@@ -13,9 +13,19 @@ use alpymist_ui::palette::Palette;
 use alpymist_ui::render::{
     ButtonStyle, button_ink, button_label_at, colour, paint_backdrop, paint_button, paint_panel,
 };
+use alpymist_ui::typeface::{self, Typeface};
 use denise::geom::Point;
+use denise::painter::Pen;
 use denise_render::Canvas;
-use denise_render::font::BUILT_IN;
+
+/// Pixel height for a layout scale.
+///
+/// The layout is still expressed in bitmap glyph-cell multiples, which is what
+/// the panel geometry was measured against. A real font wants a pixel height,
+/// and one cell is eight pixels tall.
+fn px_for(scale: i32) -> u16 {
+    u16::try_from(scale * 8).unwrap_or(16)
+}
 
 /// Same seed as the splash, so the mountains do not change at the handover.
 pub const SCENE_SEED: u64 = 0x_A1B2_C3D4_E5F6;
@@ -55,6 +65,8 @@ pub struct App {
     pub reported: Vec<String>,
     /// Set when the user asks to quit.
     pub quitting: bool,
+    /// Fira Mono where available, the built-in bitmap otherwise.
+    pub face: Typeface,
 }
 
 impl App {
@@ -71,6 +83,7 @@ impl App {
             size: (width, height),
             reported: Vec::new(),
             quitting: false,
+            face: typeface::load(),
         };
         app.snap_cursor();
         app
@@ -177,36 +190,59 @@ impl App {
 
         paint_backdrop(canvas, &self.backdrop);
         paint_panel(canvas, &chrome, &palette);
+        self.paint_buttons(canvas);
+
+        // One Pen for every glyph on the screen. It borrows the canvas, not
+        // self, so the typeface can still be borrowed mutably to rasterise.
+        let mut pen = Pen::new(canvas);
+        let text_px = px_for(chrome.text_scale);
+        let title_px = px_for(chrome.title_scale);
 
         if let Some(n) = step.question_number() {
-            canvas.draw_text(
-                &BUILT_IN,
+            self.face.draw(
+                &mut pen,
                 Point::new(chrome.counter_at.0, chrome.counter_at.1),
-                chrome.text_scale,
+                text_px,
                 &format!("STEP {n} OF {}", Step::questions().count()),
                 colour(palette.accent),
             );
         }
-        canvas.draw_text(
-            &BUILT_IN,
+        self.face.draw(
+            &mut pen,
             Point::new(chrome.title_at.0, chrome.title_at.1),
-            chrome.title_scale,
+            title_px,
             step.title(),
             colour(palette.ink),
         );
-        canvas.draw_text(
-            &BUILT_IN,
+        self.face.draw(
+            &mut pen,
             Point::new(chrome.subtitle_at.0, chrome.subtitle_at.1),
-            chrome.text_scale,
+            text_px,
             step.subtitle(),
             colour(palette.ink_dim),
         );
 
-        self.draw_rows(canvas);
-        self.draw_footer(canvas);
+        self.draw_rows(&mut pen);
+        self.draw_footer_text(&mut pen);
     }
 
-    fn draw_rows(&self, canvas: &mut Canvas<'_>) {
+    /// The button shapes, which need a painter rather than a pen.
+    fn paint_buttons(&self, canvas: &mut Canvas<'_>) {
+        let back_style = if self.wizard.can_go_back() {
+            ButtonStyle::Quiet
+        } else {
+            ButtonStyle::Disabled
+        };
+        paint_button(canvas, self.chrome.back_button, back_style, &self.palette);
+        paint_button(
+            canvas,
+            self.chrome.next_button,
+            self.primary_button().1,
+            &self.palette,
+        );
+    }
+
+    fn draw_rows(&mut self, pen: &mut Pen<'_>) {
         let chrome = self.chrome;
         let palette = self.palette;
         let rows: Vec<Row> = screens::rows(self.wizard.step(), &self.wizard.answers);
@@ -233,17 +269,17 @@ impl App {
                 (false, true) => "*  ",
                 (false, false) => "   ",
             };
-            canvas.draw_text(
-                &BUILT_IN,
+            self.face.draw(
+                pen,
                 Point::new(chrome.body.0, y),
-                chrome.text_scale,
+                px_for(chrome.text_scale),
                 &format!("{prefix}{}", row.text),
                 colour(ink),
             );
         }
     }
 
-    fn draw_footer(&self, canvas: &mut Canvas<'_>) {
+    fn draw_footer_text(&mut self, pen: &mut Pen<'_>) {
         let chrome = self.chrome;
         let palette = self.palette;
 
@@ -260,10 +296,10 @@ impl App {
             } else {
                 palette.accent
             };
-            canvas.draw_text(
-                &BUILT_IN,
+            self.face.draw(
+                pen,
                 Point::new(chrome.advisory_at.0, chrome.advisory_at.1),
-                chrome.text_scale,
+                px_for(chrome.text_scale),
                 &note,
                 colour(ink),
             );
@@ -282,12 +318,11 @@ impl App {
                 self.primary_button().1,
             ),
         ] {
-            paint_button(canvas, rect, style, &palette);
             let (x, y) = button_label_at(rect, label, chrome.text_scale);
-            canvas.draw_text(
-                &BUILT_IN,
+            self.face.draw(
+                pen,
                 Point::new(x, y),
-                chrome.text_scale,
+                px_for(chrome.text_scale),
                 label,
                 colour(button_ink(style, &palette)),
             );

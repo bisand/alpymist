@@ -29,7 +29,7 @@ clap = { version = "4", features = ["derive"] }
 denise = "0.24"
 denise-ui = "0.24"
 denise-render = "0.24"
-denise-text = "0.24"
+denise-text = { version = "0.24", features = ["truetype"] }
 denise-arrange = "0.24"
 denise-drm = "0.24"
 denise-fbdev = "0.24"

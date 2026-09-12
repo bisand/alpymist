@@ -18,6 +18,9 @@ profile_alpymist() {
 	# Mesa is needed for the EGL probe to have anything to answer with. It is
 	# pulled in explicitly rather than as a dependency of alpymistctl, because
 	# alpymistctl deliberately works without it.
-	apks="$apks alpymistctl mesa-egl mesa-gles mesa-dri-gallium"
+	# font-fira-ttf carries Fira Mono, which the splash and installer draw with.
+	# Without it they fall back to Denise's built-in bitmap and still read
+	# correctly, including Norwegian — just more crudely.
+	apks="$apks alpymistctl mesa-egl mesa-gles mesa-dri-gallium font-fira-ttf"
 	apkovl="genapkovl-alpymist.sh"
 }

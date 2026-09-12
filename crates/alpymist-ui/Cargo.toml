@@ -12,6 +12,7 @@ repository.workspace = true
 # testable with no graphics stack and no target-specific code at all.
 denise = { workspace = true, optional = true }
 denise-render = { workspace = true, optional = true }
+denise-text = { workspace = true, optional = true }
 denise-drm = { workspace = true, optional = true }
 denise-fbdev = { workspace = true, optional = true }
 denise-winit = { workspace = true, optional = true }
@@ -19,7 +20,7 @@ denise-winit = { workspace = true, optional = true }
 [features]
 default = []
 # Painting the composed scene. Needs a rasteriser but no particular backend.
-render = ["dep:denise", "dep:denise-render"]
+render = ["dep:denise", "dep:denise-render", "dep:denise-text"]
 # Development on a desktop: the same code in a window on macOS or Linux.
 winit = ["render", "dep:denise-winit"]
 # The real targets: KMS where there is a DRM device, framebuffer where not.

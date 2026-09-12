@@ -7,10 +7,11 @@
 
 use alpymist_splash_scene::{Scene, TAGLINE, WORDMARK};
 use alpymist_ui::render::{colour, paint_backdrop};
+use alpymist_ui::typeface;
 use denise::PixelFormat;
 use denise::geom::{Point, Size};
+use denise::painter::Pen;
 use denise_render::Canvas;
-use denise_render::font::BUILT_IN;
 
 // The scene module lives in the binary crate, so the example includes it
 // directly rather than depending on a library that does not exist.
@@ -36,20 +37,30 @@ fn main() {
 
     let scene = Scene::new(width, height);
     paint_backdrop(&mut canvas, &scene.backdrop);
-    canvas.draw_text(
-        &BUILT_IN,
+
+    let mut face = typeface::load();
+    eprintln!("{}", face.status.describe());
+
+    // Bitmap scales are glyph-cell multiples; a real font wants pixel heights.
+    let wordmark_px = u16::try_from(scene.layout.wordmark_scale * 8).unwrap_or(96);
+    let tagline_px = u16::try_from(scene.layout.tagline_scale * 8).unwrap_or(16);
+
+    let mut pen = Pen::new(&mut canvas);
+    face.draw(
+        &mut pen,
         Point::new(scene.layout.wordmark_at.0, scene.layout.wordmark_at.1),
-        scene.layout.wordmark_scale,
+        wordmark_px,
         WORDMARK,
         colour(scene.palette.ink),
     );
-    canvas.draw_text(
-        &BUILT_IN,
+    face.draw(
+        &mut pen,
         Point::new(scene.layout.tagline_at.0, scene.layout.tagline_at.1),
-        scene.layout.tagline_scale,
+        tagline_px,
         TAGLINE,
         colour(scene.palette.ink_dim),
     );
+    drop(pen);
 
     // ARGB8888 words out, RGBA bytes in.
     let mut rgba = Vec::with_capacity(pixels.len() * 4);

@@ -54,6 +54,7 @@ alpymistctl
 mesa-egl
 mesa-gles
 mesa-dri-gallium
+font-fira-ttf
 EOF
 
 # Hardware probing on first boot. This is a real product service, not test

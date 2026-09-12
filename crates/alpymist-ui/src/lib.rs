@@ -19,6 +19,8 @@ pub mod palette;
 #[cfg(feature = "render")]
 pub mod render;
 pub mod terrain;
+#[cfg(feature = "render")]
+pub mod typeface;
 
 pub use backdrop::{Backdrop, Layer};
 pub use chrome::Chrome;
