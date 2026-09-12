@@ -17,6 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 alpymist-core = { workspace = true }
+alpymist-hwprobe = { workspace = true }
 alpymist-ui = { workspace = true, features = ["render"] }
 denise = { workspace = true }
 denise-render = { workspace = true }

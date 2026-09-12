@@ -15,8 +15,36 @@ use alpymist_ui::render::{
 };
 use alpymist_ui::typeface::{self, Typeface};
 use denise::geom::Point;
+use denise::input::{ElementState, InputEvent, KeyCode};
 use denise::painter::Pen;
 use denise_render::Canvas;
+
+/// Translate an input event into an action, or ignore it.
+///
+/// Separate from the event loop so the whole key map is testable without a
+/// window, and so the DRM build and the desktop build cannot drift.
+///
+/// Space chooses and Enter continues, rather than Enter doing both. On the disk
+/// screen Enter-as-choose would toggle "erase everything" and advance in one
+/// keystroke, which is precisely the wrong place to be clever.
+#[must_use]
+pub fn action_for(event: &InputEvent) -> Option<Action> {
+    let InputEvent::Key { code, state, .. } = event else {
+        return None;
+    };
+    if *state != ElementState::Down {
+        return None;
+    }
+    Some(match code {
+        KeyCode::ArrowUp | KeyCode::K => Action::Up,
+        KeyCode::ArrowDown | KeyCode::J => Action::Down,
+        KeyCode::Space => Action::Choose,
+        KeyCode::Enter => Action::Advance,
+        KeyCode::Escape => Action::Back,
+        KeyCode::F10 => Action::Quit,
+        _ => return None,
+    })
+}
 
 /// Pixel height for a layout scale.
 ///
@@ -104,8 +132,8 @@ impl App {
         let rows = screens::rows(self.wizard.step(), &self.wizard.answers);
         self.cursor = rows
             .iter()
-            .position(|r| r.selectable && r.chosen)
-            .or_else(|| rows.iter().position(|r| r.selectable))
+            .position(|r| r.selectable() && r.chosen)
+            .or_else(|| rows.iter().position(Row::selectable))
             .unwrap_or(0);
     }
 
@@ -125,6 +153,14 @@ impl App {
             (None, _) => 0,
         };
         self.cursor = options[next];
+
+        // Arrowing through a list of layouts should pick as you go, but
+        // arrowing past a checkbox must never flip it.
+        let rows = screens::rows(self.wizard.step(), &self.wizard.answers);
+        if rows.get(self.cursor).is_some_and(Row::selects_on_focus) {
+            screens::choose(self.wizard.step(), self.cursor, &mut self.wizard.answers);
+            self.reported.clear();
+        }
     }
 
     /// Apply an action.
@@ -252,7 +288,7 @@ impl App {
                 continue;
             }
             let y = chrome.body_row(i32::try_from(index).unwrap_or(0));
-            let under_cursor = row.selectable && index == self.cursor;
+            let under_cursor = row.selectable() && index == self.cursor;
             // Cursor is brightest, the current choice is accented, and
             // everything else — selectable or not — is dim. Whether a dim row
             // can be landed on is carried by the cursor moving there, not by
@@ -333,10 +369,11 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::{Action, App};
-    use crate::answers::Answers;
+    use crate::answers::{Answers, DiskPlan, Network};
     use crate::screens;
     use crate::wizard::Step;
     use alpymist_core::Tier;
+    use denise::input::{ElementState, InputEvent, KeyCode};
 
     fn app() -> App {
         App::new(
@@ -354,7 +391,7 @@ mod tests {
         let mut a = app();
         a.act(Action::Advance); // Welcome -> Keyboard
         let rows = screens::rows(a.wizard.step(), &a.wizard.answers);
-        assert!(rows[a.cursor()].selectable);
+        assert!(rows[a.cursor()].selectable());
     }
 
     #[test]
@@ -397,7 +434,7 @@ mod tests {
                 let rows = screens::rows(a.wizard.step(), &a.wizard.answers);
                 if !screens::selectable(a.wizard.step(), &a.wizard.answers).is_empty() {
                     assert!(
-                        rows[a.cursor()].selectable,
+                        rows[a.cursor()].selectable(),
                         "{:?}: cursor on unselectable row {}",
                         a.wizard.step(),
                         a.cursor()
@@ -481,6 +518,130 @@ mod tests {
         let mut a = app();
         assert!(a.resize(1920, 1080));
         assert!(!a.resize(1920, 1080));
+    }
+
+    fn key(code: KeyCode) -> InputEvent {
+        InputEvent::Key {
+            code,
+            state: ElementState::Down,
+            repeat: false,
+            modifiers: denise::input::Modifiers::default(),
+        }
+    }
+
+    #[test]
+    fn the_navigation_keys_map_to_the_expected_actions() {
+        for (code, expected) in [
+            (KeyCode::ArrowUp, Action::Up),
+            (KeyCode::K, Action::Up),
+            (KeyCode::ArrowDown, Action::Down),
+            (KeyCode::J, Action::Down),
+            (KeyCode::Space, Action::Choose),
+            (KeyCode::Enter, Action::Advance),
+            (KeyCode::Escape, Action::Back),
+            (KeyCode::F10, Action::Quit),
+        ] {
+            assert_eq!(super::action_for(&key(code)), Some(expected), "{code:?}");
+        }
+    }
+
+    #[test]
+    fn keys_we_do_not_use_are_ignored() {
+        for code in [KeyCode::A, KeyCode::Tab, KeyCode::F1] {
+            assert_eq!(super::action_for(&key(code)), None, "{code:?}");
+        }
+    }
+
+    /// Acting on release as well as press would double every keystroke.
+    #[test]
+    fn key_releases_do_nothing() {
+        let release = InputEvent::Key {
+            code: KeyCode::Enter,
+            state: ElementState::Up,
+            repeat: false,
+            modifiers: denise::input::Modifiers::default(),
+        };
+        assert_eq!(super::action_for(&release), None);
+    }
+
+    /// Arrowing through a list of layouts should pick as you go.
+    #[test]
+    fn moving_onto_a_radio_row_selects_it() {
+        let mut a = app();
+        a.act(Action::Advance); // Keyboard
+        a.act(Action::Down);
+        assert!(
+            a.wizard.answers.keyboard.is_some(),
+            "arrowing did not select a layout"
+        );
+    }
+
+    /// A wizard sitting on the Disk screen with a disk already chosen.
+    ///
+    /// Built by setting answers rather than walking, so the test exercises the
+    /// toggle behaviour and not the route to it.
+    fn at_disk() -> App {
+        let answers = Answers {
+            keyboard: Some("no".into()),
+            timezone: Some("Europe/Oslo".into()),
+            network: Some(Network::Dhcp),
+            disk: Some(DiskPlan::WholeDisk {
+                device: "/dev/sda".into(),
+                encrypt: false,
+            }),
+            detected_tier: Some(Tier::Lite),
+            ..Answers::default()
+        };
+        let mut a = App::new(answers, 1280, 800);
+        for _ in 0..4 {
+            a.act(Action::Advance);
+        }
+        assert_eq!(
+            a.wizard.step(),
+            Step::Disk,
+            "fixture did not reach the disk screen"
+        );
+        a
+    }
+
+    /// ...but arrowing past a checkbox must never flip it.
+    #[test]
+    fn moving_onto_a_toggle_row_leaves_it_alone() {
+        let mut a = at_disk();
+        let confirmed = a.wizard.answers.disk_confirmed;
+        let encrypted = matches!(
+            &a.wizard.answers.disk,
+            Some(DiskPlan::WholeDisk { encrypt: true, .. })
+        );
+        for _ in 0..8 {
+            a.act(Action::Down);
+        }
+        assert_eq!(
+            a.wizard.answers.disk_confirmed, confirmed,
+            "arrowing over the erase checkbox flipped it"
+        );
+        assert_eq!(
+            matches!(
+                &a.wizard.answers.disk,
+                Some(DiskPlan::WholeDisk { encrypt: true, .. })
+            ),
+            encrypted,
+            "arrowing over the encryption checkbox flipped it"
+        );
+    }
+
+    #[test]
+    fn choosing_a_toggle_row_flips_it() {
+        let mut a = at_disk();
+        for _ in 0..8 {
+            a.act(Action::Down);
+        }
+        let before = a.wizard.answers.disk_confirmed;
+        a.act(Action::Choose);
+        assert_ne!(
+            a.wizard.answers.disk_confirmed, before,
+            "Space did not toggle"
+        );
     }
 
     #[test]

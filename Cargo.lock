@@ -74,6 +74,7 @@ name = "alpymist-install"
 version = "0.0.1"
 dependencies = [
  "alpymist-core",
+ "alpymist-hwprobe",
  "alpymist-ui",
  "denise",
  "denise-render",

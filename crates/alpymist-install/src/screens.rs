@@ -8,32 +8,68 @@ use crate::answers::{Answers, DiskPlan, Network};
 use crate::wizard::Step;
 use alpymist_core::Tier;
 
+/// What kind of thing a row is, which decides how the cursor treats it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowKind {
+    /// One of a set: moving onto it selects it, the way a radio list works.
+    Radio,
+    /// An independent on/off: moving onto it must *not* flip it.
+    Toggle,
+    /// Only there to be read.
+    Static,
+}
+
 /// One line in a screen's body.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row {
     /// What to draw.
     pub text: String,
-    /// Whether the cursor can land here.
-    pub selectable: bool,
+    /// How the cursor treats this row.
+    pub kind: RowKind,
     /// Whether this is the currently chosen value.
     pub chosen: bool,
 }
 
 impl Row {
-    /// A row the cursor can land on.
-    fn option(text: impl Into<String>, chosen: bool) -> Self {
+    /// One of a set of mutually exclusive choices.
+    fn radio(text: impl Into<String>, chosen: bool) -> Self {
         Self {
             text: text.into(),
-            selectable: true,
+            kind: RowKind::Radio,
             chosen,
         }
+    }
+
+    /// An independent on/off.
+    fn toggle(text: impl Into<String>, on: bool) -> Self {
+        Self {
+            text: text.into(),
+            kind: RowKind::Toggle,
+            chosen: on,
+        }
+    }
+
+    /// Whether the cursor can land here.
+    #[must_use]
+    pub fn selectable(&self) -> bool {
+        !matches!(self.kind, RowKind::Static)
+    }
+
+    /// Whether landing on this row should choose it.
+    ///
+    /// True for radio rows, so arrowing through a list of keyboard layouts
+    /// picks as you go. False for toggles: moving past a checkbox must never
+    /// flip it, which is the whole reason this distinction exists.
+    #[must_use]
+    pub fn selects_on_focus(&self) -> bool {
+        matches!(self.kind, RowKind::Radio)
     }
 
     /// A row that is only there to be read.
     fn note(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
-            selectable: false,
+            kind: RowKind::Static,
             chosen: false,
         }
     }
@@ -96,26 +132,26 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             .map(|(label, layout, variant)| {
                 let chosen = a.keyboard.as_deref() == Some(*layout)
                     && a.keyboard_variant.as_deref() == *variant;
-                Row::option(*label, chosen)
+                Row::radio(*label, chosen)
             })
             .collect(),
         Step::Region => TIMEZONES
             .iter()
-            .map(|(label, tz)| Row::option(*label, a.timezone.as_deref() == Some(*tz)))
+            .map(|(label, tz)| Row::radio(*label, a.timezone.as_deref() == Some(*tz)))
             .collect(),
         Step::Network => vec![
-            Row::option("Automatic (DHCP)", matches!(a.network, Some(Network::Dhcp))),
-            Row::option(
+            Row::radio("Automatic (DHCP)", matches!(a.network, Some(Network::Dhcp))),
+            Row::radio(
                 "Static address",
                 matches!(a.network, Some(Network::Static { .. })),
             ),
-            Row::option("Set up later", matches!(a.network, Some(Network::Offline))),
+            Row::radio("Set up later", matches!(a.network, Some(Network::Offline))),
         ],
         Step::Disk => {
             let mut rows: Vec<Row> = DISKS
                 .iter()
                 .map(|(label, device)| {
-                    Row::option(
+                    Row::radio(
                         *label,
                         a.disk.as_ref().is_some_and(|d| d.device() == *device),
                     )
@@ -123,11 +159,11 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
                 .collect();
             rows.push(Row::gap());
             let encrypt = matches!(&a.disk, Some(DiskPlan::WholeDisk { encrypt: true, .. }));
-            rows.push(Row::option(
+            rows.push(Row::toggle(
                 format!("[{}] Encrypt the root filesystem (LUKS2)", mark(encrypt)),
                 encrypt,
             ));
-            rows.push(Row::option(
+            rows.push(Row::toggle(
                 format!(
                     "[{}] Yes, erase everything on this disk",
                     mark(a.disk_confirmed)
@@ -137,11 +173,11 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             rows
         }
         Step::Account => vec![
-            Row::option(format!("Full name   {}", a.full_name), false),
-            Row::option(format!("Username    {}", a.username), false),
-            Row::option(format!("Password    {}", stars(&a.password)), false),
-            Row::option(format!("Confirm     {}", stars(&a.password_confirm)), false),
-            Row::option(format!("Hostname    {}", a.hostname), false),
+            Row::radio(format!("Full name   {}", a.full_name), false),
+            Row::radio(format!("Username    {}", a.username), false),
+            Row::radio(format!("Password    {}", stars(&a.password)), false),
+            Row::radio(format!("Confirm     {}", stars(&a.password_confirm)), false),
+            Row::radio(format!("Hostname    {}", a.hostname), false),
         ],
         Step::Desktop => {
             let mut rows = vec![Row::note(match a.detected_tier {
@@ -152,7 +188,7 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             rows.extend(
                 TIERS
                     .iter()
-                    .map(|(tier, label)| Row::option(*label, a.effective_tier() == Some(*tier))),
+                    .map(|(tier, label)| Row::radio(*label, a.effective_tier() == Some(*tier))),
             );
             rows
         }
@@ -224,7 +260,7 @@ fn describe_disk(a: &Answers) -> String {
 /// "choose" a heading.
 pub fn choose(step: Step, index: usize, a: &mut Answers) {
     let rows = rows(step, a);
-    if !rows.get(index).is_some_and(|r| r.selectable) {
+    if !rows.get(index).is_some_and(Row::selectable) {
         return;
     }
     match step {
@@ -288,7 +324,7 @@ pub fn selectable(step: Step, a: &Answers) -> Vec<usize> {
     rows(step, a)
         .iter()
         .enumerate()
-        .filter(|(_, r)| r.selectable)
+        .filter(|(_, r)| r.selectable())
         .map(|(i, _)| i)
         .collect()
 }
