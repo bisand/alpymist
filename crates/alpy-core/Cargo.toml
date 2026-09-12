@@ -1,0 +1,15 @@
+[package]
+name = "alpy-core"
+description = "Shared domain model for Alpy: hardware capabilities, desktop tiers, session backends."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

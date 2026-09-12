@@ -1,0 +1,33 @@
+[workspace]
+resolver = "3"
+members = ["crates/alpy-core", "crates/alpy-hwprobe", "crates/alpyctl"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bisand/alpy"
+
+[workspace.dependencies]
+alpy-core = { path = "crates/alpy-core" }
+alpy-hwprobe = { path = "crates/alpy-hwprobe" }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
