@@ -29,6 +29,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpymist-ui"
+version = "0.0.1"
+
+[[package]]
 name = "alpymistctl"
 version = "0.0.1"
 dependencies = [

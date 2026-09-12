@@ -1,0 +1,13 @@
+[package]
+name = "alpymist-ui"
+description = "Shared visual identity for the Alpymist splash and installer: palette, procedural backdrop, wizard chrome."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

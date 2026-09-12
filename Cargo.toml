@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/alpymist-core",
     "crates/alpymist-glesprobe",
+    "crates/alpymist-ui",
     "crates/alpymist-hwprobe",
     "crates/alpymistctl",
     "xtask",
@@ -19,6 +20,7 @@ repository = "https://github.com/bisand/alpymist"
 alpymist-core = { path = "crates/alpymist-core" }
 alpymist-glesprobe = { path = "crates/alpymist-glesprobe" }
 alpymist-hwprobe = { path = "crates/alpymist-hwprobe" }
+alpymist-ui = { path = "crates/alpymist-ui" }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
