@@ -2,6 +2,9 @@
 #![allow(unsafe_code, missing_docs)]
 use khronos_egl as egl;
 
+// Deliberately one linear sequence: it mirrors the order EGL calls happen in,
+// so the last line printed is the step that failed.
+#[allow(clippy::too_many_lines)]
 fn main() {
     let lib = match unsafe { libloading::Library::new("libEGL.so.1") } {
         Ok(l) => {
