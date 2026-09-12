@@ -5,7 +5,8 @@
 //! loaded yet, so arrow keys and Enter have to be enough on their own.
 
 use crate::answers::Answers;
-use crate::screens::{self, Row};
+use crate::editing;
+use crate::screens::{self, Row, TextTarget};
 use crate::wizard::{Step, Wizard};
 use alpymist_ui::backdrop::Backdrop;
 use alpymist_ui::chrome::Chrome;
@@ -27,8 +28,17 @@ use denise_render::Canvas;
 /// Space chooses and Enter continues, rather than Enter doing both. On the disk
 /// screen Enter-as-choose would toggle "erase everything" and advance in one
 /// keystroke, which is precisely the wrong place to be clever.
+///
+/// `editing_text` says whether a text field currently has focus, which is the
+/// one thing that changes the map: Space is a choice everywhere else and a
+/// space character inside a field. Printable characters arrive separately as
+/// `Text` events, already composed, so `¨` then `o` yields one `ö`.
 #[must_use]
-pub fn action_for(event: &InputEvent) -> Option<Action> {
+pub fn action_for(event: &InputEvent, editing_text: bool) -> Option<Action> {
+    if let InputEvent::Text { ch } = event {
+        // Control characters have their own keys; only real text belongs here.
+        return (editing_text && !ch.is_control()).then_some(Action::Type(*ch));
+    }
     let InputEvent::Key { code, state, .. } = event else {
         return None;
     };
@@ -36,12 +46,20 @@ pub fn action_for(event: &InputEvent) -> Option<Action> {
         return None;
     }
     Some(match code {
-        KeyCode::ArrowUp | KeyCode::K => Action::Up,
-        KeyCode::ArrowDown | KeyCode::J => Action::Down,
-        KeyCode::Space => Action::Choose,
+        KeyCode::ArrowUp => Action::Up,
+        KeyCode::ArrowDown => Action::Down,
         KeyCode::Enter => Action::Advance,
         KeyCode::Escape => Action::Back,
         KeyCode::F10 => Action::Quit,
+        KeyCode::Backspace => Action::Backspace,
+        KeyCode::Delete => Action::Delete,
+        KeyCode::ArrowLeft => Action::CaretLeft,
+        KeyCode::ArrowRight => Action::CaretRight,
+        KeyCode::Home => Action::CaretHome,
+        KeyCode::End => Action::CaretEnd,
+        // Space is a choose only where nothing is being typed; on a text field
+        // it is a space, and arrives as a Text event instead.
+        KeyCode::Space if !editing_text => Action::Choose,
         _ => return None,
     })
 }
@@ -73,6 +91,20 @@ pub enum Action {
     Back,
     /// Quit the installer.
     Quit,
+    /// Type a character into the focused field.
+    Type(char),
+    /// Delete the character before the caret.
+    Backspace,
+    /// Delete the character under the caret.
+    Delete,
+    /// Move the caret one character left.
+    CaretLeft,
+    /// Move the caret one character right.
+    CaretRight,
+    /// Move the caret to the start of the field.
+    CaretHome,
+    /// Move the caret to the end of the field.
+    CaretEnd,
 }
 
 /// The installer's interactive state.
@@ -91,6 +123,8 @@ pub struct App {
     size: (u32, u32),
     /// Blockers reported by the last refused advance, shown until it succeeds.
     pub reported: Vec<String>,
+    /// Caret position within the focused text field, in characters.
+    caret: usize,
     /// Set when the user asks to quit.
     pub quitting: bool,
     /// Fira Mono where available, the built-in bitmap otherwise.
@@ -110,6 +144,7 @@ impl App {
             palette,
             size: (width, height),
             reported: Vec::new(),
+            caret: 0,
             quitting: false,
             face: typeface::load(),
         };
@@ -135,6 +170,19 @@ impl App {
             .position(|r| r.selectable() && r.chosen)
             .or_else(|| rows.iter().position(Row::selectable))
             .unwrap_or(0);
+        self.place_caret();
+    }
+
+    /// Put the caret after whatever is already in the focused field.
+    ///
+    /// Called from both ways of arriving at a field — arrowing onto it and
+    /// landing on it when the screen opens. Only one of those did it at first,
+    /// so opening the account screen put the caret in front of the name
+    /// already there.
+    fn place_caret(&mut self) {
+        self.caret = self
+            .focused_field()
+            .map_or(0, |f| editing::length(f.value(&self.wizard.answers)));
     }
 
     /// Move the cursor, skipping rows it cannot land on.
@@ -161,11 +209,60 @@ impl App {
             screens::choose(self.wizard.step(), self.cursor, &mut self.wizard.answers);
             self.reported.clear();
         }
+        // Arriving in a field puts the caret after what is already there, which
+        // is where you want it when correcting a value rather than replacing it.
+        self.place_caret();
+    }
+
+    /// The text field the cursor is on, if it is on one.
+    #[must_use]
+    pub fn focused_field(&self) -> Option<TextTarget> {
+        screens::rows(self.wizard.step(), &self.wizard.answers)
+            .get(self.cursor)
+            .and_then(Row::text_target)
+    }
+
+    /// Where the caret sits in the focused field.
+    #[must_use]
+    pub fn caret(&self) -> usize {
+        self.caret
+    }
+
+    /// Apply an edit to the focused field, if there is one.
+    ///
+    /// Typing anywhere else is simply ignored rather than being an error: a
+    /// stray keystroke on the disk screen should do nothing at all.
+    fn edit(&mut self, action: Action) {
+        let Some(field) = self.focused_field() else {
+            return;
+        };
+        let caret = self.caret;
+        let value = field.value_mut(&mut self.wizard.answers);
+        self.caret = match action {
+            Action::Type(ch) => editing::insert(value, caret, ch),
+            Action::Backspace => editing::backspace(value, caret),
+            Action::Delete => editing::delete(value, caret),
+            Action::CaretLeft => editing::left(value, caret),
+            Action::CaretRight => editing::right(value, caret),
+            Action::CaretHome => editing::home(),
+            Action::CaretEnd => editing::end(value),
+            _ => caret,
+        };
+        // Typing is how you fix what the last refusal complained about, so the
+        // complaint should not outlive the first keystroke.
+        self.reported.clear();
     }
 
     /// Apply an action.
     pub fn act(&mut self, action: Action) {
         match action {
+            Action::Type(_)
+            | Action::Backspace
+            | Action::Delete
+            | Action::CaretLeft
+            | Action::CaretRight
+            | Action::CaretHome
+            | Action::CaretEnd => self.edit(action),
             Action::Up => self.move_cursor(false),
             Action::Down => self.move_cursor(true),
             Action::Choose => {
@@ -305,11 +402,27 @@ impl App {
                 (false, true) => "*  ",
                 (false, false) => "   ",
             };
+
+            // A text row draws its label and its current value; everything else
+            // is already the whole line.
+            let line = match row.text_target() {
+                Some(field) => {
+                    let shown = editing::with_caret(
+                        field.value(&self.wizard.answers),
+                        self.caret,
+                        field.is_secret(),
+                        under_cursor,
+                    );
+                    format!("{prefix}{:<12}{shown}", row.text)
+                }
+                None => format!("{prefix}{}", row.text),
+            };
+
             self.face.draw(
                 pen,
                 Point::new(chrome.body.0, y),
                 px_for(chrome.text_scale),
-                &format!("{prefix}{}", row.text),
+                &line,
                 colour(ink),
             );
         }
@@ -370,7 +483,7 @@ impl App {
 mod tests {
     use super::{Action, App};
     use crate::answers::{Answers, DiskPlan, Network};
-    use crate::screens;
+    use crate::screens::{self, TextTarget};
     use crate::wizard::Step;
     use alpymist_core::Tier;
     use denise::input::{ElementState, InputEvent, KeyCode};
@@ -533,23 +646,71 @@ mod tests {
     fn the_navigation_keys_map_to_the_expected_actions() {
         for (code, expected) in [
             (KeyCode::ArrowUp, Action::Up),
-            (KeyCode::K, Action::Up),
             (KeyCode::ArrowDown, Action::Down),
-            (KeyCode::J, Action::Down),
             (KeyCode::Space, Action::Choose),
             (KeyCode::Enter, Action::Advance),
             (KeyCode::Escape, Action::Back),
             (KeyCode::F10, Action::Quit),
         ] {
-            assert_eq!(super::action_for(&key(code)), Some(expected), "{code:?}");
+            assert_eq!(
+                super::action_for(&key(code), false),
+                Some(expected),
+                "{code:?}"
+            );
         }
     }
 
     #[test]
     fn keys_we_do_not_use_are_ignored() {
         for code in [KeyCode::A, KeyCode::Tab, KeyCode::F1] {
-            assert_eq!(super::action_for(&key(code)), None, "{code:?}");
+            assert_eq!(super::action_for(&key(code), false), None, "{code:?}");
         }
+    }
+
+    #[test]
+    fn the_editing_keys_map_to_editing_actions() {
+        for (code, expected) in [
+            (KeyCode::Backspace, Action::Backspace),
+            (KeyCode::Delete, Action::Delete),
+            (KeyCode::ArrowLeft, Action::CaretLeft),
+            (KeyCode::ArrowRight, Action::CaretRight),
+            (KeyCode::Home, Action::CaretHome),
+            (KeyCode::End, Action::CaretEnd),
+        ] {
+            assert_eq!(
+                super::action_for(&key(code), true),
+                Some(expected),
+                "{code:?}"
+            );
+        }
+    }
+
+    /// Space is a choice on a list and a space character in a field. Getting
+    /// this backwards means you cannot type a space in your own full name.
+    #[test]
+    fn space_chooses_on_a_list_but_not_while_typing() {
+        assert_eq!(
+            super::action_for(&key(KeyCode::Space), false),
+            Some(Action::Choose)
+        );
+        assert_eq!(super::action_for(&key(KeyCode::Space), true), None);
+    }
+
+    #[test]
+    fn typed_characters_only_arrive_while_a_field_has_focus() {
+        let text = InputEvent::Text { ch: 'å' };
+        assert_eq!(super::action_for(&text, true), Some(Action::Type('å')));
+        assert_eq!(
+            super::action_for(&text, false),
+            None,
+            "typing off a field does nothing"
+        );
+    }
+
+    #[test]
+    fn control_characters_are_not_treated_as_text() {
+        let tab = InputEvent::Text { ch: '\t' };
+        assert_eq!(super::action_for(&tab, true), None);
     }
 
     /// Acting on release as well as press would double every keystroke.
@@ -561,7 +722,7 @@ mod tests {
             repeat: false,
             modifiers: denise::input::Modifiers::default(),
         };
-        assert_eq!(super::action_for(&release), None);
+        assert_eq!(super::action_for(&release, false), None);
     }
 
     /// Arrowing through a list of layouts should pick as you go.
@@ -642,6 +803,181 @@ mod tests {
             a.wizard.answers.disk_confirmed, before,
             "Space did not toggle"
         );
+    }
+
+    /// A wizard sitting on the Account screen with everything before it done.
+    fn at_account() -> App {
+        let answers = Answers {
+            keyboard: Some("no".into()),
+            timezone: Some("Europe/Oslo".into()),
+            network: Some(Network::Dhcp),
+            disk: Some(DiskPlan::WholeDisk {
+                device: "/dev/sda".into(),
+                encrypt: true,
+            }),
+            disk_confirmed: true,
+            detected_tier: Some(Tier::Lite),
+            ..Answers::default()
+        };
+        let mut a = App::new(answers, 1280, 800);
+        for _ in 0..5 {
+            a.act(Action::Advance);
+        }
+        assert_eq!(
+            a.wizard.step(),
+            Step::Account,
+            "fixture did not reach the account screen"
+        );
+        a
+    }
+
+    fn type_text(a: &mut App, text: &str) {
+        for ch in text.chars() {
+            a.act(Action::Type(ch));
+        }
+    }
+
+    #[test]
+    fn the_account_screen_starts_focused_on_a_field() {
+        let a = at_account();
+        assert_eq!(a.focused_field(), Some(TextTarget::FullName));
+    }
+
+    /// Opening the screen must place the caret just as arrowing onto a field
+    /// does, or the first keystroke lands in front of the existing value.
+    #[test]
+    fn the_caret_is_placed_when_a_screen_opens_not_only_when_arrowing() {
+        let answers = Answers {
+            keyboard: Some("no".into()),
+            timezone: Some("Europe/Oslo".into()),
+            network: Some(Network::Dhcp),
+            disk: Some(DiskPlan::WholeDisk {
+                device: "/dev/sda".into(),
+                encrypt: true,
+            }),
+            disk_confirmed: true,
+            full_name: "André Biseth".into(),
+            detected_tier: Some(Tier::Lite),
+            ..Answers::default()
+        };
+        let mut a = App::new(answers, 1280, 800);
+        for _ in 0..5 {
+            a.act(Action::Advance);
+        }
+        assert_eq!(a.wizard.step(), Step::Account);
+        assert_eq!(
+            a.caret(),
+            "André Biseth".chars().count(),
+            "caret not at the end"
+        );
+        type_text(&mut a, "!");
+        assert_eq!(a.wizard.answers.full_name, "André Biseth!");
+    }
+
+    #[test]
+    fn typing_fills_the_focused_field_and_nothing_else() {
+        let mut a = at_account();
+        type_text(&mut a, "André Biseth");
+        assert_eq!(a.wizard.answers.full_name, "André Biseth");
+        assert!(
+            a.wizard.answers.username.is_empty(),
+            "typing leaked into another field"
+        );
+    }
+
+    /// The whole reason the caret counts characters rather than bytes.
+    #[test]
+    fn norwegian_characters_survive_being_typed_and_corrected() {
+        let mut a = at_account();
+        type_text(&mut a, "blåbærsyltetøy");
+        assert_eq!(a.wizard.answers.full_name, "blåbærsyltetøy");
+        a.act(Action::Backspace);
+        assert_eq!(a.wizard.answers.full_name, "blåbærsyltetø");
+        a.act(Action::CaretHome);
+        type_text(&mut a, "Ø");
+        assert_eq!(a.wizard.answers.full_name, "Øblåbærsyltetø");
+    }
+
+    #[test]
+    fn arrowing_between_fields_moves_the_focus() {
+        let mut a = at_account();
+        a.act(Action::Down);
+        assert_eq!(a.focused_field(), Some(TextTarget::Username));
+        type_text(&mut a, "andre");
+        assert_eq!(a.wizard.answers.username, "andre");
+        assert!(a.wizard.answers.full_name.is_empty());
+    }
+
+    /// Arriving in a field should let you correct it, not overwrite it.
+    #[test]
+    fn the_caret_lands_after_existing_text_when_entering_a_field() {
+        let mut a = at_account();
+        type_text(&mut a, "andre");
+        a.act(Action::Down);
+        a.act(Action::Up);
+        assert_eq!(
+            a.caret(),
+            5,
+            "caret should sit at the end of the existing value"
+        );
+        type_text(&mut a, "!");
+        assert_eq!(a.wizard.answers.full_name, "andre!");
+    }
+
+    #[test]
+    fn every_account_field_can_be_reached_and_typed_into() {
+        let mut a = at_account();
+        for (index, field) in TextTarget::ACCOUNT.iter().enumerate() {
+            for _ in 0..index {
+                a.act(Action::Down);
+            }
+            assert_eq!(a.focused_field(), Some(*field), "could not reach {field:?}");
+            type_text(&mut a, "x");
+            assert_eq!(field.value(&a.wizard.answers), "x");
+            for _ in 0..index {
+                a.act(Action::Up);
+            }
+        }
+    }
+
+    #[test]
+    fn a_completed_account_screen_advances() {
+        let mut a = at_account();
+        type_text(&mut a, "André Biseth");
+        a.act(Action::Down);
+        type_text(&mut a, "andre");
+        a.act(Action::Down);
+        type_text(&mut a, "a good passphrase");
+        a.act(Action::Down);
+        type_text(&mut a, "a good passphrase");
+        a.act(Action::Down);
+        type_text(&mut a, "alpymist");
+        a.act(Action::Advance);
+        assert_eq!(
+            a.wizard.step(),
+            Step::Desktop,
+            "blocked by: {:?}",
+            a.reported
+        );
+    }
+
+    #[test]
+    fn typing_clears_a_complaint_from_the_previous_refusal() {
+        let mut a = at_account();
+        a.act(Action::Advance); // refused: nothing filled in
+        assert!(!a.reported.is_empty());
+        type_text(&mut a, "a");
+        assert!(a.reported.is_empty(), "the complaint outlived the fix");
+    }
+
+    #[test]
+    fn typing_where_there_is_no_field_does_nothing() {
+        let mut a = app();
+        a.act(Action::Advance); // Keyboard: a list, not fields
+        let before = a.wizard.answers.clone();
+        type_text(&mut a, "hello");
+        a.act(Action::Backspace);
+        assert_eq!(a.wizard.answers, before);
     }
 
     #[test]

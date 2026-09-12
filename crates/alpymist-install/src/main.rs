@@ -31,7 +31,10 @@ mod run {
         fn update(&mut self, events: &[InputEvent], damage: &mut DamageTracker) {
             let mut changed = false;
             for event in events {
-                if let Some(action) = action_for(event) {
+                // Recomputed per event: moving onto a field with an arrow key
+                // changes how the next keystroke should be read.
+                let editing_text = self.app.focused_field().is_some();
+                if let Some(action) = action_for(event, editing_text) {
                     self.app.act(action);
                     changed = true;
                 }

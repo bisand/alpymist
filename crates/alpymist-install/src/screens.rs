@@ -15,8 +15,85 @@ pub enum RowKind {
     Radio,
     /// An independent on/off: moving onto it must *not* flip it.
     Toggle,
+    /// An editable line. Moving onto it focuses it; typing changes it.
+    Text {
+        /// Which answer this line edits.
+        field: TextTarget,
+        /// Whether to mask what is shown.
+        secret: bool,
+    },
     /// Only there to be read.
     Static,
+}
+
+/// Which of the account answers a text row edits.
+///
+/// A small enum rather than a closure or an index, so the mapping from row to
+/// answer is data the tests can enumerate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextTarget {
+    /// Display name.
+    FullName,
+    /// Login name.
+    Username,
+    /// Password.
+    Password,
+    /// Password confirmation.
+    PasswordConfirm,
+    /// System hostname.
+    Hostname,
+}
+
+impl TextTarget {
+    /// Every editable field on the Account screen, in the order shown.
+    pub const ACCOUNT: [Self; 5] = [
+        Self::FullName,
+        Self::Username,
+        Self::Password,
+        Self::PasswordConfirm,
+        Self::Hostname,
+    ];
+
+    /// The label shown to the left of the field.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::FullName => "Full name",
+            Self::Username => "Username",
+            Self::Password => "Password",
+            Self::PasswordConfirm => "Confirm",
+            Self::Hostname => "Hostname",
+        }
+    }
+
+    /// Whether this field should be masked.
+    #[must_use]
+    pub fn is_secret(self) -> bool {
+        matches!(self, Self::Password | Self::PasswordConfirm)
+    }
+
+    /// The answer this field edits.
+    pub fn value_mut(self, a: &mut Answers) -> &mut String {
+        match self {
+            Self::FullName => &mut a.full_name,
+            Self::Username => &mut a.username,
+            Self::Password => &mut a.password,
+            Self::PasswordConfirm => &mut a.password_confirm,
+            Self::Hostname => &mut a.hostname,
+        }
+    }
+
+    /// The answer this field edits.
+    #[must_use]
+    pub fn value(self, a: &Answers) -> &str {
+        match self {
+            Self::FullName => &a.full_name,
+            Self::Username => &a.username,
+            Self::Password => &a.password,
+            Self::PasswordConfirm => &a.password_confirm,
+            Self::Hostname => &a.hostname,
+        }
+    }
 }
 
 /// One line in a screen's body.
@@ -55,11 +132,20 @@ impl Row {
         !matches!(self.kind, RowKind::Static)
     }
 
+    /// The field this row edits, if it is an editable one.
+    #[must_use]
+    pub fn text_target(&self) -> Option<TextTarget> {
+        match self.kind {
+            RowKind::Text { field, .. } => Some(field),
+            _ => None,
+        }
+    }
+
     /// Whether landing on this row should choose it.
     ///
     /// True for radio rows, so arrowing through a list of keyboard layouts
-    /// picks as you go. False for toggles: moving past a checkbox must never
-    /// flip it, which is the whole reason this distinction exists.
+    /// picks as you go. False for toggles — moving past a checkbox must never
+    /// flip it — and false for text, where landing merely focuses.
     #[must_use]
     pub fn selects_on_focus(&self) -> bool {
         matches!(self.kind, RowKind::Radio)
@@ -172,13 +258,17 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             ));
             rows
         }
-        Step::Account => vec![
-            Row::radio(format!("Full name   {}", a.full_name), false),
-            Row::radio(format!("Username    {}", a.username), false),
-            Row::radio(format!("Password    {}", stars(&a.password)), false),
-            Row::radio(format!("Confirm     {}", stars(&a.password_confirm)), false),
-            Row::radio(format!("Hostname    {}", a.hostname), false),
-        ],
+        Step::Account => TextTarget::ACCOUNT
+            .iter()
+            .map(|field| Row {
+                text: field.label().to_string(),
+                kind: RowKind::Text {
+                    field: *field,
+                    secret: field.is_secret(),
+                },
+                chosen: false,
+            })
+            .collect(),
         Step::Desktop => {
             let mut rows = vec![Row::note(match a.detected_tier {
                 Some(t) => format!("This machine reports: {t:?}"),
@@ -226,10 +316,6 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
 
 fn mark(on: bool) -> char {
     if on { 'x' } else { ' ' }
-}
-
-fn stars(s: &str) -> String {
-    "*".repeat(s.chars().count())
 }
 
 fn describe_network(a: &Answers) -> String {

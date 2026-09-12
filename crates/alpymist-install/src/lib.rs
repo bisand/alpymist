@@ -14,6 +14,7 @@
 
 pub mod answers;
 pub mod app;
+pub mod editing;
 pub mod screens;
 pub mod wizard;
 
