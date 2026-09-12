@@ -8,8 +8,8 @@
 set -euo pipefail
 
 ARCH="${1:-$(uname -m)}"
-ALPINE_BRANCH="${ALPINE_BRANCH:-3.22-stable}"
-ALPINE_VERSION="${ALPINE_VERSION:-v3.22}"
+ALPINE_BRANCH="${ALPINE_BRANCH:-3.24-stable}"
+ALPINE_VERSION="${ALPINE_VERSION:-v3.24}"
 TAG="${TAG:-0.0.1}"
 MIRROR="${MIRROR:-https://dl-cdn.alpinelinux.org/alpine}"
 

@@ -1,4 +1,5 @@
 [toolchain]
-channel = "1.90"
+# Matched to the Rust in Alpine 3.24, so local builds and package builds agree.
+channel = "1.96"
 components = ["rustfmt", "clippy"]
 targets = ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"]

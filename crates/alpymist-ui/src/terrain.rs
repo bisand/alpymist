@@ -89,7 +89,7 @@ impl Ridge {
             let half = step / 2;
             let mut i = half;
             while i < span {
-                let mid = (grid[i - half] + grid[i + half]) / 2;
+                let mid = i32::midpoint(grid[i - half], grid[i + half]);
                 grid[i] = mid + rng.jitter(amp);
                 i += step;
             }

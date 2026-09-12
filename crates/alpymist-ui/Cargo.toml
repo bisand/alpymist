@@ -8,6 +8,23 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+# Optional so the scene composition — the part with the actual logic — stays
+# testable with no graphics stack and no target-specific code at all.
+denise = { workspace = true, optional = true }
+denise-render = { workspace = true, optional = true }
+denise-drm = { workspace = true, optional = true }
+denise-fbdev = { workspace = true, optional = true }
+denise-winit = { workspace = true, optional = true }
+
+[features]
+default = []
+# Painting the composed scene. Needs a rasteriser but no particular backend.
+render = ["dep:denise", "dep:denise-render"]
+# Development on a desktop: the same code in a window on macOS or Linux.
+winit = ["render", "dep:denise-winit"]
+# The real targets: KMS where there is a DRM device, framebuffer where not.
+drm = ["render", "dep:denise-drm"]
+fbdev = ["render", "dep:denise-fbdev"]
 
 [lints]
 workspace = true

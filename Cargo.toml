@@ -12,7 +12,7 @@ members = [
 [workspace.package]
 version = "0.0.1"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.95"  # DeniseUI 0.24 requires it
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/bisand/alpymist"
 
@@ -22,6 +22,16 @@ alpymist-glesprobe = { path = "crates/alpymist-glesprobe" }
 alpymist-hwprobe = { path = "crates/alpymist-hwprobe" }
 alpymist-ui = { path = "crates/alpymist-ui" }
 clap = { version = "4", features = ["derive"] }
+# DeniseUI: direct rendering to DRM/KMS or the framebuffer, no compositor.
+# "0.24" accepts 0.24.x, so patch releases arrive via `cargo update`.
+denise = "0.24"
+denise-ui = "0.24"
+denise-render = "0.24"
+denise-text = "0.24"
+denise-arrange = "0.24"
+denise-drm = "0.24"
+denise-fbdev = "0.24"
+denise-winit = "0.24"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
