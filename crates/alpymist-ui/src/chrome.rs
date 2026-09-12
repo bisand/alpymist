@@ -26,6 +26,12 @@ pub struct Chrome {
     pub body: (i32, i32, i32, i32),
     /// Key hints and advisories, at the bottom.
     pub footer: (i32, i32, i32, i32),
+    /// The "Back" button, as `(x, y, width, height)`.
+    pub back_button: (i32, i32, i32, i32),
+    /// The primary button, right-aligned.
+    pub next_button: (i32, i32, i32, i32),
+    /// Where an advisory line sits, above the buttons.
+    pub advisory_at: (i32, i32),
     /// Text scale for the panel title.
     pub title_scale: i32,
     /// Text scale for body and footer text.
@@ -43,6 +49,14 @@ const PANEL_HEIGHT_PCT: i32 = 62;
 const TOP_MARGIN_PCT: i32 = 38;
 /// Height of the built-in font cell, before scaling.
 const CELL_HEIGHT: i32 = 8;
+/// Advance width of one glyph cell, before scaling.
+const CELL_ADVANCE: i32 = 6;
+
+/// How wide a button has to be to hold `label` with room around it.
+fn button_width(label: &str, text_scale: i32, gap: i32) -> i32 {
+    let chars = i32::try_from(label.chars().count()).unwrap_or(0);
+    chars * CELL_ADVANCE * text_scale + gap * 4
+}
 
 impl Chrome {
     /// Lay out a wizard screen for this display size.
@@ -98,7 +112,19 @@ impl Chrome {
         let footer_y = panel_y + panel_h - padding - footer_h;
         let body_h = (footer_y - body_y - gap).max(0);
 
+        // Buttons sit on the footer's baseline, Back at the left and the primary
+        // action at the right — the order people already expect, so nobody has
+        // to read them to know which is which.
+        let button_h = CELL_HEIGHT * text_scale + gap * 3;
+        let button_y = footer_y + footer_h - button_h;
+        let back_w = button_width("Esc  Back", text_scale, gap);
+        let next_w = button_width("Enter  Continue", text_scale, gap);
+        let advisory_at = (inner_x, button_y - CELL_HEIGHT * text_scale - gap * 2);
+
         Self {
+            back_button: (inner_x, button_y, back_w, button_h),
+            next_button: (inner_x + inner_w - next_w, button_y, next_w, button_h),
+            advisory_at,
             panel: (panel_x, panel_y, panel_w, panel_h),
             header: (inner_x, header_y, inner_w, header_h),
             counter_at,
@@ -272,6 +298,55 @@ mod tests {
         assert!(
             Chrome::for_screen(1920, 1080).text_scale > Chrome::for_screen(640, 480).text_scale
         );
+    }
+
+    #[test]
+    fn the_buttons_sit_inside_the_panel_and_do_not_overlap_each_other() {
+        for (w, h) in SIZES {
+            let c = Chrome::for_screen(w, h);
+            let (px_, py, pw, ph) = c.panel;
+            for (name, (x, y, bw, bh)) in [("back", c.back_button), ("next", c.next_button)] {
+                assert!(
+                    x >= px_ && y >= py,
+                    "{w}x{h}: {name} starts outside the panel"
+                );
+                assert!(x + bw <= px_ + pw, "{w}x{h}: {name} overflows the panel");
+                assert!(
+                    y + bh <= py + ph,
+                    "{w}x{h}: {name} runs past the panel bottom"
+                );
+            }
+            let back_right = c.back_button.0 + c.back_button.2;
+            assert!(back_right < c.next_button.0, "{w}x{h}: the buttons overlap");
+        }
+    }
+
+    #[test]
+    fn the_primary_button_is_right_aligned_with_the_body() {
+        for (w, h) in SIZES {
+            let c = Chrome::for_screen(w, h);
+            let button_right = c.next_button.0 + c.next_button.2;
+            let body_right = c.body.0 + c.body.2;
+            assert_eq!(
+                button_right, body_right,
+                "{w}x{h}: primary button not flush right"
+            );
+        }
+    }
+
+    #[test]
+    fn an_advisory_has_room_above_the_buttons() {
+        for (w, h) in SIZES {
+            let c = Chrome::for_screen(w, h);
+            assert!(
+                c.advisory_at.1 + 8 * c.text_scale <= c.back_button.1,
+                "{w}x{h}: advisory would run into the buttons"
+            );
+            assert!(
+                c.advisory_at.1 >= c.footer.1,
+                "{w}x{h}: advisory sits above the footer"
+            );
+        }
     }
 
     #[test]

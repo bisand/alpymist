@@ -133,6 +133,74 @@ pub fn paint_panel<P: Painter + ?Sized>(painter: &mut P, chrome: &Chrome, palett
     );
 }
 
+/// How prominent a button is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ButtonStyle {
+    /// The action the screen expects next.
+    Primary,
+    /// Available, but not what most people want here.
+    Quiet,
+    /// Present so the layout does not jump, but not usable right now.
+    Disabled,
+}
+
+/// Paint a button: a soft slab with a hairline edge, not a raised 3D control.
+///
+/// Deliberately understated. These sit on a photograph-like backdrop, and a
+/// heavy button would look pasted on; the job is to read as pressable without
+/// competing with the mountains.
+pub fn paint_button<P: Painter + ?Sized>(
+    painter: &mut P,
+    rect: (i32, i32, i32, i32),
+    style: ButtonStyle,
+    palette: &Palette,
+) {
+    let (x, y, w, h) = rect;
+    if w <= 0 || h <= 0 {
+        return;
+    }
+    let radius = (h / 3).max(2);
+    let bounds = Rect::new(x, y, w, h);
+
+    let (fill, edge) = match style {
+        ButtonStyle::Primary => (
+            Color::rgba(palette.accent.r, palette.accent.g, palette.accent.b, 46),
+            Color::rgba(palette.accent.r, palette.accent.g, palette.accent.b, 190),
+        ),
+        ButtonStyle::Quiet => (
+            Color::rgba(palette.mist.r, palette.mist.g, palette.mist.b, 18),
+            Color::rgba(palette.mist.r, palette.mist.g, palette.mist.b, 84),
+        ),
+        ButtonStyle::Disabled => (
+            Color::rgba(palette.mist.r, palette.mist.g, palette.mist.b, 8),
+            Color::rgba(palette.mist.r, palette.mist.g, palette.mist.b, 28),
+        ),
+    };
+
+    painter.fill_rounded_rect(bounds, radius, Paint::new(fill));
+    painter.stroke_rounded_rect(bounds, radius, 1, Paint::new(edge));
+}
+
+/// The colour a button's label should be drawn in.
+#[must_use]
+pub fn button_ink(style: ButtonStyle, palette: &Palette) -> Rgb {
+    match style {
+        ButtonStyle::Primary => palette.ink,
+        ButtonStyle::Quiet => palette.ink_dim,
+        ButtonStyle::Disabled => palette.ink_dim.mix(palette.sky_high, 55),
+    }
+}
+
+/// Where a label starts so it sits centred in a button.
+#[must_use]
+pub fn button_label_at(rect: (i32, i32, i32, i32), label: &str, text_scale: i32) -> (i32, i32) {
+    let (x, y, w, h) = rect;
+    let chars = i32::try_from(label.chars().count()).unwrap_or(0);
+    let text_w = chars * 6 * text_scale - text_scale;
+    let text_h = 8 * text_scale;
+    (x + (w - text_w) / 2, y + (h - text_h) / 2)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{FX_SHIFT, colour, to_fixed};
@@ -157,6 +225,33 @@ mod tests {
         assert_eq!(to_fixed(i32::MAX), i32::MAX);
         assert_eq!(to_fixed(i32::MIN), i32::MIN);
         assert!(to_fixed(100_000_000) > 0, "must not wrap negative");
+    }
+
+    #[test]
+    fn a_button_label_is_centred_within_its_button() {
+        let rect = (100, 200, 180, 40);
+        let (x, y) = super::button_label_at(rect, "Continue", 2);
+        let text_w = 8 * 6 * 2 - 2;
+        assert_eq!(
+            x - rect.0,
+            rect.2 - text_w - (x - rect.0),
+            "not horizontally centred"
+        );
+        assert!(
+            y > rect.1 && y + 16 < rect.1 + rect.3,
+            "not vertically inside"
+        );
+    }
+
+    #[test]
+    fn a_disabled_button_is_dimmer_than_a_primary_one() {
+        let p = crate::palette::Palette::alpymist();
+        let primary = super::button_ink(super::ButtonStyle::Primary, &p).luminance();
+        let disabled = super::button_ink(super::ButtonStyle::Disabled, &p).luminance();
+        assert!(
+            disabled < primary,
+            "disabled {disabled} should be dimmer than {primary}"
+        );
     }
 
     #[test]
