@@ -1,0 +1,12 @@
+# Rust's *-unknown-linux-musl targets default to `crt-static`, producing a fully
+# static binary. A static binary cannot dlopen, which breaks any runtime library
+# loading — the EGL probe in alpymist-glesprobe most immediately, but this would
+# bite anything that loads a plugin or an optional system library later.
+#
+# Alpine's own Rust packages are dynamically linked against musl for the same
+# reason, so this also matches what an APKBUILD will produce.
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=-crt-static"]
+
+[target.aarch64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=-crt-static"]

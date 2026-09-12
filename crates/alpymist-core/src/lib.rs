@@ -10,7 +10,7 @@
 mod capabilities;
 mod tier;
 
-pub use capabilities::{Capabilities, GpuDevice, Virtualisation};
+pub use capabilities::{Capabilities, GlesInfo, GpuDevice, Virtualisation};
 pub use tier::{Rationale, SessionBackend, Tier, select_tier};
 
 /// Errors produced by Alpymist libraries.

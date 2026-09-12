@@ -28,6 +28,47 @@ impl GpuDevice {
     }
 }
 
+/// What an EGL/GLES probe found on this machine.
+///
+/// The version alone is not enough to decide anything: Mesa's `llvmpipe`
+/// software rasteriser advertises OpenGL ES 3.2, which would otherwise read as
+/// a perfectly capable GPU. The renderer string is what distinguishes real
+/// hardware from a CPU pretending to be one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GlesInfo {
+    /// OpenGL ES version as `(major, minor)`, parsed from `GL_VERSION`.
+    pub version: (u32, u32),
+    /// Raw `GL_RENDERER` string, e.g. `llvmpipe (LLVM 17.0.6, 256 bits)`.
+    pub renderer: String,
+    /// Raw `GL_VENDOR` string.
+    pub vendor: String,
+}
+
+impl GlesInfo {
+    /// Whether this is a CPU rasteriser rather than a GPU.
+    ///
+    /// Matches whole tokens rather than substrings: a bare `swr` substring
+    /// would also fire on hardware renderer names that merely contain those
+    /// letters. This is a denylist, so it can be wrong about a rasteriser we
+    /// have never seen — it errs towards calling something hardware, which the
+    /// version and RAM checks then still have to agree with.
+    #[must_use]
+    pub fn is_software(&self) -> bool {
+        const SOFTWARE_RENDERERS: [&str; 6] = [
+            "llvmpipe",
+            "softpipe",
+            "swrast",
+            "swr",
+            "lavapipe",
+            "swiftshader",
+        ];
+        self.renderer
+            .to_ascii_lowercase()
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|token| SOFTWARE_RENDERERS.contains(&token))
+    }
+}
+
 /// Detected virtualisation flavour. Influences which GPU stack we trust.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -52,11 +93,11 @@ pub struct Capabilities {
     pub cpus: usize,
     /// DRM devices found on the system.
     pub gpus: Vec<GpuDevice>,
-    /// OpenGL ES version reported by an EGL probe, as `(major, minor)`.
+    /// What the EGL probe found, if it ran and succeeded.
     ///
     /// `None` means "not probed or probe failed", which we treat as
     /// "assume no acceleration" rather than optimistically guessing.
-    pub gles_version: Option<(u32, u32)>,
+    pub gles: Option<GlesInfo>,
     /// Detected virtualisation.
     pub virtualisation: Virtualisation,
 }
@@ -75,5 +116,53 @@ impl Capabilities {
     #[must_use]
     pub fn has_kms(&self) -> bool {
         !self.gpus.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GlesInfo;
+
+    fn renderer(name: &str) -> GlesInfo {
+        GlesInfo {
+            version: (3, 2),
+            renderer: name.into(),
+            vendor: "Mesa".into(),
+        }
+    }
+
+    #[test]
+    fn known_cpu_rasterisers_are_recognised() {
+        for name in [
+            "llvmpipe (LLVM 17.0.6, 256 bits)",
+            "softpipe",
+            "SWR (LLVM 11)",
+            "swrast",
+            "lavapipe (LLVM 17.0.6, 256 bits)",
+            "Google SwiftShader",
+        ] {
+            assert!(renderer(name).is_software(), "{name} should be software");
+        }
+    }
+
+    #[test]
+    fn real_gpus_are_not_flagged_as_software() {
+        for name in [
+            "AMD Radeon RX 580 (polaris10, LLVM 17.0.6, DRM 3.54)",
+            "Mesa Intel(R) HD Graphics 620 (KBL GT2)",
+            "NV137",
+            "virgl (AMD Radeon RX 580)",
+            "Mali-G72",
+            "V3D 4.2",
+        ] {
+            assert!(!renderer(name).is_software(), "{name} should be hardware");
+        }
+    }
+
+    #[test]
+    fn matching_is_case_insensitive_and_token_based() {
+        assert!(renderer("LLVMPIPE").is_software());
+        // Substring-only matching would wrongly flag this.
+        assert!(!renderer("Swrastite GPU 9000").is_software());
     }
 }

@@ -74,6 +74,17 @@ fn probe(format: Format) -> alpymist_core::Result<()> {
             println!("metapackage: {}", rationale.tier.metapackage());
             println!("memory:      {} MiB", caps.memory_mib);
             println!("cpus:        {}", caps.cpus);
+            match &caps.gles {
+                Some(g) => println!(
+                    "gles:        {}.{} — {} ({}){}",
+                    g.version.0,
+                    g.version.1,
+                    g.renderer,
+                    g.vendor,
+                    if g.is_software() { " [software]" } else { "" }
+                ),
+                None => println!("gles:        not detected"),
+            }
             println!("virt:        {:?}", caps.virtualisation);
             println!("why:");
             for reason in &rationale.reasons {

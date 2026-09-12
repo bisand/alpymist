@@ -23,8 +23,7 @@ pub fn probe() -> Result<Capabilities> {
         memory_mib: memory_mib()?,
         cpus: std::thread::available_parallelism().map_or(1, std::num::NonZero::get),
         gpus: drm_devices(Path::new("/sys/class/drm")),
-        // Filled in by the EGL probe helper; see `alpymist-glesprobe` (not yet built).
-        gles_version: None,
+        gles: alpymist_glesprobe::probe(),
         virtualisation: virtualisation(),
     })
 }

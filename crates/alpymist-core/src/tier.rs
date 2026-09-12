@@ -108,7 +108,7 @@ pub fn select_tier(caps: &Capabilities) -> Rationale {
         gpu.card
     ));
 
-    let Some(gles) = caps.gles_version else {
+    let Some(gles) = caps.gles.as_ref() else {
         reasons.push("EGL probe did not report a GL ES version; assuming none".into());
         return Rationale {
             tier: Tier::Potato,
@@ -116,10 +116,24 @@ pub fn select_tier(caps: &Capabilities) -> Rationale {
         };
     };
 
-    if gles < LITE_MIN_GLES {
+    // Checked before the version, because llvmpipe advertises GL ES 3.2 and
+    // would otherwise sail through every check below as a capable GPU.
+    if gles.is_software() {
+        reasons.push(format!(
+            "renderer {:?} is a CPU rasteriser, not the GPU",
+            gles.renderer
+        ));
+        return Rationale {
+            tier: Tier::Potato,
+            reasons,
+        };
+    }
+
+    let version = gles.version;
+    if version < LITE_MIN_GLES {
         reasons.push(format!(
             "GL ES {}.{} is below the 2.0 minimum",
-            gles.0, gles.1
+            version.0, version.1
         ));
         return Rationale {
             tier: Tier::Potato,
@@ -137,10 +151,10 @@ pub fn select_tier(caps: &Capabilities) -> Rationale {
         };
     }
 
-    if gles < FULL_MIN_GLES {
+    if version < FULL_MIN_GLES {
         reasons.push(format!(
             "GL ES {}.{} is below the {}.{} Hyprland requires",
-            gles.0, gles.1, FULL_MIN_GLES.0, FULL_MIN_GLES.1
+            version.0, version.1, FULL_MIN_GLES.0, FULL_MIN_GLES.1
         ));
         return Rationale {
             tier: Tier::Lite,
@@ -159,8 +173,8 @@ pub fn select_tier(caps: &Capabilities) -> Rationale {
     }
 
     reasons.push(format!(
-        "GL ES {}.{} and {} MiB RAM",
-        gles.0, gles.1, caps.memory_mib
+        "GL ES {}.{} on {} with {} MiB RAM",
+        version.0, version.1, gles.renderer, caps.memory_mib
     ));
     Rationale {
         tier: Tier::Full,
@@ -171,9 +185,19 @@ pub fn select_tier(caps: &Capabilities) -> Rationale {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capabilities::{GpuDevice, Virtualisation};
+    use crate::capabilities::{GlesInfo, GpuDevice, Virtualisation};
 
+    /// Build capabilities with a hardware renderer at the given GL ES version.
     fn caps(driver: Option<&str>, gles: Option<(u32, u32)>, mib: u64) -> Capabilities {
+        caps_with_renderer(driver, gles, mib, "AMD Radeon RX 580 (polaris10)")
+    }
+
+    fn caps_with_renderer(
+        driver: Option<&str>,
+        gles: Option<(u32, u32)>,
+        mib: u64,
+        renderer: &str,
+    ) -> Capabilities {
         Capabilities {
             memory_mib: mib,
             cpus: 2,
@@ -185,7 +209,11 @@ mod tests {
                 })
                 .into_iter()
                 .collect(),
-            gles_version: gles,
+            gles: gles.map(|version| GlesInfo {
+                version,
+                renderer: renderer.into(),
+                vendor: "Mesa".into(),
+            }),
             virtualisation: Virtualisation::Bare,
         }
     }
@@ -217,6 +245,34 @@ mod tests {
             select_tier(&caps(Some("i915"), None, 8192)).tier,
             Tier::Potato
         );
+    }
+
+    /// The regression this whole `GlesInfo` type exists for: llvmpipe reports
+    /// GL ES 3.2 and would otherwise be promoted to Hyprland on a machine with
+    /// no working GPU at all.
+    #[test]
+    fn llvmpipe_is_not_mistaken_for_a_capable_gpu() {
+        let c = caps_with_renderer(
+            Some("i915"),
+            Some((3, 2)),
+            16384,
+            "llvmpipe (LLVM 17.0.6, 256 bits)",
+        );
+        let r = select_tier(&c);
+        assert_eq!(r.tier, Tier::Potato, "reasons: {:?}", r.reasons);
+        assert!(r.reasons.iter().any(|s| s.contains("CPU rasteriser")));
+    }
+
+    #[test]
+    fn other_software_rasterisers_are_caught_too() {
+        for renderer in ["softpipe", "SWR (LLVM 11)", "swrast", "lavapipe (LLVM 17)"] {
+            let c = caps_with_renderer(Some("i915"), Some((3, 2)), 16384, renderer);
+            assert_eq!(
+                select_tier(&c).tier,
+                Tier::Potato,
+                "renderer {renderer} slipped through"
+            );
+        }
     }
 
     #[test]
@@ -257,8 +313,8 @@ mod tests {
 
     #[test]
     fn virtio_gpu_in_a_vm_is_treated_as_accelerated() {
-        let r = select_tier(&caps(Some("virtio_gpu"), Some((3, 2)), 4096));
-        assert_eq!(r.tier, Tier::Full);
+        let c = caps_with_renderer(Some("virtio_gpu"), Some((3, 2)), 4096, "virgl (AMD Radeon)");
+        assert_eq!(select_tier(&c).tier, Tier::Full);
     }
 
     #[test]
