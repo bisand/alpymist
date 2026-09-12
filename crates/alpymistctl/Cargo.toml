@@ -1,6 +1,6 @@
 [package]
-name = "alpyctl"
-description = "Alpy system control CLI."
+name = "alpymistctl"
+description = "Alpymist system control CLI."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,8 +8,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-alpy-core = { workspace = true }
-alpy-hwprobe = { workspace = true }
+alpymist-core = { workspace = true }
+alpymist-hwprobe = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
 

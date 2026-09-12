@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "alpy-core"
+name = "alpymist-core"
 version = "0.0.1"
 dependencies = [
  "serde",
@@ -11,18 +11,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "alpy-hwprobe"
+name = "alpymist-hwprobe"
 version = "0.0.1"
 dependencies = [
- "alpy-core",
+ "alpymist-core",
 ]
 
 [[package]]
-name = "alpyctl"
+name = "alpymistctl"
 version = "0.0.1"
 dependencies = [
- "alpy-core",
- "alpy-hwprobe",
+ "alpymist-core",
+ "alpymist-hwprobe",
  "clap",
  "serde_json",
 ]

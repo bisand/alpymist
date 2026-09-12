@@ -1,5 +1,5 @@
 [package]
-name = "alpy-hwprobe"
+name = "alpymist-hwprobe"
 description = "Reads hardware capabilities from the running Linux system."
 version.workspace = true
 edition.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-alpy-core = { workspace = true }
+alpymist-core = { workspace = true }
 
 [lints]
 workspace = true

@@ -2,11 +2,11 @@
 //!
 //! Everything here is best-effort: a field we cannot read becomes `None` or a
 //! conservative default, never a panic and never an optimistic guess. The
-//! interesting decisions all live in [`alpy_core::select_tier`].
+//! interesting decisions all live in [`alpymist_core::select_tier`].
 
 #![forbid(unsafe_code)]
 
-use alpy_core::{Capabilities, Error, GpuDevice, Result, Virtualisation};
+use alpymist_core::{Capabilities, Error, GpuDevice, Result, Virtualisation};
 use std::fs;
 use std::path::Path;
 
@@ -23,7 +23,7 @@ pub fn probe() -> Result<Capabilities> {
         memory_mib: memory_mib()?,
         cpus: std::thread::available_parallelism().map_or(1, std::num::NonZero::get),
         gpus: drm_devices(Path::new("/sys/class/drm")),
-        // Filled in by the EGL probe helper; see `alpy-glesprobe` (not yet built).
+        // Filled in by the EGL probe helper; see `alpymist-glesprobe` (not yet built).
         gles_version: None,
         virtualisation: virtualisation(),
     })
@@ -133,7 +133,7 @@ mod tests {
     }
 
     fn scratch(name: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("alpy-hwprobe-{name}"));
+        let d = std::env::temp_dir().join(format!("alpymist-hwprobe-{name}"));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d

@@ -61,9 +61,9 @@ impl Tier {
     #[must_use]
     pub fn metapackage(self) -> &'static str {
         match self {
-            Self::Full => "alpy-desktop-full",
-            Self::Lite | Self::Potato => "alpy-desktop-lite",
-            Self::Legacy => "alpy-desktop-legacy",
+            Self::Full => "alpymist-desktop-full",
+            Self::Lite | Self::Potato => "alpymist-desktop-lite",
+            Self::Legacy => "alpymist-desktop-legacy",
         }
     }
 }
@@ -252,7 +252,7 @@ mod tests {
         let r = select_tier(&caps(Some("amdgpu"), Some((3, 2)), 16384));
         assert_eq!(r.tier, Tier::Full);
         assert_eq!(r.tier.backend(), SessionBackend::Hyprland);
-        assert_eq!(r.tier.metapackage(), "alpy-desktop-full");
+        assert_eq!(r.tier.metapackage(), "alpymist-desktop-full");
     }
 
     #[test]

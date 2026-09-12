@@ -1,8 +1,12 @@
-# Alpy
+# Alpymist
 
 An opinionated, curated desktop on top of Alpine Linux — Wayland first, with a
 software-rendered path for hardware that cannot do better, and an X11 fallback
 for hardware that cannot do Wayland at all.
+
+The name is Alpine plus mist — the haze on the mountains — and a pun on
+*alchemist*, which is roughly what turning a fifteen-year-old laptop back into
+a usable desktop amounts to.
 
 Two things make it different from the curated-desktop projects it takes
 inspiration from:
@@ -26,7 +30,7 @@ the other founding decisions.
 Pre-alpha. Nothing is installable yet. What works today:
 
 ```
-cargo run -p alpyctl -- probe
+cargo run -p alpymistctl -- probe
 ```
 
 on a Linux machine, which reports the desktop tier that machine would get and
@@ -37,7 +41,7 @@ why.
 | Path             | Contents                                              |
 |------------------|-------------------------------------------------------|
 | `crates/`        | Rust workspace: domain model, probes, CLI             |
-| `aports/`        | `APKBUILD`s for Alpy packages                          |
+| `aports/`        | `APKBUILD`s for Alpymist packages                          |
 | `profiles/`      | `mkimage` profiles and `genapkovl` overlays            |
 | `builder/`       | The Alpine container everything is built in            |
 | `docs/adr/`      | Architecture decision records                          |

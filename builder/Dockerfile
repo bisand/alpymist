@@ -1,4 +1,4 @@
-# The one place Alpy is built. Pinned digest, no network surprises.
+# The one place Alpymist is built. Pinned digest, no network surprises.
 FROM alpine:3.22
 
 # abuild: Alpine package building. mkinitfs/xorriso/squashfs: ISO assembly.

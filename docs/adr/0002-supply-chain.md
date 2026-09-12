@@ -19,13 +19,13 @@ None of that is inherent to a curated desktop. It is a choice about packaging.
 
 ## Decision
 
-1. **No installer script. Ever.** There is no `curl | sh` path to an Alpy
-   system. You either boot a signed ISO, or you `apk add alpy-desktop` from a
+1. **No installer script. Ever.** There is no `curl | sh` path to an Alpymist
+   system. You either boot a signed ISO, or you `apk add alpymist-desktop` from a
    signed repository on an existing Alpine box.
 2. **Every artefact we ship is an apk**, signed with an offline key. Config
    files, themes, and wallpapers are packages, not `cp` commands.
-3. **System mutation goes through `alpyctl`**, in Rust, which writes to
-   `/etc/alpy` and generates backend config from it. Hand-edited files are
+3. **System mutation goes through `alpymistctl`**, in Rust, which writes to
+   `/etc/alpymist` and generates backend config from it. Hand-edited files are
    detected, never silently overwritten.
 4. **Reproducible builds are a release gate**, not an aspiration. CI builds
    each package twice, on different hosts, and diffs them.

@@ -1,4 +1,4 @@
-//! `alpyctl` — the single entry point for configuring an Alpy system.
+//! `alpymistctl` — the single entry point for configuring an Alpymist system.
 
 #![forbid(unsafe_code)]
 
@@ -6,9 +6,9 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(
-    name = "alpyctl",
+    name = "alpymistctl",
     version,
-    about = "Configure and inspect an Alpy system"
+    about = "Configure and inspect an Alpymist system"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -38,21 +38,21 @@ fn main() -> std::process::ExitCode {
     match run(&cli) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("alpyctl: {e}");
+            eprintln!("alpymistctl: {e}");
             std::process::ExitCode::FAILURE
         }
     }
 }
 
-fn run(cli: &Cli) -> alpy_core::Result<()> {
+fn run(cli: &Cli) -> alpymist_core::Result<()> {
     match cli.command {
         Command::Probe { format } => probe(format),
     }
 }
 
-fn probe(format: Format) -> alpy_core::Result<()> {
-    let caps = alpy_hwprobe::probe()?;
-    let rationale = alpy_core::select_tier(&caps);
+fn probe(format: Format) -> alpymist_core::Result<()> {
+    let caps = alpymist_hwprobe::probe()?;
+    let rationale = alpymist_core::select_tier(&caps);
 
     match format {
         Format::Json => {

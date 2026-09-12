@@ -1,6 +1,6 @@
-//! Shared domain model for Alpy.
+//! Shared domain model for Alpymist.
 //!
-//! The central idea of Alpy is that the *user-facing desktop* (keybindings, theme,
+//! The central idea of Alpymist is that the *user-facing desktop* (keybindings, theme,
 //! panel, launcher, lock screen) is defined once, and rendered onto whichever
 //! session backend the machine can actually drive. [`Tier`] is the decision, and
 //! [`select_tier`] is the pure function that makes it.
@@ -13,7 +13,7 @@ mod tier;
 pub use capabilities::{Capabilities, GpuDevice, Virtualisation};
 pub use tier::{Rationale, SessionBackend, Tier, select_tier};
 
-/// Errors produced by Alpy libraries.
+/// Errors produced by Alpymist libraries.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// A `/sys` or `/proc` node could not be read.

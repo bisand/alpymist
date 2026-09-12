@@ -20,7 +20,7 @@ compositor, which is the "lightweight, X11-like desktop" half of the brief.
 
 ## Decision
 
-Alpy defines the desktop **once** — keybindings, theme, panel, launcher, lock,
+Alpymist defines the desktop **once** — keybindings, theme, panel, launcher, lock,
 idle — and renders it onto whichever backend the machine can drive:
 
 | Tier     | Backend                    | Chosen when                              |
@@ -30,7 +30,7 @@ idle — and renders it onto whichever backend the machine can drive:
 | `Potato` | labwc (`WLR_RENDERER=pixman`) | KMS but no usable GPU rendering       |
 | `Legacy` | X11 + i3                   | no DRM/KMS device at all                 |
 
-Selection is a pure function, `alpy_core::select_tier`, run at install time and
+Selection is a pure function, `alpymist_core::select_tier`, run at install time and
 again on first boot. It is **pessimistic**: anything unknown downgrades. A
 desktop that starts slowly is recoverable; one that does not start is not.
 

@@ -1,5 +1,5 @@
 ARCH ?= $(shell uname -m)
-BUILDER := alpy-builder
+BUILDER := alpymist-builder
 
 .PHONY: help check test lint builder shell iso clean
 help: ## Show this help

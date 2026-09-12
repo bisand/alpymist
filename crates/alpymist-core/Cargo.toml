@@ -1,6 +1,6 @@
 [package]
-name = "alpy-core"
-description = "Shared domain model for Alpy: hardware capabilities, desktop tiers, session backends."
+name = "alpymist-core"
+description = "Shared domain model for Alpymist: hardware capabilities, desktop tiers, session backends."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

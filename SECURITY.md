@@ -1,6 +1,6 @@
 # Security policy
 
-Alpy's security posture is described in
+Alpymist's security posture is described in
 [ADR 0002](docs/adr/0002-supply-chain.md). In short: no install scripts,
 everything signed, reproducible builds, no third-party repositories by default,
 and all first-party code in Rust with `unsafe` forbidden.
