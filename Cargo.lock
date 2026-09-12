@@ -64,6 +64,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpymist-install"
+version = "0.0.1"
+dependencies = [
+ "alpymist-core",
+ "alpymist-ui",
+ "denise",
+ "denise-render",
+ "denise-winit",
+ "png",
+]
+
+[[package]]
 name = "alpymist-splash"
 version = "0.0.1"
 dependencies = [

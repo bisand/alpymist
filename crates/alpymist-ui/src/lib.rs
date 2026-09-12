@@ -13,6 +13,7 @@
 #![forbid(unsafe_code)]
 
 pub mod backdrop;
+pub mod chrome;
 pub mod convert;
 pub mod palette;
 #[cfg(feature = "render")]
@@ -20,5 +21,6 @@ pub mod render;
 pub mod terrain;
 
 pub use backdrop::{Backdrop, Layer};
+pub use chrome::Chrome;
 pub use palette::Palette;
 pub use terrain::Ridge;

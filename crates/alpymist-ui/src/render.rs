@@ -5,8 +5,9 @@
 //! apart is what lets the scene be tested without a graphics stack.
 
 use crate::backdrop::{Backdrop, Layer};
+use crate::chrome::Chrome;
 use crate::convert::px;
-use crate::palette::Rgb;
+use crate::palette::{Palette, Rgb};
 use denise::color::Color;
 use denise::geom::Rect;
 use denise::paint::Paint;
@@ -92,6 +93,44 @@ fn paint_mist<P: Painter + ?Sized>(
             Paint::new(Color::rgba(c.r, c.g, c.b, alpha)),
         );
     }
+}
+
+/// Paint the wizard panel: a translucent slab with a hairline edge.
+///
+/// Translucent rather than opaque so the mountains still read through it. The
+/// edge is what stops it dissolving into the backdrop on a washed-out panel.
+pub fn paint_panel<P: Painter + ?Sized>(painter: &mut P, chrome: &Chrome, palette: &Palette) {
+    let (x, y, w, h) = chrome.panel;
+    let radius = (chrome.padding / 2).max(2);
+    let slab = Color::rgba(
+        palette.sky_high.r,
+        palette.sky_high.g,
+        palette.sky_high.b,
+        216,
+    );
+    painter.fill_rounded_rect(Rect::new(x, y, w, h), radius, Paint::new(slab));
+    painter.stroke_rounded_rect(
+        Rect::new(x, y, w, h),
+        radius,
+        1,
+        Paint::new(Color::rgba(
+            palette.mist.r,
+            palette.mist.g,
+            palette.mist.b,
+            64,
+        )),
+    );
+
+    // A rule under the header, so the title reads as a heading.
+    painter.fill_rect(
+        Rect::new(chrome.header.0, chrome.rule_y, chrome.header.2, 1),
+        Paint::new(Color::rgba(
+            palette.ink_dim.r,
+            palette.ink_dim.g,
+            palette.ink_dim.b,
+            72,
+        )),
+    );
 }
 
 #[cfg(test)]

@@ -1,0 +1,284 @@
+//! The frame every wizard screen is drawn inside.
+//!
+//! Pure geometry: where the panel sits and how it divides into header, body and
+//! footer. Rendering lives in [`crate::render`]. Keeping the two apart means the
+//! layout can be checked at every screen size we care about without a display —
+//! and the sizes that matter here go down to 640×480.
+
+use crate::convert::px;
+
+/// Where each part of a wizard screen sits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Chrome {
+    /// The panel as `(x, y, width, height)`.
+    pub panel: (i32, i32, i32, i32),
+    /// Inside the panel, above the divider.
+    pub header: (i32, i32, i32, i32),
+    /// Top-left of the "STEP n OF m" line.
+    pub counter_at: (i32, i32),
+    /// Top-left of the screen title.
+    pub title_at: (i32, i32),
+    /// Top-left of the one-line subtitle.
+    pub subtitle_at: (i32, i32),
+    /// Y of the rule under the header.
+    pub rule_y: i32,
+    /// The content area.
+    pub body: (i32, i32, i32, i32),
+    /// Key hints and advisories, at the bottom.
+    pub footer: (i32, i32, i32, i32),
+    /// Text scale for the panel title.
+    pub title_scale: i32,
+    /// Text scale for body and footer text.
+    pub text_scale: i32,
+    /// Padding inside the panel edge.
+    pub padding: i32,
+}
+
+/// Fraction of the screen width the panel occupies, in percent.
+const PANEL_WIDTH_PCT: i32 = 74;
+/// Fraction of the screen height the panel occupies, in percent.
+const PANEL_HEIGHT_PCT: i32 = 62;
+/// How far down the screen the panel starts, in percent. Keeps the horizon
+/// clear at every size, including the small ones.
+const TOP_MARGIN_PCT: i32 = 38;
+/// Height of the built-in font cell, before scaling.
+const CELL_HEIGHT: i32 = 8;
+
+impl Chrome {
+    /// Lay out a wizard screen for this display size.
+    ///
+    /// The panel sits low rather than centred: the mountains occupy the upper
+    /// half, and covering them with a dialogue would waste the only thing on
+    /// screen that makes this look like anything.
+    #[must_use]
+    pub fn for_screen(width: u32, height: u32) -> Self {
+        let w = px(width.max(1));
+        let h = px(height.max(1));
+
+        let text_scale = if w >= 1600 {
+            3
+        } else if w >= 1024 {
+            2
+        } else {
+            1
+        };
+        let title_scale = text_scale + 1;
+        let padding = (text_scale * 12).max(10);
+
+        // The top margin is fixed first and the panel shrinks to fit below it,
+        // rather than the panel taking a fixed share and being positioned after.
+        // On a 640x480 screen the second order gives the panel so much height
+        // that it rides up over the horizon — which is the one thing on screen
+        // worth looking at.
+        let top_margin = h * TOP_MARGIN_PCT / 100;
+        let panel_w = (w * PANEL_WIDTH_PCT / 100).min(w - padding * 2).max(0);
+        let panel_h = (h * PANEL_HEIGHT_PCT / 100)
+            .min(h - top_margin - padding)
+            .max(0);
+        let panel_x = (w - panel_w) / 2;
+        let panel_y = top_margin;
+
+        let inner_x = panel_x + padding;
+        let inner_w = panel_w - padding * 2;
+
+        // Header rows are positioned here rather than by the caller, so the
+        // header's height and the lines inside it cannot disagree — which is
+        // exactly how the subtitle ended up overlapping the body.
+        let gap = text_scale * 4;
+        let header_y = panel_y + padding;
+        let counter_at = (inner_x, header_y);
+        let title_at = (inner_x, header_y + CELL_HEIGHT * text_scale + gap);
+        let subtitle_at = (inner_x, title_at.1 + CELL_HEIGHT * title_scale + gap);
+        let header_bottom = subtitle_at.1 + CELL_HEIGHT * text_scale;
+        let rule_y = header_bottom + gap;
+        let header_h = rule_y - header_y;
+
+        let footer_h = CELL_HEIGHT * text_scale * 3 + padding;
+        let body_y = rule_y + gap * 2;
+        let footer_y = panel_y + panel_h - padding - footer_h;
+        let body_h = (footer_y - body_y - gap).max(0);
+
+        Self {
+            panel: (panel_x, panel_y, panel_w, panel_h),
+            header: (inner_x, header_y, inner_w, header_h),
+            counter_at,
+            title_at,
+            subtitle_at,
+            rule_y,
+            body: (inner_x, body_y, inner_w, body_h),
+            footer: (inner_x, footer_y, inner_w, footer_h),
+            title_scale,
+            text_scale,
+            padding,
+        }
+    }
+
+    /// The y of a body row, `index` lines down from the top of the body.
+    #[must_use]
+    pub fn body_row(&self, index: i32) -> i32 {
+        let line = CELL_HEIGHT * self.text_scale + self.text_scale * 4;
+        self.body.1 + index * line
+    }
+
+    /// How many rows fit in the body.
+    #[must_use]
+    pub fn body_rows(&self) -> i32 {
+        let line = CELL_HEIGHT * self.text_scale + self.text_scale * 4;
+        (self.body.3 / line.max(1)).max(1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Chrome;
+    use crate::convert::px;
+
+    /// Every resolution we claim to support, from a netbook to a modern panel.
+    const SIZES: [(u32, u32); 7] = [
+        (640, 480),
+        (800, 600),
+        (1024, 600),
+        (1024, 768),
+        (1366, 768),
+        (1920, 1080),
+        (2560, 1440),
+    ];
+
+    #[test]
+    fn the_panel_stays_on_screen_at_every_size() {
+        for (w, h) in SIZES {
+            let c = Chrome::for_screen(w, h);
+            let (x, y, pw, ph) = c.panel;
+            assert!(x >= 0 && y >= 0, "{w}x{h}: panel at {x},{y}");
+            assert!(x + pw <= px(w), "{w}x{h}: panel overflows right");
+            assert!(y + ph <= px(h), "{w}x{h}: panel overflows bottom");
+        }
+    }
+
+    #[test]
+    fn header_body_and_footer_stay_inside_the_panel_and_do_not_overlap() {
+        for (w, h) in SIZES {
+            let c = Chrome::for_screen(w, h);
+            let (px_, py, pw, ph) = c.panel;
+            for (name, (x, y, rw, rh)) in
+                [("header", c.header), ("body", c.body), ("footer", c.footer)]
+            {
+                assert!(
+                    x >= px_ && y >= py,
+                    "{w}x{h}: {name} starts outside the panel"
+                );
+                assert!(
+                    x + rw <= px_ + pw,
+                    "{w}x{h}: {name} overflows the panel width"
+                );
+                assert!(
+                    y + rh <= py + ph,
+                    "{w}x{h}: {name} overflows the panel height"
+                );
+            }
+            assert!(
+                c.header.1 + c.header.3 <= c.body.1,
+                "{w}x{h}: header overlaps body"
+            );
+            assert!(
+                c.body.1 + c.body.3 <= c.footer.1,
+                "{w}x{h}: body overlaps footer"
+            );
+        }
+    }
+
+    #[test]
+    fn the_panel_is_horizontally_centred() {
+        for (w, h) in SIZES {
+            let c = Chrome::for_screen(w, h);
+            let (x, _, pw, _) = c.panel;
+            let right_gap = px(w) - (x + pw);
+            assert!(
+                (x - right_gap).abs() <= 1,
+                "{w}x{h}: off-centre by {}",
+                (x - right_gap).abs()
+            );
+        }
+    }
+
+    /// The mountains are the whole point of the backdrop; a panel that covers
+    /// them makes the installer look like a dialogue box on a wallpaper.
+    #[test]
+    fn the_panel_leaves_the_upper_third_of_the_screen_clear() {
+        for (w, h) in SIZES {
+            let c = Chrome::for_screen(w, h);
+            assert!(
+                c.panel.1 > px(h) / 3,
+                "{w}x{h}: panel starts at {} which covers the horizon",
+                c.panel.1
+            );
+        }
+    }
+
+    #[test]
+    fn the_body_always_has_room_for_at_least_a_few_rows() {
+        for (w, h) in SIZES {
+            let rows = Chrome::for_screen(w, h).body_rows();
+            assert!(rows >= 3, "{w}x{h}: only {rows} body rows");
+        }
+    }
+
+    #[test]
+    fn body_rows_advance_downwards_and_stay_within_the_body() {
+        let c = Chrome::for_screen(1280, 800);
+        assert!(c.body_row(1) > c.body_row(0));
+        let last = c.body_row(c.body_rows() - 1);
+        assert!(
+            last < c.body.1 + c.body.3,
+            "last row {last} spills past the body"
+        );
+    }
+
+    /// The bug this guards: the header reported a height that did not match
+    /// where its own lines were drawn, so the subtitle ran into the body.
+    #[test]
+    fn the_subtitle_never_runs_into_the_body() {
+        for (w, h) in SIZES {
+            let c = Chrome::for_screen(w, h);
+            let subtitle_bottom = c.subtitle_at.1 + 8 * c.text_scale;
+            assert!(
+                subtitle_bottom <= c.rule_y,
+                "{w}x{h}: subtitle ends at {subtitle_bottom}, rule at {}",
+                c.rule_y
+            );
+            assert!(c.rule_y < c.body.1, "{w}x{h}: rule sits inside the body");
+        }
+    }
+
+    #[test]
+    fn header_lines_run_top_to_bottom_in_order() {
+        for (w, h) in SIZES {
+            let c = Chrome::for_screen(w, h);
+            assert!(c.counter_at.1 < c.title_at.1, "{w}x{h}");
+            assert!(c.title_at.1 < c.subtitle_at.1, "{w}x{h}");
+            assert_eq!(
+                c.counter_at.0, c.title_at.0,
+                "{w}x{h}: header not left-aligned"
+            );
+            assert_eq!(
+                c.title_at.0, c.subtitle_at.0,
+                "{w}x{h}: header not left-aligned"
+            );
+        }
+    }
+
+    #[test]
+    fn bigger_screens_get_bigger_text() {
+        assert!(
+            Chrome::for_screen(1920, 1080).text_scale > Chrome::for_screen(640, 480).text_scale
+        );
+    }
+
+    #[test]
+    fn a_degenerate_size_does_not_panic() {
+        for (w, h) in [(1, 1), (16, 16), (320, 240)] {
+            let c = Chrome::for_screen(w, h);
+            assert!(c.panel.2 >= 0 && c.panel.3 >= 0);
+        }
+    }
+}
