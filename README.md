@@ -17,6 +17,10 @@ All first-party code is Rust with `unsafe` forbidden. Packaging metadata
 (`APKBUILD`) is shell because Alpine's build system requires it; it contains no
 logic beyond build recipes.
 
+Proprietary and glibc-only software runs via Flatpak, sandboxed, rather than
+natively — see [ADR 0003](docs/adr/0003-foundational-choices.md) for that and
+the other founding decisions.
+
 ## Status
 
 Pre-alpha. Nothing is installable yet. What works today:
@@ -42,3 +46,8 @@ why.
 
 Requires Docker (for Alpine builds) and a Rust toolchain. `make help` lists the
 targets.
+
+## Licence
+
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your
+option. Contributions are accepted under the same terms.
