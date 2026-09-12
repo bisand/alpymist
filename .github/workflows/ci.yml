@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust (lint + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  image:
+    name: ISO (x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # x86_64 is the architecture Alpymist actually targets — old laptops are
+      # overwhelmingly x86. Development happens on aarch64 Macs, so this job is
+      # what stops the real target from rotting (ADR 0003).
+      - name: Build the builder container
+        run: docker build -t alpymist-builder builder
+
+      - name: Build the ISO
+        run: |
+          mkdir -p out && chmod 777 out
+          docker run --rm -v "$PWD":/src -v "$PWD/out":/out \
+            alpymist-builder bash /src/ci/build-iso.sh x86_64
+
+      # Potato, not Lite: virtio-gpu without virgl gives the guest no hardware
+      # GL, so Mesa falls back to llvmpipe and the tier logic correctly refuses
+      # to promote it. If this ever reports Full, the software-renderer check
+      # has regressed.
+      - name: Boot it and assert the reported tier
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86
+          cargo run -p xtask -- smoke \
+            --iso out/alpymist-0.0.1-x86_64.iso \
+            --arch x86_64 \
+            --expect-tier Potato \
+            --timeout 300
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: alpymist-x86_64-iso
+          path: out/*.iso
+          retention-days: 7

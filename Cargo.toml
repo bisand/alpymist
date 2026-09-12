@@ -5,6 +5,7 @@ members = [
     "crates/alpymist-glesprobe",
     "crates/alpymist-hwprobe",
     "crates/alpymistctl",
+    "xtask",
 ]
 
 [workspace.package]

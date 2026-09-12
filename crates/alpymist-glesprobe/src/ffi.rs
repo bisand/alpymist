@@ -6,6 +6,7 @@
 
 #![allow(unsafe_code)]
 
+use crate::ProbeError;
 use khronos_egl as egl;
 use std::ffi::{CStr, c_char};
 
@@ -29,18 +30,22 @@ pub(crate) struct RawStrings {
 
 /// Load libEGL, create a context, and read the GL strings.
 ///
-/// Returns `None` at the first sign of trouble; a probe that cannot answer is
-/// not an error condition, it is just an absence of information.
-pub(crate) fn query() -> Option<RawStrings> {
+/// Each failure is reported as the step it happened at, so a user landing on an
+/// unexpected tier can tell "Mesa is not installed" from "this GPU has no
+/// working driver".
+pub(crate) fn query() -> Result<RawStrings, ProbeError> {
     // SAFETY: dlopen of a system library by soname. Unsound only if the host's
     // libEGL is itself malicious, in which case we have already lost.
-    let lib = unsafe { libloading::Library::new("libEGL.so.1") }.ok()?;
+    let lib = unsafe { libloading::Library::new("libEGL.so.1") }
+        .map_err(|e| ProbeError::NoLibrary(e.to_string()))?;
     // SAFETY: resolves EGL entry points from the library just opened. The
     // symbols and their signatures are fixed by the EGL ABI.
-    let egl = unsafe { egl::DynamicInstance::<egl::EGL1_4>::load_required_from(lib) }.ok()?;
+    let egl = unsafe { egl::DynamicInstance::<egl::EGL1_4>::load_required_from(lib) }
+        .map_err(|_| ProbeError::MissingSymbols)?;
 
-    let display = open_display(&egl)?;
-    egl.initialize(display).ok()?;
+    let display = open_display(&egl).ok_or(ProbeError::NoDisplay)?;
+    egl.initialize(display)
+        .map_err(|_| ProbeError::InitFailed)?;
 
     let result = with_context(&egl, display);
 
@@ -83,8 +88,9 @@ fn open_display(egl: &egl::DynamicInstance<egl::EGL1_4>) -> Option<egl::Display>
 fn with_context(
     egl: &egl::DynamicInstance<egl::EGL1_4>,
     display: egl::Display,
-) -> Option<RawStrings> {
-    egl.bind_api(egl::OPENGL_ES_API).ok()?;
+) -> Result<RawStrings, ProbeError> {
+    egl.bind_api(egl::OPENGL_ES_API)
+        .map_err(|_| ProbeError::InitFailed)?;
 
     let config = egl
         .choose_first_config(
@@ -97,19 +103,23 @@ fn with_context(
                 egl::NONE,
             ],
         )
-        .ok()??;
+        .map_err(|_| ProbeError::NoConfig)?
+        .ok_or(ProbeError::NoConfig)?;
 
     // Ask for ES 3 first. Old drivers — exactly the hardware Alpymist targets —
     // will refuse, and we retry at ES 2 rather than reporting nothing.
-    let context = [3, 2].into_iter().find_map(|version| {
-        egl.create_context(
-            display,
-            config,
-            None,
-            &[egl::CONTEXT_CLIENT_VERSION, version, egl::NONE],
-        )
-        .ok()
-    })?;
+    let context = [3, 2]
+        .into_iter()
+        .find_map(|version| {
+            egl.create_context(
+                display,
+                config,
+                None,
+                &[egl::CONTEXT_CLIENT_VERSION, version, egl::NONE],
+            )
+            .ok()
+        })
+        .ok_or(ProbeError::NoContext)?;
 
     // Surfaceless needs EGL_KHR_surfaceless_context, which old drivers lack;
     // fall back to a 1x1 pbuffer, which every pbuffer-capable config supports.
@@ -118,9 +128,9 @@ fn with_context(
     } else {
         let pbuffer = egl
             .create_pbuffer_surface(display, config, &[egl::WIDTH, 1, egl::HEIGHT, 1, egl::NONE])
-            .ok()?;
+            .map_err(|_| ProbeError::NoCurrent)?;
         egl.make_current(display, Some(pbuffer), Some(pbuffer), Some(context))
-            .ok()?;
+            .map_err(|_| ProbeError::NoCurrent)?;
         Some(pbuffer)
     };
 
@@ -135,17 +145,19 @@ fn with_context(
 }
 
 /// Read the three `glGetString` values from the current context.
-fn read_gl_strings(egl: &egl::DynamicInstance<egl::EGL1_4>) -> Option<RawStrings> {
-    let proc = egl.get_proc_address("glGetString")?;
+fn read_gl_strings(egl: &egl::DynamicInstance<egl::EGL1_4>) -> Result<RawStrings, ProbeError> {
+    let proc = egl
+        .get_proc_address("glGetString")
+        .ok_or(ProbeError::NoStrings)?;
     // SAFETY: eglGetProcAddress returned a non-null pointer for the name
     // "glGetString", whose signature is fixed by the GL ES ABI as
     // `const GLubyte *glGetString(GLenum)`. Transmuting a fn pointer to that
     // signature is the documented way to use the result.
     let gl_get_string: GlGetString = unsafe { std::mem::transmute(proc) };
 
-    Some(RawStrings {
-        version: get_string(gl_get_string, GL_VERSION)?,
-        renderer: get_string(gl_get_string, GL_RENDERER)?,
+    Ok(RawStrings {
+        version: get_string(gl_get_string, GL_VERSION).ok_or(ProbeError::NoStrings)?,
+        renderer: get_string(gl_get_string, GL_RENDERER).ok_or(ProbeError::NoStrings)?,
         vendor: get_string(gl_get_string, GL_VENDOR).unwrap_or_default(),
     })
 }

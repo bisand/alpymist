@@ -109,7 +109,10 @@ pub fn select_tier(caps: &Capabilities) -> Rationale {
     ));
 
     let Some(gles) = caps.gles.as_ref() else {
-        reasons.push("EGL probe did not report a GL ES version; assuming none".into());
+        reasons.push(caps.gles_error.as_ref().map_or_else(
+            || "EGL was not probed; assuming no acceleration".to_string(),
+            |why| format!("EGL probe failed: {why}"),
+        ));
         return Rationale {
             tier: Tier::Potato,
             reasons,
@@ -214,6 +217,7 @@ mod tests {
                 renderer: renderer.into(),
                 vendor: "Mesa".into(),
             }),
+            gles_error: None,
             virtualisation: Virtualisation::Bare,
         }
     }

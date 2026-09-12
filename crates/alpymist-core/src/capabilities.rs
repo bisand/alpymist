@@ -98,6 +98,12 @@ pub struct Capabilities {
     /// `None` means "not probed or probe failed", which we treat as
     /// "assume no acceleration" rather than optimistically guessing.
     pub gles: Option<GlesInfo>,
+    /// Why the EGL probe produced nothing, when it produced nothing.
+    ///
+    /// Carried separately so the tier rationale can say *why* a machine was
+    /// downgraded. "mesa-egl is not installed" and "this GPU has no working
+    /// driver" both yield no `gles`, but call for very different responses.
+    pub gles_error: Option<String>,
     /// Detected virtualisation.
     pub virtualisation: Virtualisation,
 }

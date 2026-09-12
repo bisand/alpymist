@@ -27,14 +27,23 @@ the other founding decisions.
 
 ## Status
 
-Pre-alpha. Nothing is installable yet. What works today:
+Pre-alpha. Nothing is installable yet, but the build pipeline runs end to end:
+
+```
+make iso     # build a bootable ISO in the Alpine builder container
+make smoke   # boot it in QEMU and assert it reports a desktop tier
+```
+
+`make iso` builds `alpymistctl` into a signed apk, assembles an Alpine image
+around it with `mkimage`, and drops the ISO in `out/`. `make smoke` boots that
+ISO under QEMU with a virtio-gpu, captures the serial console, and checks that
+the first-boot probe reported a tier and explained itself.
+
+On any Linux machine you can also just run the probe directly:
 
 ```
 cargo run -p alpymistctl -- probe
 ```
-
-on a Linux machine, which reports the desktop tier that machine would get and
-why.
 
 ## Repository layout
 
@@ -44,6 +53,7 @@ why.
 | `aports/`        | `APKBUILD`s for Alpymist packages                          |
 | `profiles/`      | `mkimage` profiles and `genapkovl` overlays            |
 | `builder/`       | The Alpine container everything is built in            |
+| `xtask/`         | Build and test orchestration (Rust)                    |
 | `docs/adr/`      | Architecture decision records                          |
 
 ## Development

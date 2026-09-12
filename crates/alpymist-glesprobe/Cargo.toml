@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 alpymist-core = { workspace = true }
 khronos-egl = { version = "6", features = ["dynamic"] }
+thiserror = { workspace = true }
 libloading = "0.8"
 
 [lints]

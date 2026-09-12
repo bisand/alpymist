@@ -18,16 +18,54 @@ use alpymist_core::GlesInfo;
 
 mod ffi;
 
+/// Why an EGL probe did not produce an answer.
+///
+/// Every variant names the step that failed. A user whose machine lands on an
+/// unexpectedly low tier can read this and know whether they are missing Mesa,
+/// missing a driver, or running hardware EGL cannot drive.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ProbeError {
+    /// libEGL is not installed, or cannot be loaded.
+    #[error("libEGL.so.1 could not be loaded ({0}); is mesa-egl installed?")]
+    NoLibrary(String),
+    /// The library loaded but is not a usable EGL implementation.
+    #[error("libEGL.so.1 is missing required EGL 1.4 entry points")]
+    MissingSymbols,
+    /// No EGL display could be opened by any platform we tried.
+    #[error("no EGL display available (tried surfaceless, then default)")]
+    NoDisplay,
+    /// `eglInitialize` failed.
+    #[error("eglInitialize failed; EGL found no usable driver")]
+    InitFailed,
+    /// No config matched a minimal GL ES 2 request.
+    #[error("no EGL config supports GL ES 2 rendering")]
+    NoConfig,
+    /// A context could not be created at ES 3 or ES 2.
+    #[error("could not create a GL ES context at version 3 or 2")]
+    NoContext,
+    /// The context could not be made current, even with a pbuffer.
+    #[error("could not make a GL ES context current")]
+    NoCurrent,
+    /// `glGetString` was not resolvable, or returned nothing.
+    #[error("glGetString was unavailable or returned no version string")]
+    NoStrings,
+    /// The driver returned a `GL_VERSION` we could not parse.
+    #[error("could not parse a version out of GL_VERSION {0:?}")]
+    UnparsableVersion(String),
+}
+
 /// Ask EGL what this machine can render.
 ///
-/// Returns [`None`] if libEGL is missing, if no context could be created, or if
-/// the strings EGL returned made no sense. Every one of those means the same
-/// thing to the caller: we learned nothing, so assume the worst.
-#[must_use]
-pub fn probe() -> Option<GlesInfo> {
+/// # Errors
+/// Returns the step that failed. Callers treat any error as "assume no
+/// acceleration", but the specific variant is worth surfacing to the user:
+/// "mesa-egl is not installed" and "this GPU has no working driver" call for
+/// very different responses.
+pub fn probe() -> Result<GlesInfo, ProbeError> {
     let raw = ffi::query()?;
-    Some(GlesInfo {
-        version: parse_gl_version(&raw.version)?,
+    Ok(GlesInfo {
+        version: parse_gl_version(&raw.version)
+            .ok_or_else(|| ProbeError::UnparsableVersion(raw.version.clone()))?,
         renderer: raw.renderer,
         vendor: raw.vendor,
     })

@@ -83,7 +83,10 @@ fn probe(format: Format) -> alpymist_core::Result<()> {
                     g.vendor,
                     if g.is_software() { " [software]" } else { "" }
                 ),
-                None => println!("gles:        not detected"),
+                None => println!(
+                    "gles:        not detected ({})",
+                    caps.gles_error.as_deref().unwrap_or("not probed")
+                ),
             }
             println!("virt:        {:?}", caps.virtualisation);
             println!("why:");

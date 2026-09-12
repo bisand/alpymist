@@ -19,11 +19,16 @@ pub fn probe() -> Result<Capabilities> {
     if !cfg!(target_os = "linux") {
         return Err(Error::UnsupportedHost(std::env::consts::OS));
     }
+    let (gles, gles_error) = match alpymist_glesprobe::probe() {
+        Ok(info) => (Some(info), None),
+        Err(why) => (None, Some(why.to_string())),
+    };
     Ok(Capabilities {
         memory_mib: memory_mib()?,
         cpus: std::thread::available_parallelism().map_or(1, std::num::NonZero::get),
         gpus: drm_devices(Path::new("/sys/class/drm")),
-        gles: alpymist_glesprobe::probe(),
+        gles,
+        gles_error,
         virtualisation: virtualisation(),
     })
 }
