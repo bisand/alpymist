@@ -109,22 +109,23 @@ impl Ridge {
         Self { heights }
     }
 
-    /// The ridge as a closed polygon filling everything below it.
+    /// The ridge's filled area as one vertical span per screen column.
     ///
-    /// Returned as screen-space points ready to hand to a polygon fill.
+    /// A heightfield is naturally a set of vertical bars, and drawing it that
+    /// way keeps the silhouette exact at every column. The obvious alternative
+    /// — one polygon — cannot work here: Denise's rasteriser caps a polygon at
+    /// 32 vertices and silently ignores anything longer, which is not enough
+    /// to describe a ridge across even a 640-pixel screen.
+    ///
+    /// Each entry is `(x, top, height)`.
     #[must_use]
-    pub fn as_polygon(&self, height: u32) -> Vec<(i32, i32)> {
-        let mut points: Vec<(i32, i32)> = self
-            .heights
+    pub fn columns(&self, screen_height: u32) -> Vec<(i32, i32, i32)> {
+        let bottom = px(screen_height);
+        self.heights
             .iter()
             .enumerate()
-            .map(|(x, &y)| (idx(x), y))
-            .collect();
-        let bottom = px(height);
-        let right = idx(self.heights.len()) - 1;
-        points.push((right, bottom));
-        points.push((0, bottom));
-        points
+            .map(|(x, &top)| (idx(x), top, (bottom - top).max(0)))
+            .collect()
     }
 }
 
@@ -195,11 +196,14 @@ mod tests {
     }
 
     #[test]
-    fn the_polygon_closes_along_the_bottom_of_the_screen() {
+    fn every_column_reaches_the_bottom_of_the_screen() {
         let ridge = Ridge::generate(W, H, 300, 60, 55, 5);
-        let poly = ridge.as_polygon(H);
-        assert_eq!(poly.len(), W as usize + 2);
-        assert_eq!(poly[poly.len() - 2], (px(W) - 1, px(H)));
-        assert_eq!(poly[poly.len() - 1], (0, px(H)));
+        let cols = ridge.columns(H);
+        assert_eq!(cols.len(), W as usize, "one span per screen column");
+        for (x, top, h) in cols {
+            assert!((0..px(W)).contains(&x));
+            assert_eq!(top + h, px(H), "column {x} does not reach the bottom");
+            assert!(h > 0, "column {x} is empty");
+        }
     }
 }

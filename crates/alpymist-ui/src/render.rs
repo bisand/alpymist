@@ -47,25 +47,50 @@ pub fn paint_backdrop<P: Painter + ?Sized>(painter: &mut P, backdrop: &Backdrop)
                     Paint::new(colour(*c)),
                 );
             }
-            Layer::Mountain { polygon, colour: c } => {
-                let points: Vec<(i32, i32)> = polygon
+            Layer::Mountain { columns, colour: c } => {
+                let rects: Vec<Rect> = columns
                     .iter()
-                    .map(|&(x, y)| (to_fixed(x), to_fixed(y)))
+                    .map(|&(x, top, h)| Rect::new(x, top, 1, h))
                     .collect();
-                painter.fill_polygon_fx(&points, Paint::new(colour(*c)));
+                painter.fill_rects(&rects, Paint::new(colour(*c)));
             }
             Layer::Mist {
                 y,
                 height,
                 colour: c,
                 alpha,
-            } => {
-                painter.fill_rect(
-                    Rect::new(0, px(*y), width, px(*height)),
-                    Paint::new(Color::rgba(c.r, c.g, c.b, *alpha)),
-                );
-            }
+            } => paint_mist(painter, width, *y, *height, *c, *alpha),
         }
+    }
+}
+
+/// Paint a mist band with alpha ramping to zero at both edges.
+///
+/// A flat translucent rectangle reads as a banding artefact, not as mist — the
+/// hard edge is what gives it away. Ramping the alpha across the band costs one
+/// `fill_rect` per row and is the whole difference between the two.
+fn paint_mist<P: Painter + ?Sized>(
+    painter: &mut P,
+    width: i32,
+    y: u32,
+    height: u32,
+    c: Rgb,
+    peak: u8,
+) {
+    let rows = px(height.max(1));
+    let half = (rows / 2).max(1);
+    for row in 0..rows {
+        // Triangular profile: zero at the edges, `peak` in the middle.
+        let distance_from_centre = (row - half).abs();
+        let falloff = (half - distance_from_centre).max(0);
+        let alpha = u8::try_from(i32::from(peak) * falloff / half).unwrap_or(peak);
+        if alpha == 0 {
+            continue;
+        }
+        painter.fill_rect(
+            Rect::new(0, px(y).saturating_add(row), width, 1),
+            Paint::new(Color::rgba(c.r, c.g, c.b, alpha)),
+        );
     }
 }
 

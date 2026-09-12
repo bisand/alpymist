@@ -1,0 +1,28 @@
+[package]
+name = "alpymist-splash"
+description = "The Alpymist boot splash: the first thing the machine draws."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+alpymist-ui = { workspace = true, features = ["render"] }
+denise = { workspace = true }
+denise-render = { workspace = true }
+denise-winit = { workspace = true, optional = true }
+
+[features]
+# Desktop preview is the default because that is where it is developed; the
+# boot image builds with --no-default-features --features drm.
+default = ["winit"]
+winit = ["dep:denise-winit"]
+
+[dev-dependencies]
+# Only for the snapshot example: renders a frame offscreen to a PNG so the
+# splash can be reviewed without opening a window, and so CI can diff it.
+png = "0.17"
+
+[lints]
+workspace = true

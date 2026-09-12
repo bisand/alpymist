@@ -21,10 +21,14 @@ pub enum Layer {
         /// Colour of the band.
         colour: Rgb,
     },
-    /// A filled mountain ridge.
+    /// A filled mountain ridge, as one vertical span per screen column.
+    ///
+    /// Spans rather than a polygon because Denise's rasteriser caps polygons at
+    /// 32 vertices — far too few to describe a ridge — and silently draws
+    /// nothing beyond that.
     Mountain {
-        /// Closed polygon in screen space.
-        polygon: Vec<(i32, i32)>,
+        /// `(x, top, height)` per column, left to right.
+        columns: Vec<(i32, i32, i32)>,
         /// Fill colour, already hazed for its distance.
         colour: Rgb,
     },
@@ -84,7 +88,10 @@ impl Backdrop {
             // Further ridges sit higher up the screen and are gentler.
             let base_y = height - (height * (2 + t) / (RIDGE_COUNT + 4));
             let amplitude = px(height / (6 + depth * 2));
-            let roughness = 40 + depth * 8;
+            // Roughness falls with distance. Near ridges are jagged because you
+            // can see their detail; far ones smooth into a silhouette. Getting
+            // this backwards makes the horizon look like an audio waveform.
+            let roughness = 72 - depth * 8;
             let base_y = px(base_y);
 
             let ridge = Ridge::generate(
@@ -96,7 +103,7 @@ impl Backdrop {
                 seed.wrapping_add(u64::from(depth) * 0x9E37_79B9),
             );
             layers.push(Layer::Mountain {
-                polygon: ridge.as_polygon(height),
+                columns: ridge.columns(height),
                 colour: palette.ridge_at(depth, RIDGE_COUNT),
             });
 
@@ -104,10 +111,12 @@ impl Backdrop {
             // which is what sells the name.
             if depth > 0 {
                 layers.push(Layer::Mist {
-                    y: rows(base_y).saturating_add(height / 40),
-                    height: height / 18,
+                    y: rows(base_y).saturating_add(height / 60),
+                    height: (height / 22).max(2),
                     colour: palette.mist,
-                    alpha: u8::try_from((26 + depth * 8).min(90)).unwrap_or(90),
+                    // Thinner than it looks: the renderer ramps alpha to zero at
+                    // both edges, so this is the value at the band's centre.
+                    alpha: u8::try_from((18 + depth * 6).min(54)).unwrap_or(54),
                 });
             }
         }
@@ -173,12 +182,15 @@ mod tests {
     fn every_mountain_stays_on_screen() {
         let (w, h) = (800, 600);
         for layer in &scene(w, h).layers {
-            if let Layer::Mountain { polygon, .. } = layer {
+            if let Layer::Mountain { columns, .. } = layer {
+                assert_eq!(columns.len(), w as usize, "a span per column");
                 assert!(
-                    polygon
+                    columns
                         .iter()
-                        .all(|&(x, y)| (0..px(w)).contains(&x) && (0..=px(h)).contains(&y)),
-                    "polygon left the screen"
+                        .all(|&(x, top, height)| (0..px(w)).contains(&x)
+                            && (0..px(h)).contains(&top)
+                            && top + height == px(h)),
+                    "a mountain column left the screen"
                 );
             }
         }
