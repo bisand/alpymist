@@ -13,6 +13,11 @@ profile_alpymist() {
 	# Alpymist, and says so.
 	image_name="alpymist"
 	image_ext="iso"
+	# Both of these, not just the extension: mkimage builds the syslinux boot
+	# sections only when output_format says iso, and without them an x86 image
+	# has no BIOS boot path at all — no use on the old laptops Alpymist is for,
+	# and invisible on aarch64, which boots through UEFI either way.
+	output_format="iso"
 	arch="x86_64 aarch64"
 	hostname="alpymist"
 	# Mesa is needed for the EGL probe to have anything to answer with. It is
