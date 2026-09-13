@@ -20,7 +20,7 @@ use alpymist_ui::render::{
 };
 use alpymist_ui::typeface::{self, Typeface};
 use denise::geom::Point;
-use denise::input::{ElementState, InputEvent, KeyCode};
+use denise::input::{ElementState, InputEvent, KeyCode, Modifiers};
 use denise::painter::Pen;
 use denise::theme::Theme;
 use denise_render::Canvas;
@@ -60,7 +60,13 @@ pub fn action_for(event: &InputEvent, editing_text: bool) -> Option<Action> {
         // Control characters have their own keys; only real text belongs here.
         return (editing_text && !ch.is_control()).then_some(Action::Type(*ch));
     }
-    let InputEvent::Key { code, state, .. } = event else {
+    let InputEvent::Key {
+        code,
+        state,
+        modifiers,
+        ..
+    } = event
+    else {
         return None;
     };
     if *state != ElementState::Down {
@@ -69,6 +75,8 @@ pub fn action_for(event: &InputEvent, editing_text: bool) -> Option<Action> {
     Some(match code {
         KeyCode::ArrowUp => Action::Up,
         KeyCode::ArrowDown => Action::Down,
+        KeyCode::Tab if modifiers.contains(Modifiers::SHIFT) => Action::PreviousField,
+        KeyCode::Tab => Action::NextField,
         KeyCode::Enter => Action::Advance,
         KeyCode::Escape => Action::Back,
         KeyCode::F10 => Action::Quit,
@@ -104,6 +112,10 @@ pub enum Action {
     Up,
     /// Move the cursor down a row.
     Down,
+    /// Jump to the next text field, wrapping after the last.
+    NextField,
+    /// Jump to the previous text field, wrapping before the first.
+    PreviousField,
     /// Choose the row under the cursor.
     Choose,
     /// Leave this screen.
@@ -270,7 +282,42 @@ impl App {
             (Some(i), false) => i.saturating_sub(1),
             (None, _) => 0,
         };
-        self.cursor = options[next];
+        self.land_on(options[next]);
+    }
+
+    /// Tab between text fields, the way every form on every desktop does.
+    ///
+    /// Unlike the arrows this wraps, because that is what Tab does elsewhere
+    /// and fields are few enough that overshooting is obvious. Screens without
+    /// fields ignore it rather than guessing what Tab should mean on a list.
+    fn move_to_field(&mut self, forward: bool) {
+        let rows = screens::rows(self.wizard.step(), &self.wizard.answers);
+        let fields: Vec<usize> = (0..rows.len())
+            .filter(|i| rows[*i].text_target().is_some())
+            .collect();
+        let (Some(&first), Some(&last)) = (fields.first(), fields.last()) else {
+            return;
+        };
+        let next = if forward {
+            fields
+                .iter()
+                .copied()
+                .find(|i| *i > self.cursor)
+                .unwrap_or(first)
+        } else {
+            fields
+                .iter()
+                .copied()
+                .rev()
+                .find(|i| *i < self.cursor)
+                .unwrap_or(last)
+        };
+        self.land_on(next);
+    }
+
+    /// Put the cursor on a row and do what arriving there implies.
+    fn land_on(&mut self, index: usize) {
+        self.cursor = index;
 
         // Arrowing through a list of layouts should pick as you go, but
         // arrowing past a checkbox must never flip it.
@@ -335,6 +382,8 @@ impl App {
             | Action::CaretEnd => self.edit(action),
             Action::Up => self.move_cursor(false),
             Action::Down => self.move_cursor(true),
+            Action::NextField => self.move_to_field(true),
+            Action::PreviousField => self.move_to_field(false),
             Action::Choose => {
                 screens::choose(self.wizard.step(), self.cursor, &mut self.wizard.answers);
                 self.reported.clear();
@@ -723,7 +772,7 @@ mod tests {
     use crate::wizard::Step;
     use alpymist_core::Tier;
     use denise::geom::Point;
-    use denise::input::{ElementState, InputEvent, KeyCode};
+    use denise::input::{ElementState, InputEvent, KeyCode, Modifiers};
 
     fn app() -> App {
         App::new(
@@ -898,8 +947,66 @@ mod tests {
     }
 
     #[test]
+    fn tab_and_shift_tab_move_between_fields_even_while_typing() {
+        let shift_tab = InputEvent::Key {
+            code: KeyCode::Tab,
+            state: ElementState::Down,
+            repeat: false,
+            modifiers: Modifiers::SHIFT,
+        };
+        for editing in [false, true] {
+            assert_eq!(
+                super::action_for(&key(KeyCode::Tab), editing),
+                Some(Action::NextField)
+            );
+            assert_eq!(
+                super::action_for(&shift_tab, editing),
+                Some(Action::PreviousField)
+            );
+        }
+    }
+
+    #[test]
+    fn tab_walks_the_account_fields_and_wraps() {
+        let mut a = at_account();
+        let fields = TextTarget::ACCOUNT.len();
+        let start = a.focused_field();
+        assert!(start.is_some());
+        let mut seen = vec![start];
+        for _ in 1..fields {
+            a.act(Action::NextField);
+            seen.push(a.focused_field());
+        }
+        for (i, f) in seen.iter().enumerate() {
+            assert!(!seen[..i].contains(f), "Tab revisited {f:?} early");
+        }
+        a.act(Action::NextField);
+        assert_eq!(
+            a.focused_field(),
+            start,
+            "Tab should wrap to the first field"
+        );
+        a.act(Action::PreviousField);
+        assert_eq!(
+            a.focused_field(),
+            seen[fields - 1],
+            "Shift+Tab should wrap back"
+        );
+    }
+
+    #[test]
+    fn tab_puts_the_caret_at_the_end_of_the_field_it_lands_on() {
+        let mut a = at_account();
+        a.act(Action::Type('x'));
+        a.act(Action::Type('y'));
+        a.act(Action::NextField);
+        a.act(Action::PreviousField);
+        assert_eq!(a.caret(), 2);
+    }
+
+    #[test]
     fn keys_we_do_not_use_are_ignored() {
-        for code in [KeyCode::A, KeyCode::Tab, KeyCode::F1] {
+        for code in [KeyCode::A, KeyCode::F1] {
             assert_eq!(super::action_for(&key(code), false), None, "{code:?}");
         }
     }
