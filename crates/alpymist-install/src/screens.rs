@@ -5,6 +5,7 @@
 //! what you get when you walk the wizard — they cannot drift apart.
 
 use crate::answers::{Answers, DiskPlan, Network};
+use crate::catalog;
 use crate::wizard::Step;
 use alpymist_core::Tier;
 
@@ -26,7 +27,7 @@ pub enum RowKind {
     Static,
 }
 
-/// Which of the account answers a text row edits.
+/// Which answer a text row edits.
 ///
 /// A small enum rather than a closure or an index, so the mapping from row to
 /// answer is data the tests can enumerate.
@@ -42,9 +43,20 @@ pub enum TextTarget {
     PasswordConfirm,
     /// System hostname.
     Hostname,
+    /// The keyboard screen's search.
+    KeyboardSearch,
+    /// The time zone screen's search.
+    ZoneSearch,
+    /// Disk encryption passphrase.
+    Passphrase,
+    /// Passphrase confirmation.
+    PassphraseConfirm,
 }
 
 impl TextTarget {
+    /// The fields on the Encryption screen, in the order shown.
+    pub const ENCRYPTION: [Self; 2] = [Self::Passphrase, Self::PassphraseConfirm];
+
     /// Every editable field on the Account screen, in the order shown.
     pub const ACCOUNT: [Self; 5] = [
         Self::FullName,
@@ -61,15 +73,21 @@ impl TextTarget {
             Self::FullName => "Full name",
             Self::Username => "Username",
             Self::Password => "Password",
-            Self::PasswordConfirm => "Confirm",
+
             Self::Hostname => "Hostname",
+            Self::KeyboardSearch | Self::ZoneSearch => "Search",
+            Self::Passphrase => "Passphrase",
+            Self::PasswordConfirm | Self::PassphraseConfirm => "Confirm",
         }
     }
 
     /// Whether this field should be masked.
     #[must_use]
     pub fn is_secret(self) -> bool {
-        matches!(self, Self::Password | Self::PasswordConfirm)
+        matches!(
+            self,
+            Self::Password | Self::PasswordConfirm | Self::Passphrase | Self::PassphraseConfirm
+        )
     }
 
     /// The answer this field edits.
@@ -80,6 +98,10 @@ impl TextTarget {
             Self::Password => &mut a.password,
             Self::PasswordConfirm => &mut a.password_confirm,
             Self::Hostname => &mut a.hostname,
+            Self::KeyboardSearch => &mut a.keyboard_filter,
+            Self::ZoneSearch => &mut a.timezone_filter,
+            Self::Passphrase => &mut a.passphrase,
+            Self::PassphraseConfirm => &mut a.passphrase_confirm,
         }
     }
 
@@ -92,6 +114,10 @@ impl TextTarget {
             Self::Password => &a.password,
             Self::PasswordConfirm => &a.password_confirm,
             Self::Hostname => &a.hostname,
+            Self::KeyboardSearch => &a.keyboard_filter,
+            Self::ZoneSearch => &a.timezone_filter,
+            Self::Passphrase => &a.passphrase,
+            Self::PassphraseConfirm => &a.passphrase_confirm,
         }
     }
 }
@@ -176,25 +202,150 @@ impl Row {
     }
 }
 
-/// Keyboard layouts offered, as `(label, layout, variant)`.
-pub const LAYOUTS: [(&str, &str, Option<&str>); 6] = [
-    ("Norwegian", "no", None),
-    ("Norwegian — no dead keys", "no", Some("nodeadkeys")),
-    ("Swedish", "se", None),
-    ("English (UK)", "gb", None),
-    ("English (US)", "us", None),
-    ("German", "de", None),
-];
+/// How many entries of a long list are shown at once.
+///
+/// With the search row above and the count below, this fills the eight body
+/// rows every supported screen size has.
+pub const LIST_ROWS: usize = 6;
 
-/// Timezones offered, as `(label, IANA name)`.
-pub const TIMEZONES: [(&str, &str); 6] = [
-    ("Oslo", "Europe/Oslo"),
-    ("Stockholm", "Europe/Stockholm"),
-    ("Copenhagen", "Europe/Copenhagen"),
-    ("London", "Europe/London"),
-    ("Berlin", "Europe/Berlin"),
-    ("UTC", "UTC"),
-];
+/// Whether this screen is a searchable list rather than a set of rows.
+///
+/// On these the cursor stays in the search field, so typing always searches,
+/// and the arrow keys move the choice through the list instead of the cursor.
+#[must_use]
+pub fn is_picker(step: Step) -> bool {
+    matches!(step, Step::Keyboard | Step::Region)
+}
+
+/// Indices into the catalogue matching this screen's search, and the position
+/// of the current choice among them.
+fn matching(step: Step, a: &Answers) -> (Vec<usize>, Option<usize>) {
+    let (found, chosen): (Vec<usize>, Option<usize>) = match step {
+        Step::Keyboard => (
+            catalog::keymaps()
+                .iter()
+                .enumerate()
+                .filter(|(_, k)| k.matches(&a.keyboard_filter))
+                .map(|(i, _)| i)
+                .collect(),
+            a.keyboard
+                .as_deref()
+                .zip(a.keyboard_variant.as_deref())
+                .and_then(|(l, v)| catalog::keymap_index(l, v)),
+        ),
+        Step::Region => (
+            catalog::zones()
+                .iter()
+                .enumerate()
+                .filter(|(_, z)| z.matches(&a.timezone_filter))
+                .map(|(i, _)| i)
+                .collect(),
+            a.timezone.as_deref().and_then(catalog::zone_index),
+        ),
+        _ => return (Vec::new(), None),
+    };
+    let at = chosen.and_then(|c| found.iter().position(|i| *i == c));
+    (found, at)
+}
+
+/// The first match shown, chosen so the current choice is on screen.
+///
+/// Derived from the answers rather than stored, so the list cannot scroll away
+/// from what is selected and there is no scroll state to get out of step.
+fn window_start(total: usize, at: Option<usize>) -> usize {
+    let last_start = total.saturating_sub(LIST_ROWS);
+    at.map_or(0, |at| at.saturating_sub(LIST_ROWS / 2).min(last_start))
+}
+
+/// Choose an entry of the catalogue behind a picker screen.
+fn choose_match(step: Step, catalogue_index: usize, a: &mut Answers) {
+    match step {
+        Step::Keyboard => {
+            if let Some(k) = catalog::keymaps().get(catalogue_index) {
+                a.keyboard = Some(k.layout.to_string());
+                a.keyboard_variant = Some(k.variant.to_string());
+            }
+        }
+        Step::Region => {
+            if let Some(z) = catalog::zones().get(catalogue_index) {
+                a.timezone = Some(z.zone.to_string());
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Move the choice on a picker screen by `delta` matches, stopping at the ends.
+///
+/// With nothing chosen among the matches, any movement picks the first.
+pub fn move_choice(step: Step, delta: isize, a: &mut Answers) {
+    let (found, at) = matching(step, a);
+    if found.is_empty() {
+        return;
+    }
+    let next = at.map_or(0, |at| at.saturating_add_signed(delta).min(found.len() - 1));
+    choose_match(step, found[next], a);
+}
+
+/// Keep a picker's choice among its matches after the search changed.
+///
+/// Typing `oslo` should leave Oslo chosen, so Enter takes the obvious match. If
+/// nothing matches, the previous choice stands rather than vanishing.
+pub fn follow_search(step: Step, a: &mut Answers) {
+    let (found, at) = matching(step, a);
+    if at.is_none()
+        && let Some(first) = found.first()
+    {
+        choose_match(step, *first, a);
+    }
+}
+
+/// The rows of a picker screen: search, the visible matches, then a count.
+fn picker_rows(step: Step, a: &Answers) -> Vec<Row> {
+    let (field, filter, total, noun) = match step {
+        Step::Keyboard => (
+            TextTarget::KeyboardSearch,
+            &a.keyboard_filter,
+            catalog::keymaps().len(),
+            "layouts",
+        ),
+        _ => (
+            TextTarget::ZoneSearch,
+            &a.timezone_filter,
+            catalog::zones().len(),
+            "time zones",
+        ),
+    };
+    let (found, at) = matching(step, a);
+    let mut rows = vec![Row {
+        text: field.label().to_string(),
+        kind: RowKind::Text {
+            field,
+            secret: false,
+        },
+        chosen: false,
+    }];
+    let start = window_start(found.len(), at);
+    for (offset, index) in found.iter().skip(start).take(LIST_ROWS).enumerate() {
+        let label = match step {
+            Step::Keyboard => catalog::keymaps()[*index].label(),
+            _ => catalog::zones()[*index].label(),
+        };
+        rows.push(Row::radio(label, at == Some(start + offset)));
+    }
+    if found.is_empty() {
+        rows.push(Row::note(format!("Nothing matches \"{}\".", filter.trim())));
+    }
+    while rows.len() < LIST_ROWS + 1 {
+        rows.push(Row::gap());
+    }
+    rows.push(Row::note(if filter.trim().is_empty() {
+        format!("{total} {noun}. Arrows choose, typing searches.")
+    } else {
+        format!("{} of {total} {noun} match.", found.len())
+    }));
+    rows
+}
 
 /// The tiers a user may pick, with what each actually runs.
 pub const TIERS: [(Tier, &str); 4] = [
@@ -220,18 +371,7 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             Row::gap(),
             Row::note("Nothing is written to any disk until you confirm."),
         ],
-        Step::Keyboard => LAYOUTS
-            .iter()
-            .map(|(label, layout, variant)| {
-                let chosen = a.keyboard.as_deref() == Some(*layout)
-                    && a.keyboard_variant.as_deref() == *variant;
-                Row::radio(*label, chosen)
-            })
-            .collect(),
-        Step::Region => TIMEZONES
-            .iter()
-            .map(|(label, tz)| Row::radio(*label, a.timezone.as_deref() == Some(*tz)))
-            .collect(),
+        Step::Keyboard | Step::Region => picker_rows(step, a),
         Step::Network => vec![
             Row::radio("Automatic (DHCP)", matches!(a.network, Some(Network::Dhcp))),
             Row::radio(
@@ -270,11 +410,6 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
                 ));
                 return rows;
             }
-            let encrypt = matches!(&a.disk, Some(DiskPlan::WholeDisk { encrypt: true, .. }));
-            rows.push(Row::toggle(
-                format!("[{}] Encrypt the root filesystem (LUKS2)", mark(encrypt)),
-                encrypt,
-            ));
             rows.push(Row::toggle(
                 format!(
                     "[{}] Yes, erase everything on this disk",
@@ -282,6 +417,34 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
                 ),
                 a.disk_confirmed,
             ));
+            rows
+        }
+        Step::Encryption => {
+            let encrypt = a.encrypts();
+            let mut rows = vec![
+                Row::toggle(
+                    format!("[{}] Encrypt this disk (LUKS2)", mark(encrypt)),
+                    encrypt,
+                ),
+                Row::gap(),
+            ];
+            if encrypt {
+                rows.extend(TextTarget::ENCRYPTION.iter().map(|field| Row {
+                    text: field.label().to_string(),
+                    kind: RowKind::Text {
+                        field: *field,
+                        secret: true,
+                    },
+                    chosen: false,
+                }));
+                rows.push(Row::gap());
+                rows.push(Row::note(
+                    "You will type this every time the machine starts.",
+                ));
+                rows.push(Row::note("Nobody can recover the disk without it."));
+            } else {
+                rows.push(Row::note("The disk will be readable by anyone who has it."));
+            }
             rows
         }
         Step::Account => TextTarget::ACCOUNT
@@ -311,7 +474,10 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
         Step::Confirm => vec![
             Row::note(format!(
                 "Keyboard    {}",
-                a.keyboard.as_deref().unwrap_or("-")
+                a.keyboard_variant
+                    .as_deref()
+                    .or(a.keyboard.as_deref())
+                    .unwrap_or("-")
             )),
             Row::note(format!(
                 "Time        {}",
@@ -386,15 +552,14 @@ pub fn choose(step: Step, index: usize, a: &mut Answers) {
         return;
     }
     match step {
-        Step::Keyboard => {
-            if let Some((_, layout, variant)) = LAYOUTS.get(index) {
-                a.keyboard = Some((*layout).to_string());
-                a.keyboard_variant = variant.map(ToString::to_string);
-            }
-        }
-        Step::Region => {
-            if let Some((_, tz)) = TIMEZONES.get(index) {
-                a.timezone = Some((*tz).to_string());
+        Step::Keyboard | Step::Region => {
+            // Row 0 is the search field; the visible matches follow it.
+            let (found, at) = matching(step, a);
+            if let Some(offset) = index.checked_sub(1)
+                && offset < LIST_ROWS
+                && let Some(i) = found.get(window_start(found.len(), at) + offset)
+            {
+                choose_match(step, *i, a);
             }
         }
         Step::Network => {
@@ -411,22 +576,17 @@ pub fn choose(step: Step, index: usize, a: &mut Answers) {
         Step::Disk if a.disks.is_empty() => {}
         Step::Disk => match index {
             i if i < a.disks.len() && a.disks[i].mounted_at.is_none() => {
-                let encrypt = matches!(&a.disk, Some(DiskPlan::WholeDisk { encrypt: true, .. }));
-                a.disk = Some(DiskPlan::WholeDisk {
-                    device: a.disks[i].device.clone(),
-                    encrypt,
-                });
-            }
-            // The gap row follows the disks; the two toggles follow it.
-            i if i == a.disks.len() + 1 => {
-                if let Some(DiskPlan::WholeDisk { device, encrypt }) = &a.disk {
-                    a.disk = Some(DiskPlan::WholeDisk {
-                        device: device.clone(),
-                        encrypt: !encrypt,
-                    });
+                let device = a.disks[i].device.clone();
+                // Agreeing to erase one disk is not agreeing to erase another.
+                if a.disk.as_ref().is_some_and(|d| d.device() != device) {
+                    a.disk_confirmed = false;
                 }
+                // Encrypted unless the user already said otherwise.
+                let encrypt = a.disk.is_none() || a.encrypts();
+                a.disk = Some(DiskPlan::WholeDisk { device, encrypt });
             }
-            i if i == a.disks.len() + 2 => a.disk_confirmed = !a.disk_confirmed,
+            // The gap row follows the disks; the erase confirmation follows it.
+            i if i == a.disks.len() + 1 => a.disk_confirmed = !a.disk_confirmed,
             _ => {}
         },
         Step::Desktop => {
@@ -435,6 +595,16 @@ pub fn choose(step: Step, index: usize, a: &mut Answers) {
                 && let Some((tier, _)) = TIERS.get(i)
             {
                 a.tier_override = Some(*tier);
+            }
+        }
+        Step::Encryption => {
+            if index == 0
+                && let Some(DiskPlan::WholeDisk { device, encrypt }) = &a.disk
+            {
+                a.disk = Some(DiskPlan::WholeDisk {
+                    device: device.clone(),
+                    encrypt: !encrypt,
+                });
             }
         }
         Step::Welcome | Step::Account | Step::Confirm | Step::Install | Step::Done => {}
@@ -454,7 +624,7 @@ pub fn selectable(step: Step, a: &Answers) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{LAYOUTS, TIERS, TIMEZONES, choose, rows, selectable};
+    use super::{LIST_ROWS, TIERS, choose, follow_search, move_choice, rows, selectable};
     use crate::answers::{Answers, DiskPlan, Network};
     use crate::wizard::Step;
 
@@ -507,6 +677,7 @@ mod tests {
             Step::Region,
             Step::Network,
             Step::Disk,
+            Step::Encryption,
             Step::Desktop,
         ] {
             assert!(
@@ -527,62 +698,169 @@ mod tests {
         }
     }
 
-    #[test]
-    fn choosing_a_layout_records_both_layout_and_variant() {
-        let mut a = answers();
-        let dead_keys = LAYOUTS
-            .iter()
-            .position(|(l, ..)| *l == "Norwegian — no dead keys")
-            .unwrap();
-        choose(Step::Keyboard, dead_keys, &mut a);
-        assert_eq!(a.keyboard.as_deref(), Some("no"));
-        assert_eq!(a.keyboard_variant.as_deref(), Some("nodeadkeys"));
+    /// The rows of a picker that show an entry, with their indices.
+    fn entries(step: Step, a: &Answers) -> Vec<(usize, String, bool)> {
+        rows(step, a)
+            .into_iter()
+            .enumerate()
+            .filter(|(_, r)| r.kind == super::RowKind::Radio)
+            .map(|(i, r)| (i, r.text, r.chosen))
+            .collect()
     }
 
     #[test]
-    fn choosing_a_plain_layout_clears_any_previous_variant() {
-        let mut a = answers();
-        choose(Step::Keyboard, 1, &mut a); // no + nodeadkeys
-        choose(Step::Keyboard, 0, &mut a); // plain no
-        assert_eq!(a.keyboard_variant, None, "a stale variant would survive");
+    fn a_picker_opens_with_its_search_field_first() {
+        let a = answers().with_defaults();
+        for step in [Step::Keyboard, Step::Region] {
+            let r = rows(step, &a);
+            assert!(
+                r[0].text_target().is_some(),
+                "{step:?} row 0 is not the search"
+            );
+            assert_eq!(entries(step, &a).len(), LIST_ROWS);
+        }
+    }
+
+    #[test]
+    fn choosing_a_layout_records_both_layout_and_variant() {
+        let mut a = answers().with_defaults();
+        a.keyboard_filter = "norway nodeadkeys".into();
+        follow_search(Step::Keyboard, &mut a);
+        let (row, ..) = entries(Step::Keyboard, &a)
+            .into_iter()
+            .find(|(_, text, _)| text.starts_with("no-nodeadkeys "))
+            .expect("no-nodeadkeys is listed under norway");
+        choose(Step::Keyboard, row, &mut a);
+        assert_eq!(a.keyboard.as_deref(), Some("no"));
+        assert_eq!(a.keyboard_variant.as_deref(), Some("no-nodeadkeys"));
+    }
+
+    /// Typing the obvious thing and pressing Enter should get the obvious thing.
+    #[test]
+    fn searching_chooses_the_first_match_when_the_choice_is_filtered_out() {
+        let mut a = answers().with_defaults();
+        a.timezone_filter = "oslo".into();
+        follow_search(Step::Region, &mut a);
+        assert_eq!(a.timezone.as_deref(), Some("Europe/Oslo"));
+
+        a.keyboard_filter = "norway".into();
+        follow_search(Step::Keyboard, &mut a);
+        assert_eq!(a.keyboard.as_deref(), Some("no"));
+    }
+
+    #[test]
+    fn searching_keeps_a_choice_that_still_matches() {
+        let mut a = answers().with_defaults();
+        a.timezone = Some("Europe/Stockholm".into());
+        a.timezone_filter = "europe".into();
+        follow_search(Step::Region, &mut a);
+        assert_eq!(a.timezone.as_deref(), Some("Europe/Stockholm"));
+    }
+
+    #[test]
+    fn a_search_with_no_matches_keeps_the_choice_and_says_so() {
+        let mut a = answers().with_defaults();
+        a.timezone_filter = "atlantis".into();
+        follow_search(Step::Region, &mut a);
+        assert_eq!(a.timezone.as_deref(), Some("UTC"));
+        assert!(entries(Step::Region, &a).is_empty());
+        assert!(
+            rows(Step::Region, &a)
+                .iter()
+                .any(|r| r.text.contains("Nothing matches"))
+        );
+    }
+
+    /// However far the choice moves, it stays on screen and marked.
+    #[test]
+    fn the_list_scrolls_to_keep_the_choice_visible() {
+        let mut a = answers().with_defaults();
+        a.timezone = Some(crate::catalog::zones()[0].zone.into());
+        for _ in 0..50 {
+            move_choice(Step::Region, 1, &mut a);
+            let chosen: Vec<_> = entries(Step::Region, &a)
+                .into_iter()
+                .filter(|e| e.2)
+                .collect();
+            assert_eq!(chosen.len(), 1, "exactly one visible row is chosen");
+        }
+        assert_eq!(
+            a.timezone.as_deref(),
+            Some(crate::catalog::zones()[50].zone)
+        );
+        for _ in 0..10_000 {
+            move_choice(Step::Region, 1, &mut a);
+        }
+        assert_eq!(
+            a.timezone.as_deref(),
+            crate::catalog::zones().last().map(|z| z.zone),
+            "moving past the end stops at the end"
+        );
+        move_choice(Step::Region, -10_000, &mut a);
+        assert_eq!(a.timezone.as_deref(), Some(crate::catalog::zones()[0].zone));
     }
 
     #[test]
     fn the_chosen_row_is_the_one_marked_chosen() {
-        let mut a = answers();
-        choose(Step::Region, 2, &mut a);
-        let marked: Vec<usize> = rows(Step::Region, &a)
-            .iter()
-            .enumerate()
-            .filter(|(_, r)| r.chosen)
-            .map(|(i, _)| i)
+        let mut a = answers().with_defaults();
+        let (row, ..) = entries(Step::Region, &a)[2].clone();
+        choose(Step::Region, row, &mut a);
+        let marked: Vec<String> = entries(Step::Region, &a)
+            .into_iter()
+            .filter(|e| e.2)
+            .map(|e| e.1)
             .collect();
-        assert_eq!(marked, vec![2]);
-        assert_eq!(a.timezone.as_deref(), Some(TIMEZONES[2].1));
+        assert_eq!(marked.len(), 1);
+        let zone = a.timezone.clone().unwrap().replace('_', " ");
+        assert!(marked[0].starts_with(&zone), "{marked:?} vs {zone}");
     }
 
     #[test]
-    fn choosing_a_disk_keeps_the_encryption_setting() {
+    fn choosing_a_disk_keeps_the_encryption_setting_and_forgets_the_erase() {
         let mut a = answers();
         choose(Step::Disk, 0, &mut a);
-        choose(Step::Disk, crate::disks::sample().len() + 1, &mut a); // toggle encryption on
-        assert!(matches!(
-            &a.disk,
-            Some(DiskPlan::WholeDisk { encrypt: true, .. })
-        ));
-        choose(Step::Disk, 1, &mut a); // switch to the other disk
+        assert!(a.encrypts(), "a first choice is encrypted by default");
+        choose(Step::Encryption, 0, &mut a);
+        assert!(!a.encrypts());
+        choose(Step::Disk, crate::disks::sample().len() + 1, &mut a);
+        assert!(a.disk_confirmed);
+        choose(Step::Disk, 1, &mut a);
         assert!(
-            matches!(&a.disk, Some(DiskPlan::WholeDisk { device, encrypt: true }) if device == "/dev/sdb"),
-            "changing disk must not silently turn encryption off: {:?}",
+            matches!(&a.disk, Some(DiskPlan::WholeDisk { device, encrypt: false }) if device == "/dev/sdb"),
+            "changing disk must keep the encryption choice: {:?}",
             a.disk
         );
+        assert!(
+            !a.disk_confirmed,
+            "agreeing to erase one disk is not agreeing to erase another"
+        );
+    }
+
+    #[test]
+    fn the_passphrase_fields_appear_only_when_encrypting() {
+        let mut a = answers();
+        choose(Step::Disk, 0, &mut a);
+        let fields = |a: &Answers| {
+            rows(Step::Encryption, a)
+                .iter()
+                .filter(|r| r.text_target().is_some())
+                .count()
+        };
+        assert_eq!(fields(&a), 2);
+        assert!(
+            rows(Step::Encryption, &a)
+                .iter()
+                .all(|r| r.text_target().is_none_or(super::TextTarget::is_secret))
+        );
+        choose(Step::Encryption, 0, &mut a);
+        assert_eq!(fields(&a), 0);
     }
 
     #[test]
     fn the_erase_confirmation_toggles() {
         let mut a = answers();
         choose(Step::Disk, 0, &mut a);
-        let confirm_row = crate::disks::sample().len() + 2;
+        let confirm_row = crate::disks::sample().len() + 1;
         choose(Step::Disk, confirm_row, &mut a);
         assert!(a.disk_confirmed);
         choose(Step::Disk, confirm_row, &mut a);
@@ -657,9 +935,11 @@ mod tests {
             full_name: "André Biseth".into(),
             password: "secret".into(),
             password_confirm: "secret".into(),
+            passphrase: "secret".into(),
+            passphrase_confirm: "secret".into(),
             hostname: "alpymist".into(),
             detected_tier: Some(Tier::Lite),
-            ..answers()
+            ..answers().with_defaults()
         }
     }
 

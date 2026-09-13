@@ -17,7 +17,8 @@
 
 use crate::plan::{Plan, Step};
 use crate::safety::{self, Refusal, SystemFacts};
-use std::process::Command;
+use std::io::Write as _;
+use std::process::{Command, Stdio};
 
 /// Whether to actually do it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -139,11 +140,28 @@ fn execute(step: &Step, mode: Mode) -> Result<Vec<String>, String> {
         return Err("a step with no command".into());
     };
 
-    let output = Command::new(program)
+    let mut child = Command::new(program)
         .args(args)
         .envs(step.env.iter().map(|(k, v)| (k.clone(), v.clone())))
-        .output()
+        // Never inherit the installer's own stdin: a command that stops to ask
+        // a question would otherwise wait forever on a keyboard it cannot see.
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| format!("could not run {program}: {e}"))?;
+    {
+        // Dropped at the end of this block, which closes the pipe: the command
+        // sees end of input rather than waiting for more.
+        let mut pipe = child.stdin.take().ok_or("could not open standard input")?;
+        if let Some(input) = &step.stdin {
+            pipe.write_all(input.bytes())
+                .map_err(|e| format!("could not feed {program}: {e}"))?;
+        }
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("{program} did not finish: {e}"))?;
 
     let mut lines: Vec<String> = String::from_utf8_lossy(&output.stdout)
         .lines()
@@ -178,6 +196,7 @@ mod tests {
             title: title.to_string(),
             argv: vec!["true".to_string()],
             env: Vec::new(),
+            stdin: None,
             destructive: false,
         };
         s.destructive = destructive;

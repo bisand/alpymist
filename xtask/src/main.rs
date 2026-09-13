@@ -6,6 +6,7 @@
 
 #![forbid(unsafe_code)]
 
+mod installer_data;
 mod qemu;
 mod serial;
 
@@ -42,6 +43,20 @@ enum Command {
         #[arg(long)]
         verbose: bool,
     },
+    /// Regenerate the installer's keyboard layout and time zone lists.
+    ///
+    /// Run inside the Alpine builder with kbd-bkeymaps and tzdata installed.
+    InstallerData {
+        /// Where kbd-bkeymaps keeps its keymaps.
+        #[arg(long, default_value = "/usr/share/bkeymaps")]
+        bkeymaps: PathBuf,
+        /// Where tzdata keeps zone.tab and iso3166.tab.
+        #[arg(long, default_value = "/usr/share/zoneinfo")]
+        zoneinfo: PathBuf,
+        /// Directory to write keymaps.tsv and timezones.tsv into.
+        #[arg(long, default_value = "crates/alpymist-install/data")]
+        out: PathBuf,
+    },
 }
 
 /// Architectures we build images for.
@@ -70,6 +85,11 @@ fn main() -> Result<()> {
             expect_tier.as_deref(),
             verbose,
         ),
+        Command::InstallerData {
+            bkeymaps,
+            zoneinfo,
+            out,
+        } => installer_data::generate(&bkeymaps, &zoneinfo, &out),
     }
 }
 

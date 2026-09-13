@@ -22,6 +22,7 @@ alpymist-ui = { workspace = true, features = ["render"] }
 denise = { workspace = true }
 denise-render = { workspace = true }
 denise-ui = { workspace = true }
+denise-layout = { workspace = true }
 denise-winit = { workspace = true, optional = true }
 denise-drm = { workspace = true, optional = true }
 denise-evdev = { workspace = true, optional = true }

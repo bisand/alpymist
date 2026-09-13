@@ -23,6 +23,13 @@ profile_alpymist() {
 	# correctly, including Norwegian — just more crudely.
 	apks="$apks alpymistctl alpymist-install alpymist-install-openrc"
 	apks="$apks mesa-egl mesa-gles mesa-dri-gallium font-fira-ttf"
+	# What the installer runs, on the image rather than fetched, so installing
+	# works with no network: partitioning, LUKS, filesystems and the bootloader
+	# setup-disk installs into the new system.
+	apks="$apks sfdisk dosfstools cryptsetup grub-efi"
+	case "$ARCH" in
+		x86*) apks="$apks grub-bios";;
+	esac
 	# Boot quietly into the installer rather than into a login prompt.
 	#
 	# Deliberately *not* console=tty2. Redirecting the console to an unused VT

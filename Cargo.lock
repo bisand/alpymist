@@ -79,6 +79,7 @@ dependencies = [
  "denise",
  "denise-drm",
  "denise-evdev",
+ "denise-layout",
  "denise-render",
  "denise-ui",
  "denise-winit",

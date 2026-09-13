@@ -80,8 +80,11 @@ mod run {
         let answers = Answers {
             detected_tier,
             disks,
+            // A window system has already applied the keyboard layout.
+            typed_by_os: true,
             ..Answers::default()
-        };
+        }
+        .with_defaults();
 
         let size = Size::new(1280, 800);
         let app = App::with_mode(answers, size.width, size.height, crate::install_mode());
@@ -117,8 +120,9 @@ mod run {
 #[cfg(feature = "drm")]
 mod drm_run {
     use alpymist_core::Tier;
-    use alpymist_install::answers::Answers;
+    use alpymist_install::answers::{Answers, Firmware};
     use alpymist_install::app::{App, action_for};
+    use alpymist_install::typing;
     use denise::geom::Rect;
     use denise::{InputEvent, InputSource, Surface};
     use denise_drm::{DrmSurface, SurfaceConfig};
@@ -194,22 +198,35 @@ mod drm_run {
                     .join("; ")
             }
         );
+        // Whatever the live system is already set to is how this keyboard
+        // types right now, which makes it a better default than US.
+        let configured = std::fs::read_to_string("/etc/conf.d/loadkmap")
+            .ok()
+            .and_then(|text| typing::configured_keymap(&text));
         let answers = Answers {
             detected_tier,
             disks,
+            firmware: Firmware::detect(),
+            keyboard: configured.map(|(layout, _)| layout.to_string()),
+            keyboard_variant: configured.map(|(_, variant)| variant.to_string()),
             ..Answers::default()
-        };
+        }
+        .with_defaults();
+        eprintln!("firmware: {:?}", answers.firmware);
         let mut app = App::with_mode(answers, size.width, size.height, crate::install_mode());
         eprintln!("{}", app.face.status.describe());
 
         let mut events: Vec<InputEvent> = Vec::new();
         let mut next_retry = Instant::now() + RETRY_EVERY;
+        // The layout keys are currently translated with, once input exists.
+        let mut typing_as: Option<&'static str> = None;
         loop {
             events.clear();
             match input.as_mut() {
                 Some(input) => input.poll(&mut events),
                 None if Instant::now() >= next_retry => {
                     input = open_input(size, &mut complained);
+                    typing_as = None;
                     next_retry = Instant::now() + RETRY_EVERY;
                 }
                 None => {}
@@ -219,6 +236,20 @@ mod drm_run {
                 if let Some(action) = action_for(event, editing_text) {
                     app.act(action);
                 }
+            }
+            // Type the way the chosen layout does, as soon as it is chosen, so
+            // the passwords entered later are the ones that work after boot.
+            let answers = &app.wizard.answers;
+            let wanted = typing::effective_layout(
+                answers.keyboard.as_deref(),
+                answers.keyboard_variant.as_deref(),
+            );
+            if let Some(input) = input.as_mut()
+                && typing_as != Some(wanted.name)
+            {
+                input.set_layout(wanted);
+                eprintln!("typing as: {}", wanted.name);
+                typing_as = Some(wanted.name);
             }
             app.tick();
             if app.quitting || stop.load(Ordering::Relaxed) {
@@ -312,7 +343,7 @@ fn unattended_main() -> Option<Result<(), Box<dyn std::error::Error>>> {
 #[cfg(any(feature = "winit", feature = "drm"))]
 mod unattended {
     use alpymist_core::Tier;
-    use alpymist_install::answers::{Answers, DiskPlan, Network};
+    use alpymist_install::answers::{Answers, DiskPlan, Firmware, Network};
     use alpymist_install::execute::{self, Mode, Progress};
     use alpymist_install::plan;
 
@@ -379,6 +410,7 @@ mod unattended {
             username: o.user.clone(),
             full_name: o.user.clone(),
             hostname: o.hostname.clone(),
+            firmware: Firmware::detect(),
             detected_tier: Some(Tier::Potato),
             ..Answers::default()
         }

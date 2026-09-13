@@ -75,6 +75,8 @@ pub fn action_for(event: &InputEvent, editing_text: bool) -> Option<Action> {
     Some(match code {
         KeyCode::ArrowUp => Action::Up,
         KeyCode::ArrowDown => Action::Down,
+        KeyCode::PageUp => Action::PageUp,
+        KeyCode::PageDown => Action::PageDown,
         KeyCode::Tab if modifiers.contains(Modifiers::SHIFT) => Action::PreviousField,
         KeyCode::Tab => Action::NextField,
         KeyCode::Enter => Action::Advance,
@@ -112,6 +114,10 @@ pub enum Action {
     Up,
     /// Move the cursor down a row.
     Down,
+    /// Move a page up a long list.
+    PageUp,
+    /// Move a page down a long list.
+    PageDown,
     /// Jump to the next text field, wrapping after the last.
     NextField,
     /// Jump to the previous text field, wrapping before the first.
@@ -245,13 +251,23 @@ impl App {
     /// Landing on the current choice rather than the top of the list means
     /// arrowing down from a screen you have already answered does not silently
     /// jump your selection back to the first option.
+    ///
+    /// An empty field comes first of all, because a screen that needs typing
+    /// should be ready for it without a keystroke to get there. Searchable
+    /// lists keep the cursor in their search field for the same reason.
     fn snap_cursor(&mut self) {
-        let rows = screens::rows(self.wizard.step(), &self.wizard.answers);
-        self.cursor = rows
-            .iter()
-            .position(|r| r.selectable() && r.chosen)
-            .or_else(|| rows.iter().position(Row::selectable))
-            .unwrap_or(0);
+        let step = self.wizard.step();
+        let answers = &self.wizard.answers;
+        let rows = screens::rows(step, answers);
+        self.cursor = if screens::is_picker(step) {
+            0
+        } else {
+            rows.iter()
+                .position(|r| r.text_target().is_some_and(|f| f.value(answers).is_empty()))
+                .or_else(|| rows.iter().position(|r| r.selectable() && r.chosen))
+                .or_else(|| rows.iter().position(Row::selectable))
+                .unwrap_or(0)
+        };
         self.place_caret();
     }
 
@@ -272,6 +288,12 @@ impl App {
     /// Stops at the ends rather than wrapping: wrapping in a short list makes
     /// it easy to overshoot and not notice.
     fn move_cursor(&mut self, down: bool) {
+        let step = self.wizard.step();
+        if screens::is_picker(step) {
+            screens::move_choice(step, if down { 1 } else { -1 }, &mut self.wizard.answers);
+            self.reported.clear();
+            return;
+        }
         let options = screens::selectable(self.wizard.step(), &self.wizard.answers);
         if options.is_empty() {
             return;
@@ -365,6 +387,9 @@ impl App {
             Action::CaretEnd => editing::end(value),
             _ => caret,
         };
+        if matches!(field, TextTarget::KeyboardSearch | TextTarget::ZoneSearch) {
+            screens::follow_search(self.wizard.step(), &mut self.wizard.answers);
+        }
         // Typing is how you fix what the last refusal complained about, so the
         // complaint should not outlive the first keystroke.
         self.reported.clear();
@@ -382,11 +407,35 @@ impl App {
             | Action::CaretEnd => self.edit(action),
             Action::Up => self.move_cursor(false),
             Action::Down => self.move_cursor(true),
+            Action::PageUp | Action::PageDown => {
+                let step = self.wizard.step();
+                if screens::is_picker(step) {
+                    let page = isize::try_from(screens::LIST_ROWS).unwrap_or(1);
+                    let delta = if action == Action::PageUp {
+                        -page
+                    } else {
+                        page
+                    };
+                    screens::move_choice(step, delta, &mut self.wizard.answers);
+                    self.reported.clear();
+                }
+            }
             Action::NextField => self.move_to_field(true),
             Action::PreviousField => self.move_to_field(false),
             Action::Choose => {
                 screens::choose(self.wizard.step(), self.cursor, &mut self.wizard.answers);
                 self.reported.clear();
+                // Turning encryption on reveals the passphrase fields; go to them.
+                if self.wizard.step() == Step::Encryption && self.focused_field().is_none() {
+                    let rows = screens::rows(Step::Encryption, &self.wizard.answers);
+                    if let Some(i) = rows.iter().position(|r| {
+                        r.text_target()
+                            .is_some_and(|f| f.value(&self.wizard.answers).is_empty())
+                    }) {
+                        self.cursor = i;
+                        self.place_caret();
+                    }
+                }
             }
             Action::Advance => match self.wizard.advance() {
                 Ok(step) => {
@@ -431,7 +480,12 @@ impl App {
         let rows = screens::rows(self.wizard.step(), &self.wizard.answers);
         match pointer::hit_test(&self.chrome, rows.len(), x, y) {
             pointer::Hit::Row(index) => {
-                if rows.get(index).is_some_and(Row::selectable) {
+                if screens::is_picker(self.wizard.step()) {
+                    // The cursor lives in the search field; a click on an entry
+                    // chooses it without taking the typing away from there.
+                    screens::choose(self.wizard.step(), index, &mut self.wizard.answers);
+                    self.reported.clear();
+                } else if rows.get(index).is_some_and(Row::selectable) {
                     self.cursor = index;
                     self.place_caret();
                     // A text field only takes focus; anything else is a choice.
@@ -796,8 +850,7 @@ mod tests {
 
     #[test]
     fn moving_down_then_up_returns_to_where_it_started() {
-        let mut a = app();
-        a.act(Action::Advance);
+        let mut a = at_disk();
         let start = a.cursor();
         a.act(Action::Down);
         assert_ne!(a.cursor(), start);
@@ -808,8 +861,7 @@ mod tests {
     /// Wrapping in a short list makes it easy to overshoot without noticing.
     #[test]
     fn the_cursor_stops_at_the_ends_rather_than_wrapping() {
-        let mut a = app();
-        a.act(Action::Advance);
+        let mut a = at_disk();
         for _ in 0..50 {
             a.act(Action::Down);
         }
@@ -884,7 +936,7 @@ mod tests {
     fn going_back_returns_to_the_previous_screen() {
         let mut a = app();
         a.act(Action::Advance);
-        a.act(Action::Choose);
+        a.act(Action::Down);
         a.act(Action::Advance); // Region
         a.act(Action::Back);
         assert_eq!(a.wizard.step(), Step::Keyboard);
@@ -892,15 +944,92 @@ mod tests {
 
     #[test]
     fn the_cursor_lands_on_the_existing_choice_when_returning_to_a_screen() {
+        let mut a = at_disk();
+        a.act(Action::Down);
+        let chosen = a.cursor();
+        a.act(Action::Choose);
+        a.act(Action::Back);
+        a.act(Action::Advance);
+        assert_eq!(a.cursor(), chosen, "returning reset the selection");
+    }
+
+    /// On a searchable list the cursor never leaves the search field, so the
+    /// arrows change the choice and typing always searches.
+    #[test]
+    fn arrows_on_a_list_move_the_choice_and_leave_typing_in_the_search() {
+        let mut a = app();
+        a.act(Action::Advance); // Keyboard
+        assert_eq!(a.focused_field(), Some(TextTarget::KeyboardSearch));
+        a.act(Action::Down);
+        let first = a.wizard.answers.keyboard_variant.clone();
+        assert!(first.is_some(), "Down chose nothing");
+        a.act(Action::Down);
+        assert_ne!(a.wizard.answers.keyboard_variant, first);
+        a.act(Action::Up);
+        assert_eq!(a.wizard.answers.keyboard_variant, first);
+        assert_eq!(a.focused_field(), Some(TextTarget::KeyboardSearch));
+    }
+
+    #[test]
+    fn typing_on_a_list_searches_and_enter_takes_the_top_match() {
         let mut a = app();
         a.act(Action::Advance);
         a.act(Action::Down);
-        a.act(Action::Down);
-        a.act(Action::Choose);
-        let chosen = a.cursor();
+        a.act(Action::Advance); // Region
+        assert_eq!(a.wizard.step(), Step::Region);
+        type_text(&mut a, "oslo");
         a.act(Action::Advance);
-        a.act(Action::Back);
-        assert_eq!(a.cursor(), chosen, "returning reset the selection");
+        assert_eq!(a.wizard.step(), Step::Network);
+        assert_eq!(a.wizard.answers.timezone.as_deref(), Some("Europe/Oslo"));
+    }
+
+    #[test]
+    fn page_down_moves_a_whole_page_of_a_list() {
+        let mut a = app();
+        a.act(Action::Advance);
+        a.act(Action::Down);
+        let at = |a: &App| {
+            crate::catalog::keymap_index(
+                a.wizard.answers.keyboard.as_deref().unwrap(),
+                a.wizard.answers.keyboard_variant.as_deref().unwrap(),
+            )
+            .unwrap()
+        };
+        let start = at(&a);
+        a.act(Action::PageDown);
+        assert_eq!(at(&a), start + screens::LIST_ROWS);
+        a.act(Action::PageUp);
+        assert_eq!(at(&a), start);
+    }
+
+    #[test]
+    fn the_encryption_screen_opens_ready_for_the_passphrase() {
+        let mut a = at_disk();
+        a.wizard.answers.disk_confirmed = true;
+        a.wizard.answers.disk = Some(DiskPlan::WholeDisk {
+            device: "/dev/sda".into(),
+            encrypt: true,
+        });
+        a.act(Action::Advance);
+        assert_eq!(a.wizard.step(), Step::Encryption);
+        assert_eq!(a.focused_field(), Some(TextTarget::Passphrase));
+        type_text(&mut a, "open sesame");
+        a.act(Action::NextField);
+        type_text(&mut a, "open sesame");
+        a.act(Action::Advance);
+        assert_eq!(a.wizard.step(), Step::Account);
+    }
+
+    #[test]
+    fn turning_encryption_on_goes_straight_to_the_passphrase() {
+        let mut a = at_disk();
+        a.wizard.answers.disk_confirmed = true;
+        a.act(Action::Advance); // Encryption, off in this fixture
+        assert_eq!(a.wizard.step(), Step::Encryption);
+        assert_eq!(a.focused_field(), None);
+        a.act(Action::Choose);
+        assert!(a.wizard.answers.encrypts());
+        assert_eq!(a.focused_field(), Some(TextTarget::Passphrase));
     }
 
     #[test]
@@ -909,7 +1038,7 @@ mod tests {
         let mut a = app();
         a.act(Action::Advance); // Keyboard, nothing chosen
         assert_eq!(a.primary_button().1, ButtonStyle::Disabled);
-        a.act(Action::Choose);
+        a.act(Action::Down);
         assert_eq!(a.primary_button().1, ButtonStyle::Primary);
     }
 
@@ -1116,24 +1245,12 @@ mod tests {
     fn moving_onto_a_toggle_row_leaves_it_alone() {
         let mut a = at_disk();
         let confirmed = a.wizard.answers.disk_confirmed;
-        let encrypted = matches!(
-            &a.wizard.answers.disk,
-            Some(DiskPlan::WholeDisk { encrypt: true, .. })
-        );
         for _ in 0..8 {
             a.act(Action::Down);
         }
         assert_eq!(
             a.wizard.answers.disk_confirmed, confirmed,
             "arrowing over the erase checkbox flipped it"
-        );
-        assert_eq!(
-            matches!(
-                &a.wizard.answers.disk,
-                Some(DiskPlan::WholeDisk { encrypt: true, .. })
-            ),
-            encrypted,
-            "arrowing over the encryption checkbox flipped it"
         );
     }
 
@@ -1162,12 +1279,14 @@ mod tests {
                 encrypt: true,
             }),
             disk_confirmed: true,
+            passphrase: "a disk passphrase".into(),
+            passphrase_confirm: "a disk passphrase".into(),
             detected_tier: Some(Tier::Lite),
             disks: crate::disks::sample(),
             ..Answers::default()
         };
         let mut a = App::new(answers, 1280, 800);
-        for _ in 0..5 {
+        for _ in 0..6 {
             a.act(Action::Advance);
         }
         assert_eq!(
@@ -1203,13 +1322,21 @@ mod tests {
                 encrypt: true,
             }),
             disk_confirmed: true,
+            passphrase: "a disk passphrase".into(),
+            passphrase_confirm: "a disk passphrase".into(),
+            // Every field filled, so the screen opens on the first rather than
+            // on whichever is empty.
             full_name: "André Biseth".into(),
+            username: "andre".into(),
+            password: "a password".into(),
+            password_confirm: "a password".into(),
+            hostname: "alpymist".into(),
             detected_tier: Some(Tier::Lite),
             disks: crate::disks::sample(),
             ..Answers::default()
         };
         let mut a = App::new(answers, 1280, 800);
-        for _ in 0..5 {
+        for _ in 0..6 {
             a.act(Action::Advance);
         }
         assert_eq!(a.wizard.step(), Step::Account);
@@ -1320,8 +1447,7 @@ mod tests {
 
     #[test]
     fn typing_where_there_is_no_field_does_nothing() {
-        let mut a = app();
-        a.act(Action::Advance); // Keyboard: a list, not fields
+        let mut a = at_disk(); // a list of disks, not fields
         let before = a.wizard.answers.clone();
         type_text(&mut a, "hello");
         a.act(Action::Backspace);
@@ -1385,10 +1511,14 @@ mod tests {
         let chrome = alpymist_ui::chrome::Chrome::for_screen(1280, 800);
         let (left, top, width, height) = chrome.row_rect(2);
         a.act(Action::ClickAt(left + width / 2, top + height / 2));
-        assert_eq!(a.cursor(), 2, "the click did not move the selection");
         assert!(
             a.wizard.answers.keyboard.is_some(),
             "the click did not choose"
+        );
+        assert_eq!(
+            a.focused_field(),
+            Some(TextTarget::KeyboardSearch),
+            "clicking an entry took typing away from the search"
         );
     }
 
@@ -1409,7 +1539,7 @@ mod tests {
     fn clicking_back_goes_back() {
         let mut a = app();
         a.act(Action::Advance);
-        a.act(Action::Choose);
+        a.act(Action::Down);
         a.act(Action::Advance); // Region
         let chrome = alpymist_ui::chrome::Chrome::for_screen(1280, 800);
         let (left, top, width, height) = chrome.back_button;
@@ -1501,14 +1631,15 @@ mod tests {
     #[test]
     fn an_install_that_cannot_be_planned_says_why_instead_of_starting() {
         let mut a = at_confirm();
-        // Encryption has no plan yet; the wizard should report that, not hang.
+        // Answers changed behind the wizard's back: encryption with no
+        // passphrase. The plan refuses, and the screen should say why.
         a.wizard.answers.disk = Some(DiskPlan::WholeDisk {
             device: "/dev/sdb".into(),
             encrypt: true,
         });
         a.act(Action::Advance);
         assert!(!a.reported.is_empty(), "no reason was given");
-        assert!(a.reported[0].to_lowercase().contains("encryption"));
+        assert!(a.reported[0].to_lowercase().contains("passphrase"));
     }
 
     #[test]

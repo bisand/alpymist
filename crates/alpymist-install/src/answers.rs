@@ -40,6 +40,37 @@ pub enum Field {
     PasswordConfirm,
     /// System hostname.
     Hostname,
+    /// Disk encryption passphrase.
+    Passphrase,
+    /// Passphrase confirmation.
+    PassphraseConfirm,
+}
+
+/// How the machine starts, which decides the partition layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Firmware {
+    /// UEFI: a GPT disk with an EFI system partition. Every aarch64 machine
+    /// Alpymist runs on, and most x86 ones made this century.
+    #[default]
+    Uefi,
+    /// Legacy BIOS: an MBR disk with a small boot partition.
+    Bios,
+}
+
+impl Firmware {
+    /// How the running machine booted, which is how the installed one will.
+    #[must_use]
+    pub fn detect() -> Self {
+        if std::path::Path::new("/sys/firmware/efi").exists() {
+            Self::Uefi
+        } else if cfg!(target_arch = "x86_64") || cfg!(target_arch = "x86") {
+            Self::Bios
+        } else {
+            // Everything else Alpymist runs on boots through UEFI, and a
+            // missing sysfs entry there says more about sysfs than firmware.
+            Self::Uefi
+        }
+    }
 }
 
 /// How the machine gets on the network.
@@ -95,20 +126,28 @@ impl DiskPlan {
 }
 
 /// Everything the wizard has collected.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Clone, PartialEq, Eq, Default)]
 pub struct Answers {
     /// Console and desktop keyboard layout, e.g. `no`.
     pub keyboard: Option<String>,
-    /// Keyboard variant, e.g. `nodeadkeys`.
+    /// Keymap within the layout, e.g. `no-nodeadkeys`.
     pub keyboard_variant: Option<String>,
+    /// What has been typed into the keyboard screen's search.
+    pub keyboard_filter: String,
     /// IANA timezone, e.g. `Europe/Oslo`.
     pub timezone: Option<String>,
+    /// What has been typed into the time zone screen's search.
+    pub timezone_filter: String,
     /// Network configuration.
     pub network: Option<Network>,
     /// What to do with the disk.
     pub disk: Option<DiskPlan>,
     /// Set when the user has acknowledged that the disk will be erased.
     pub disk_confirmed: bool,
+    /// Passphrase for the encrypted disk.
+    pub passphrase: String,
+    /// Passphrase, again.
+    pub passphrase_confirm: String,
     /// Login name.
     pub username: String,
     /// Display name, optional.
@@ -121,6 +160,13 @@ pub struct Answers {
     pub hostname: String,
     /// Disks found on this machine, offered on the disk screen.
     pub disks: Vec<crate::disks::Disk>,
+    /// How this machine boots.
+    pub firmware: Firmware,
+    /// Whether typed characters come already translated by an operating system
+    /// that follows the chosen layout, as in the desktop preview. When false,
+    /// the installer translates keys itself and can only do so for the layouts
+    /// Denise has tables for.
+    pub typed_by_os: bool,
     /// Desktop tier the probe detected, if it ran.
     pub detected_tier: Option<Tier>,
     /// Tier the user chose instead, if they overrode the detection.
@@ -136,7 +182,64 @@ pub const MIN_PASSWORD: usize = 8;
 /// The longest a single hostname label may be, per RFC 1123.
 const MAX_HOSTNAME_LABEL: usize = 63;
 
+impl std::fmt::Debug for Answers {
+    /// Everything except the secrets, which a log has no business holding.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let masked = |s: &str| if s.is_empty() { "" } else { "<set>" };
+        f.debug_struct("Answers")
+            .field("keyboard", &self.keyboard)
+            .field("keyboard_variant", &self.keyboard_variant)
+            .field("timezone", &self.timezone)
+            .field("network", &self.network)
+            .field("disk", &self.disk)
+            .field("disk_confirmed", &self.disk_confirmed)
+            .field("passphrase", &masked(&self.passphrase))
+            .field("username", &self.username)
+            .field("full_name", &self.full_name)
+            .field("password", &masked(&self.password))
+            .field("hostname", &self.hostname)
+            .field("firmware", &self.firmware)
+            .field("detected_tier", &self.detected_tier)
+            .field("tier_override", &self.tier_override)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Answers {
+    /// Fill every unanswered question that has a sensible answer.
+    ///
+    /// The point is that someone who agrees with the defaults can press Enter
+    /// through the wizard, stopping only where a default cannot exist — their
+    /// name, their password — or must not — agreeing to erase a disk.
+    #[must_use]
+    pub fn with_defaults(mut self) -> Self {
+        if self.keyboard.is_none() {
+            let (layout, variant) = crate::catalog::DEFAULT_KEYMAP;
+            self.keyboard = Some(layout.into());
+            self.keyboard_variant = Some(variant.into());
+        }
+        if self.timezone.is_none() {
+            self.timezone = Some(crate::catalog::DEFAULT_ZONE.into());
+        }
+        if self.network.is_none() {
+            self.network = Some(Network::Dhcp);
+        }
+        if self.disk.is_none()
+            && let Some(free) = self.disks.iter().find(|d| d.mounted_at.is_none())
+        {
+            // Encrypted unless the user says otherwise: this is the distro
+            // that is supposed to get security right by default.
+            self.disk = Some(DiskPlan::WholeDisk {
+                device: free.device.clone(),
+                encrypt: true,
+            });
+        }
+        if self.hostname.is_empty() {
+            self.hostname = "alpymist".into();
+        }
+        self
+    }
+
     /// The tier this machine will actually be set up for.
     ///
     /// An explicit choice always wins over the probe: the user may know

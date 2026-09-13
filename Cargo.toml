@@ -33,6 +33,7 @@ denise-text = { version = "0.24", features = ["truetype"] }
 denise-arrange = "0.24"
 denise-drm = "0.24"
 denise-evdev = "0.24"
+denise-layout = "0.24"
 denise-fbdev = "0.24"
 denise-winit = "0.24"
 serde = { version = "1", features = ["derive"] }

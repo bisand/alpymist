@@ -5,7 +5,7 @@
 //! every reason it refuses to advance — can be tested directly.
 
 use crate::answers::{
-    Answers, Field, Issue, MIN_PASSWORD, Network, validate_hostname, validate_ipv4,
+    Answers, DiskPlan, Field, Issue, MIN_PASSWORD, Network, validate_hostname, validate_ipv4,
     validate_username,
 };
 
@@ -23,6 +23,8 @@ pub enum Step {
     Network,
     /// Disk.
     Disk,
+    /// Whether and how to encrypt the disk.
+    Encryption,
     /// User account and hostname.
     Account,
     /// Detected desktop tier, with an override.
@@ -37,12 +39,13 @@ pub enum Step {
 
 impl Step {
     /// Every step in order.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Welcome,
         Self::Keyboard,
         Self::Region,
         Self::Network,
         Self::Disk,
+        Self::Encryption,
         Self::Account,
         Self::Desktop,
         Self::Confirm,
@@ -59,6 +62,7 @@ impl Step {
             Self::Region => "Region and time",
             Self::Network => "Network",
             Self::Disk => "Disk",
+            Self::Encryption => "Encryption",
             Self::Account => "Your account",
             Self::Desktop => "Desktop",
             Self::Confirm => "Ready to install",
@@ -72,10 +76,13 @@ impl Step {
     pub fn subtitle(self) -> &'static str {
         match self {
             Self::Welcome => "This will set up Alpymist on this machine.",
-            Self::Keyboard => "Pick the layout your keyboard actually has.",
-            Self::Region => "Used for the clock and for regional defaults.",
+            Self::Keyboard => "Pick the layout your keyboard actually has. Type to search.",
+            Self::Region => "Used for the clock. Type a city or country to search.",
             Self::Network => "Alpymist can install without a network, but updates need one.",
             Self::Disk => "Nothing is written to the disk until you confirm on the last screen.",
+            Self::Encryption => {
+                "Keeps what is on the disk private if the machine is lost or stolen."
+            }
             Self::Account => "The first account, which will be able to use doas.",
             Self::Desktop => "Chosen from what this machine can actually drive.",
             Self::Confirm => {
@@ -117,6 +124,43 @@ impl Step {
     pub fn previous(self) -> Option<Self> {
         let i = Self::ALL.iter().position(|s| *s == self)?;
         i.checked_sub(1).and_then(|i| Self::ALL.get(i)).copied()
+    }
+}
+
+/// Whether what is typed here is what the chosen layout would type.
+fn types_as_chosen(a: &Answers) -> bool {
+    a.typed_by_os
+        || crate::typing::layout_for(
+            a.keyboard.as_deref().unwrap_or_default(),
+            a.keyboard_variant.as_deref().unwrap_or_default(),
+        )
+        .is_some()
+}
+
+/// What to say when a secret is being typed on a layout other than the chosen one.
+fn typed_as_warning(a: &Answers) -> String {
+    format!(
+        "Typed here as {}, not exactly your layout. Pick one that types the same on both.",
+        typed_as(a)
+    )
+}
+
+/// The layout actually being typed with, named for a person.
+fn typed_as(a: &Answers) -> &'static str {
+    let layout =
+        crate::typing::effective_layout(a.keyboard.as_deref(), a.keyboard_variant.as_deref());
+    match layout.name {
+        "no" => "Norwegian",
+        "de" => "German",
+        _ => "US English",
+    }
+}
+
+impl Answers {
+    /// Whether the chosen disk will be encrypted.
+    #[must_use]
+    pub fn encrypts(&self) -> bool {
+        matches!(self.disk, Some(DiskPlan::WholeDisk { encrypt: true, .. }))
     }
 }
 
@@ -219,6 +263,18 @@ impl Wizard {
                     }
                 }
             },
+            Step::Encryption => {
+                if a.encrypts() {
+                    if a.passphrase.is_empty() {
+                        issues.push(issue(Field::Passphrase, "Choose a passphrase."));
+                    } else if a.passphrase != a.passphrase_confirm {
+                        issues.push(issue(
+                            Field::PassphraseConfirm,
+                            "The passphrases do not match.",
+                        ));
+                    }
+                }
+            }
             Step::Account => {
                 if let Err(why) = validate_username(&a.username) {
                     issues.push(issue(Field::Username, &why));
@@ -266,22 +322,38 @@ impl Wizard {
                     ));
                 }
             }
+            Step::Keyboard if !types_as_chosen(a) => {
+                notes.push(note(
+                    Field::Keyboard,
+                    format!(
+                        "This installer types as {} here; the installed system uses yours.",
+                        typed_as(a)
+                    ),
+                ));
+            }
+            Step::Encryption => {
+                if !a.encrypts() {
+                    notes.push(note(
+                        Field::Disk,
+                        "Without encryption, anyone holding this disk can read it.".into(),
+                    ));
+                } else if !types_as_chosen(a) {
+                    notes.push(note(Field::Passphrase, typed_as_warning(a)));
+                } else if !a.passphrase.is_empty() && a.passphrase.chars().count() < MIN_PASSWORD {
+                    notes.push(note(
+                        Field::Passphrase,
+                        format!("Shorter than {MIN_PASSWORD} characters. That is your call."),
+                    ));
+                }
+            }
+            Step::Account if !types_as_chosen(a) => {
+                notes.push(note(Field::Password, typed_as_warning(a)));
+            }
             Step::Account => {
                 if !a.password.is_empty() && a.password.chars().count() < MIN_PASSWORD {
                     notes.push(note(
                         Field::Password,
                         format!("Shorter than {MIN_PASSWORD} characters. That is your call."),
-                    ));
-                }
-            }
-            Step::Disk => {
-                if matches!(
-                    &a.disk,
-                    Some(crate::answers::DiskPlan::WholeDisk { encrypt: false, .. })
-                ) {
-                    notes.push(note(
-                        Field::Disk,
-                        "Without encryption, anyone holding this disk can read it.".into(),
                     ));
                 }
             }
@@ -336,7 +408,7 @@ mod tests {
     fn complete() -> Wizard {
         Wizard::new(Answers {
             keyboard: Some("no".into()),
-            keyboard_variant: None,
+            keyboard_variant: Some("no".into()),
             timezone: Some("Europe/Oslo".into()),
             network: Some(Network::Dhcp),
             disk: Some(DiskPlan::WholeDisk {
@@ -344,6 +416,8 @@ mod tests {
                 encrypt: true,
             }),
             disk_confirmed: true,
+            passphrase: "correct horse battery staple".into(),
+            passphrase_confirm: "correct horse battery staple".into(),
             username: "andre".into(),
             full_name: "André Biseth".into(),
             password: "correct horse battery".into(),
@@ -351,7 +425,7 @@ mod tests {
             hostname: "alpymist".into(),
             disks: crate::disks::sample(),
             detected_tier: Some(Tier::Lite),
-            tier_override: None,
+            ..Answers::default()
         })
     }
 
@@ -392,8 +466,8 @@ mod tests {
         assert_eq!(Step::Install.question_number(), None);
         assert_eq!(Step::Done.question_number(), None);
         assert_eq!(Step::Keyboard.question_number(), Some(1));
-        assert_eq!(Step::Confirm.question_number(), Some(7));
-        assert_eq!(Step::questions().count(), 7);
+        assert_eq!(Step::Confirm.question_number(), Some(8));
+        assert_eq!(Step::questions().count(), 8);
     }
 
     #[test]
@@ -473,7 +547,7 @@ mod tests {
     fn going_back_returns_to_the_previous_screen() {
         let mut w = at(Step::Account);
         assert!(w.back());
-        assert_eq!(w.step(), Step::Disk);
+        assert_eq!(w.step(), Step::Encryption);
     }
 
     /// Once the disk is being written there is nothing to go back to.
@@ -507,13 +581,97 @@ mod tests {
 
     #[test]
     fn an_unencrypted_whole_disk_install_advises_but_does_not_block() {
-        let mut w = at(Step::Disk);
+        let mut w = at(Step::Encryption);
         w.answers.disk = Some(DiskPlan::WholeDisk {
             device: "/dev/sda".into(),
             encrypt: false,
         });
         assert!(w.blockers().is_empty());
         assert!(!w.advisories().is_empty());
+    }
+
+    #[test]
+    fn encrypting_needs_a_passphrase_typed_the_same_twice() {
+        let mut w = at(Step::Encryption);
+        w.answers.passphrase_confirm = "something else".into();
+        let blockers = w.advance().expect_err("mismatch must block");
+        assert!(blockers.iter().any(|i| i.field == Field::PassphraseConfirm));
+        w.answers.passphrase.clear();
+        let blockers = w.advance().expect_err("empty must block");
+        assert!(blockers.iter().any(|i| i.field == Field::Passphrase));
+    }
+
+    #[test]
+    fn not_encrypting_needs_no_passphrase() {
+        let mut w = at(Step::Encryption);
+        w.answers.disk = Some(DiskPlan::WholeDisk {
+            device: "/dev/sda".into(),
+            encrypt: false,
+        });
+        w.answers.passphrase.clear();
+        assert!(w.advance().is_ok());
+    }
+
+    /// A passphrase typed on the wrong layout is a disk that will not unlock.
+    #[test]
+    fn a_layout_the_installer_cannot_type_is_warned_about_where_secrets_are_typed() {
+        for step in [Step::Keyboard, Step::Encryption, Step::Account] {
+            let mut w = at(step);
+            w.answers.keyboard = Some("fr".into());
+            w.answers.keyboard_variant = Some("fr".into());
+            assert!(
+                w.advisories()
+                    .iter()
+                    .any(|i| i.message.contains("US English")),
+                "{step:?} does not warn"
+            );
+            assert!(w.blockers().is_empty(), "{step:?} should warn, not block");
+            w.answers.keyboard = Some("no".into());
+            w.answers.keyboard_variant = Some("no-mac".into());
+            assert!(
+                w.advisories()
+                    .iter()
+                    .any(|i| i.message.contains("Norwegian")),
+                "{step:?} should name the closest layout it types with"
+            );
+            w.answers.typed_by_os = true;
+            assert!(
+                !w.advisories()
+                    .iter()
+                    .any(|i| i.message.contains("types") || i.message.contains("Typed")),
+                "{step:?} warns although the OS does the typing"
+            );
+        }
+    }
+
+    /// Someone happy with every default presses Enter until something
+    /// genuinely needs them: agreeing to erase, then choosing secrets.
+    #[test]
+    fn the_defaults_carry_the_wizard_to_the_first_real_decision() {
+        let mut w = Wizard::new(
+            Answers {
+                disks: crate::disks::sample(),
+                ..Answers::default()
+            }
+            .with_defaults(),
+        );
+        while w.advance().is_ok() {}
+        assert_eq!(
+            w.step(),
+            Step::Disk,
+            "stopped somewhere a default should have done"
+        );
+        w.answers.disk_confirmed = true;
+        while w.advance().is_ok() {}
+        assert_eq!(w.step(), Step::Encryption, "encryption is on by default");
+        w.answers.passphrase = "p".into();
+        w.answers.passphrase_confirm = "p".into();
+        while w.advance().is_ok() {}
+        assert_eq!(w.step(), Step::Account);
+        assert!(
+            w.answers.hostname == "alpymist",
+            "the hostname has a default"
+        );
     }
 
     #[test]

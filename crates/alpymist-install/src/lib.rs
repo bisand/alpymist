@@ -14,6 +14,7 @@
 
 pub mod answers;
 pub mod app;
+pub mod catalog;
 pub mod disks;
 pub mod editing;
 pub mod execute;
@@ -21,8 +22,9 @@ pub mod plan;
 pub mod pointer;
 pub mod safety;
 pub mod screens;
+pub mod typing;
 pub mod wizard;
 
-pub use answers::{Answers, DiskPlan, Field, Issue, Network};
+pub use answers::{Answers, DiskPlan, Field, Firmware, Issue, Network};
 pub use screens::{Row, choose, rows, selectable};
 pub use wizard::{Step, Wizard};

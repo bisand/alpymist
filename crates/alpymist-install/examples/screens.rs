@@ -23,7 +23,7 @@ use denise_render::Canvas;
 fn answers() -> Answers {
     Answers {
         keyboard: Some("no".into()),
-        keyboard_variant: Some("nodeadkeys".into()),
+        keyboard_variant: Some("no".into()),
         timezone: Some("Europe/Oslo".into()),
         network: Some(Network::Dhcp),
         disk: Some(DiskPlan::WholeDisk {
@@ -37,8 +37,10 @@ fn answers() -> Answers {
         password_confirm: "a good long passphrase".into(),
         hostname: "alpymist".into(),
         disks: alpymist_install::disks::sample(),
+        passphrase: "a long disk passphrase".into(),
+        passphrase_confirm: "a long disk passphrase".into(),
         detected_tier: Some(Tier::Lite),
-        tier_override: None,
+        ..Answers::default()
     }
 }
 
