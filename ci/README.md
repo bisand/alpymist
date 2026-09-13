@@ -1,12 +1,21 @@
 # CI
 
-Not yet wired. Planned gates, in order of introduction:
+Two workflows:
 
-1. `make lint` and `make test` on every PR.
-2. `cargo deny check` and `cargo audit`.
-3. Package builds for `x86_64` and `aarch64` in the pinned builder container.
-4. ISO build + automated QEMU boot smoke test per tier.
-5. Double-build reproducibility diff as a release gate.
+- **CI** (`.github/workflows/ci.yml`): `cargo fmt --check`, clippy with
+  `-D warnings`, and the tests, on every push to `main` and every pull request.
+  A couple of minutes.
+- **ISO** (`.github/workflows/iso.yml`): builds the x86_64 image, boots it in
+  QEMU with KVM, and asserts the reported tier. Nightly, skipped when `main`
+  has not moved since the last successful image, and on demand from the
+  Actions tab ("Run workflow"), which always builds.
+
+Still planned:
+
+1. `cargo deny check` and `cargo audit`.
+2. Package builds for `aarch64` in CI.
+3. An install test: install onto a scratch disk and boot the result.
+4. Double-build reproducibility diff as a release gate.
 
 ## Known limitation: `xtask smoke` on a macOS dev box
 

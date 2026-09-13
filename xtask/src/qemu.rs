@@ -38,19 +38,48 @@ impl Arch {
     /// virtio-gpu is also the configuration most Alpymist installs will run in.
     fn machine_args(self) -> Vec<String> {
         let mut args: Vec<String> = match self {
-            Self::Aarch64 => vec![
-                "-M".into(),
-                "virt".into(),
-                "-cpu".into(),
-                "cortex-a72".into(),
-                "-bios".into(),
-                firmware_path(),
-            ],
+            Self::Aarch64 => vec!["-M".into(), "virt".into(), "-bios".into(), firmware_path()],
             Self::X86_64 => vec!["-M".into(), "q35".into()],
         };
         args.extend(["-device".into(), "virtio-gpu-pci".into()]);
+        args.extend(self.accel_args());
         args
     }
+
+    /// Hardware acceleration, when this host can give it to this guest.
+    ///
+    /// Without KVM, QEMU emulates every instruction, and an x86 boot on a CI
+    /// runner takes minutes instead of seconds. KVM needs the guest to be the
+    /// host's own architecture and `/dev/kvm` to be openable by this user;
+    /// anything else falls back to emulation rather than failing.
+    fn accel_args(self) -> Vec<String> {
+        if self.is_host() && kvm_usable() {
+            eprintln!("accelerating with KVM");
+            vec!["-accel".into(), "kvm".into(), "-cpu".into(), "host".into()]
+        } else {
+            match self {
+                // virt has no default CPU model worth emulating.
+                Self::Aarch64 => vec!["-cpu".into(), "cortex-a72".into()],
+                Self::X86_64 => Vec::new(),
+            }
+        }
+    }
+
+    fn is_host(self) -> bool {
+        match self {
+            Self::Aarch64 => cfg!(target_arch = "aarch64"),
+            Self::X86_64 => cfg!(target_arch = "x86_64"),
+        }
+    }
+}
+
+/// Whether `/dev/kvm` exists and this process may use it.
+fn kvm_usable() -> bool {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/kvm")
+        .is_ok()
 }
 
 /// Where Homebrew's QEMU keeps its bundled UEFI firmware.
