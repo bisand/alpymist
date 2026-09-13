@@ -6,6 +6,7 @@
 //! be tested without a framebuffer, and reused by any backend Denise offers.
 
 use crate::convert::{px, rows};
+use crate::logo::MARK;
 use crate::palette::{Palette, Rgb};
 use crate::terrain::Ridge;
 
@@ -29,6 +30,9 @@ pub enum Layer {
     Mountain {
         /// `(x, top, height)` per column, left to right.
         columns: Vec<(i32, i32, i32)>,
+        /// `(x, y, coverage)` for the partly covered pixels along the skyline,
+        /// painted blended so the ridge does not read as a staircase.
+        edge: Vec<(i32, i32, u8)>,
         /// Fill colour, already hazed for its distance.
         colour: Rgb,
     },
@@ -55,6 +59,11 @@ pub struct Backdrop {
 /// How many ridges the scene draws. Enough for depth, few enough to stay quick
 /// to fill on a CPU that is the reason this machine is on the Potato tier.
 const RIDGE_COUNT: u32 = 5;
+/// How much of the horizon the mark's range occupies, as a percentage.
+const MARK_SPREAD: u32 = 72;
+/// Where that range starts, as a percentage of the width. Off-centre, because
+/// a range that is centred looks placed.
+const MARK_SHIFT: u32 = 15;
 /// Sky gradient bands. More is smoother; this is imperceptible from banding at
 /// typical panel sizes while staying cheap.
 const SKY_BANDS: u32 = 64;
@@ -94,16 +103,29 @@ impl Backdrop {
             let roughness = 72 - depth * 8;
             let base_y = px(base_y);
 
-            let ridge = Ridge::generate(
-                width,
-                height,
-                base_y,
-                amplitude,
-                roughness,
-                seed.wrapping_add(u64::from(depth) * 0x9E37_79B9),
-            );
+            let seed = seed.wrapping_add(u64::from(depth) * 0x9E37_79B9);
+            let ridge = if depth == RIDGE_COUNT - 1 {
+                // The furthest range is the Alpymist mark, weathered: the logo
+                // is in the scenery for anyone who looks twice, and looks like
+                // mountains to everyone else.
+                Ridge::from_silhouette(
+                    width,
+                    height,
+                    base_y,
+                    px(height / 14),
+                    amplitude * 2 / 3,
+                    roughness,
+                    MARK_SPREAD,
+                    MARK_SHIFT,
+                    seed,
+                    &MARK,
+                )
+            } else {
+                Ridge::generate(width, height, base_y, amplitude, roughness, seed)
+            };
             layers.push(Layer::Mountain {
                 columns: ridge.columns(height),
+                edge: ridge.edge(),
                 colour: palette.ridge_at(depth, RIDGE_COUNT),
             });
 

@@ -65,7 +65,10 @@ prepare() {
 
 build() {
 	cargo build --release --locked -p alpymist-wallpaper
+	# The wallpaper and the mark come from the same code: the furthest range in
+	# the wallpaper is the mark, weathered.
 	./target/release/alpymist-wallpaper "$builddir"/alpymist.png 2560 1440
+	./target/release/alpymist-wallpaper --mark "$builddir"/mark.png 64
 }
 
 # Copy one of desktop/skel's parts into a package's /etc/skel.
@@ -77,6 +80,7 @@ _skel() {
 package() {
 	install -Dm644 "$builddir"/alpymist.png \
 		"$pkgdir"/usr/share/backgrounds/alpymist/alpymist.png
+	install -Dm644 "$builddir"/mark.png "$pkgdir"/usr/share/alpymist/mark.png
 	# A PAM service of our own rather than an edit to greetd's, which belongs
 	# to the greetd package; each tier's configuration names it.
 	install -Dm644 "$builddir"/desktop/alpymist-greetd.pam \

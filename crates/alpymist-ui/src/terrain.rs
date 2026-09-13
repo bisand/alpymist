@@ -9,6 +9,7 @@
 //! so the shapes can be tested without a framebuffer.
 
 use crate::convert::{idx, px};
+use crate::logo::{Silhouette, UNIT};
 
 /// A deterministic pseudo-random source.
 ///
@@ -44,11 +45,20 @@ impl Rng {
     }
 }
 
+/// Sub-pixel precision for ridge heights: 1/256th of a pixel.
+///
+/// A ridge is a near-horizontal line, and near-horizontal lines are where
+/// whole-pixel steps show up as a staircase. Keeping the fraction lets the
+/// renderer blend the topmost pixel by how much of it the mountain covers.
+const SUBPIXEL: i32 = 256;
+
 /// One mountain ridge: a height for every x across the screen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ridge {
-    /// Height in pixels from the top of the screen, one entry per x column.
+    /// Height in whole pixels from the top of the screen, one entry per column.
     pub heights: Vec<i32>,
+    /// How far below `heights` the surface actually lies, in 1/256ths.
+    pub fractions: Vec<u8>,
 }
 
 impl Ridge {
@@ -79,12 +89,15 @@ impl Ridge {
         while span + 1 < width {
             span *= 2;
         }
-        let mut grid = vec![base_y; span + 1];
-        grid[0] = base_y + rng.jitter(amplitude / 2);
-        grid[span] = base_y + rng.jitter(amplitude / 2);
+        // Everything below is in sub-pixel units, so the resampled heights
+        // keep a fraction the renderer can blend with.
+        let base = base_y.saturating_mul(SUBPIXEL);
+        let mut grid = vec![base; span + 1];
+        grid[0] = base + rng.jitter(amplitude * SUBPIXEL / 2);
+        grid[span] = base + rng.jitter(amplitude * SUBPIXEL / 2);
 
         let mut step = span;
-        let mut amp = amplitude;
+        let mut amp = amplitude.saturating_mul(SUBPIXEL);
         while step > 1 {
             let half = step / 2;
             let mut i = half;
@@ -94,19 +107,116 @@ impl Ridge {
                 i += step;
             }
             step = half;
-            amp = (amp * i32::try_from(roughness).unwrap_or(50)) / 100;
+            // Saturating and through i64: sub-pixel amplitudes are 256 times
+            // larger than they were, and an absurd theme value must clamp
+            // rather than wrap the ridge to the other end of the screen.
+            amp = i32::try_from(i64::from(amp) * i64::from(roughness) / 100).unwrap_or(i32::MAX);
         }
 
-        // Resample the grid onto actual screen columns.
-        let heights = (0..width)
+        // Resample the grid onto actual screen columns, interpolating between
+        // grid points so the surface is smooth between them as well as along.
+        let fine: Vec<i32> = (0..width)
             .map(|x| {
-                let g = x * span / width.max(1);
+                let pos = x * span / width.max(1);
+                let next = (pos + 1).min(span);
+                let within = (x * span) % width.max(1);
+                let a = grid[pos.min(span)];
+                let b = grid[next];
+                // Through i64: these are sub-pixel units, so the products are
+                // 256 times what they used to be.
+                let step = i32::try_from(
+                    i64::from(b - a) * i64::from(within as u32)
+                        / i64::from(u32::try_from(width.max(1)).unwrap_or(1)),
+                )
+                .unwrap_or(0);
                 // height - 1: the last drawable row, not one past it.
-                grid[g.min(span)].clamp(0, px(height.saturating_sub(1)))
+                a.saturating_add(step)
+                    .clamp(0, px(height.saturating_sub(1)).saturating_mul(SUBPIXEL))
             })
             .collect();
 
-        Self { heights }
+        Self::from_subpixel(&fine)
+    }
+
+    /// Split sub-pixel heights into whole pixels and fractions.
+    fn from_subpixel(fine: &[i32]) -> Self {
+        Self {
+            heights: fine.iter().map(|q| q / SUBPIXEL).collect(),
+            fractions: fine
+                .iter()
+                .map(|q| u8::try_from(q.rem_euclid(SUBPIXEL)).unwrap_or(0))
+                .collect(),
+        }
+    }
+
+    /// The partly covered pixel along the ridge's top edge.
+    ///
+    /// Each entry is `(x, y, coverage)`: how much of the topmost pixel the
+    /// mountain fills, 0-255. Painting these blended is what turns a staircase
+    /// into a skyline.
+    #[must_use]
+    pub fn edge(&self) -> Vec<(i32, i32, u8)> {
+        self.heights
+            .iter()
+            .zip(&self.fractions)
+            .enumerate()
+            .filter_map(|(x, (&top, &frac))| {
+                // The surface lies `frac` into this pixel, so the mountain
+                // covers the rest of it.
+                let coverage = 255u8.saturating_sub(frac);
+                // Nearly empty or nearly full pixels are not worth a draw call.
+                (20..=235)
+                    .contains(&coverage)
+                    .then(|| (idx(x), top, coverage))
+            })
+            .collect()
+    }
+
+    /// Generate a ridge that follows a silhouette, roughened by terrain noise.
+    ///
+    /// The furthest ridge in the backdrop is the Alpymist mark. `relief` is how
+    /// tall it stands above `base_y` at its summit, `weather` how much noise is
+    /// laid over it, and `spread` and `shift` what part of the horizon it
+    /// occupies, as percentages of the width — a range fills part of a view,
+    /// not all of it, and the difference between an homage and a stamp is
+    /// mostly that it is not centred, not symmetrical, and not smooth.
+    #[allow(clippy::too_many_arguments)]
+    #[must_use]
+    pub fn from_silhouette(
+        width: u32,
+        height: u32,
+        base_y: i32,
+        relief: i32,
+        weather: i32,
+        roughness: u32,
+        spread: u32,
+        shift: u32,
+        seed: u64,
+        shape: &Silhouette,
+    ) -> Self {
+        let noise = Self::generate(width, height, 0, weather, roughness, seed);
+        let columns = noise.heights.len().max(1);
+        let fine: Vec<i32> = noise
+            .heights
+            .iter()
+            .enumerate()
+            .map(|(x, &wobble)| {
+                let span = columns * usize::try_from(spread.clamp(1, 100)).unwrap_or(100) / 100;
+                let start = columns * usize::try_from(shift.min(100)).unwrap_or(0) / 100;
+                let across = x.checked_sub(start).filter(|d| *d < span).map_or(0, |d| {
+                    u32::try_from(d * UNIT as usize / span.max(1)).unwrap_or(0)
+                });
+                let up = i32::try_from(shape.elevation(across)).unwrap_or(0) * relief
+                    / i32::try_from(UNIT).unwrap_or(1);
+                // Noise eases off towards the summits, but never to nothing: a
+                // ridge with a perfectly clean peak looks drawn, not weathered.
+                let ease = 100 - (up * 45 / relief.max(1)).clamp(0, 45);
+                (base_y - up + wobble * ease / 100)
+                    .clamp(0, px(height.saturating_sub(1)))
+                    .saturating_mul(SUBPIXEL)
+            })
+            .collect();
+        Self::from_subpixel(&fine)
     }
 
     /// The ridge's filled area as one vertical span per screen column.

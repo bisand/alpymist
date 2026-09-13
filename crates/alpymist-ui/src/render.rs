@@ -51,12 +51,25 @@ pub fn paint_backdrop<P: Painter + ?Sized>(painter: &mut P, backdrop: &Backdrop)
                     Paint::new(colour(*c)),
                 );
             }
-            Layer::Mountain { columns, colour: c } => {
+            Layer::Mountain {
+                columns,
+                edge,
+                colour: c,
+            } => {
                 let rects: Vec<Rect> = columns
                     .iter()
                     .map(|&(x, top, h)| Rect::new(x, top, 1, h))
                     .collect();
                 painter.fill_rects(&rects, Paint::new(colour(*c)));
+                // The skyline's topmost pixel, blended by how much of it the
+                // mountain covers: the difference between a ridge and a
+                // staircase, at one thin rectangle per column.
+                for &(x, y, coverage) in edge {
+                    painter.fill_rect(
+                        Rect::new(x, y, 1, 1),
+                        Paint::new(Color::rgba(c.r, c.g, c.b, coverage)),
+                    );
+                }
             }
             Layer::Mist {
                 y,

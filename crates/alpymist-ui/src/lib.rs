@@ -15,6 +15,7 @@
 pub mod backdrop;
 pub mod chrome;
 pub mod convert;
+pub mod logo;
 pub mod palette;
 #[cfg(feature = "render")]
 pub mod render;
@@ -24,5 +25,6 @@ pub mod typeface;
 
 pub use backdrop::{Backdrop, Layer};
 pub use chrome::Chrome;
+pub use logo::{MARK, Silhouette};
 pub use palette::Palette;
 pub use terrain::Ridge;

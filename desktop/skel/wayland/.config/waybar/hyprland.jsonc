@@ -14,7 +14,8 @@
   "modules-right": ["group/tray-drawer", "bluetooth", "network", "pulseaudio", "cpu", "memory", "battery", "custom/session"],
 
   "custom/alpymist": {
-    "format": "󰋵",
+    // The mark is an image, drawn by our own code; see the stylesheet.
+    "format": " ",
     "tooltip-format": "Applications",
     "on-click": "fuzzel"
   },
