@@ -115,6 +115,14 @@ pub fn run_with(
                 }
                 report(Progress::Finished { index, ok: true });
             }
+            Err(why) if step.may_fail => {
+                report(Progress::Output(why));
+                report(Progress::Output(format!(
+                    "{} did not work; carrying on without it.",
+                    step.title
+                )));
+                report(Progress::Finished { index, ok: false });
+            }
             Err(why) => {
                 report(Progress::Output(why));
                 report(Progress::Finished { index, ok: false });
@@ -198,6 +206,7 @@ mod tests {
             env: Vec::new(),
             stdin: None,
             destructive: false,
+            may_fail: false,
         };
         s.destructive = destructive;
         s
@@ -255,6 +264,30 @@ mod tests {
             .count();
         assert_eq!(started, 2, "the third step should never have started");
         assert!(matches!(seen.last(), Some(Progress::Done { ok: false })));
+    }
+
+    /// A step allowed to fail is reported, and the rest still runs.
+    #[test]
+    fn a_step_that_may_fail_does_not_stop_the_plan() {
+        let mut p = plan();
+        p.steps[2].may_fail = true;
+        p.steps.push(step("unmount", false));
+        let mut seen = Vec::new();
+        let mut n = 0;
+        let ok = run_with(&p, Mode::DryRun, &mut |e| seen.push(e), &mut |_| {
+            n += 1;
+            if n == 3 {
+                Err("no such package".into())
+            } else {
+                Ok(Vec::new())
+            }
+        });
+        assert!(ok, "an optional failure is not a failed install");
+        assert_eq!(n, 4, "the step after it did not run");
+        assert!(
+            seen.iter()
+                .any(|e| matches!(e, Progress::Output(l) if l.contains("no such package")))
+        );
     }
 
     #[test]

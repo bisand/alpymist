@@ -437,6 +437,10 @@ impl App {
                     }
                 }
             }
+            // Leaving the Install screen means the install succeeded. Enter
+            // while it runs, or after it failed, must not announce "installed".
+            Action::Advance
+                if self.wizard.step() == Step::Install && self.install_outcome() != Some(true) => {}
             Action::Advance => match self.wizard.advance() {
                 Ok(step) => {
                     self.reported.clear();
@@ -555,16 +559,28 @@ impl App {
         };
         loop {
             match running.events.try_recv() {
+                // Everything shown is also logged: the screen keeps only the
+                // tail, and after a failed install the log is all there is.
+                // Commands are logged as displayed, which never includes input.
                 Ok(Progress::Starting {
                     index,
                     total,
                     title,
-                    ..
+                    command,
                 }) => {
+                    eprintln!("install: [{}/{total}] {title}: {command}", index + 1);
                     running.at = Some((index, total));
                     running.lines.push(title);
                 }
-                Ok(Progress::Output(line)) => running.lines.push(format!("   {line}")),
+                // One row per line: a failing command's output arrives as one
+                // multi-line message, and drawn as one row it ran down over
+                // the buttons.
+                Ok(Progress::Output(text)) => {
+                    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+                        eprintln!("install:     {line}");
+                        running.lines.push(format!("   {line}"));
+                    }
+                }
                 Ok(Progress::Finished { .. }) => {}
                 Ok(Progress::Refused(reasons)) => {
                     running.lines.push("Refused to write to this disk:".into());
@@ -572,7 +588,10 @@ impl App {
                         .lines
                         .extend(reasons.into_iter().map(|r| format!("   {r}")));
                 }
-                Ok(Progress::Done { ok }) => running.outcome = Some(ok),
+                Ok(Progress::Done { ok }) => {
+                    eprintln!("install: {}", if ok { "finished" } else { "stopped" });
+                    running.outcome = Some(ok);
+                }
                 Err(TryRecvError::Empty) => break,
                 // The thread finished and dropped the sender.
                 Err(TryRecvError::Disconnected) => {
@@ -583,6 +602,12 @@ impl App {
                 }
             }
         }
+    }
+
+    /// How the install ended, once it has.
+    #[must_use]
+    pub fn install_outcome(&self) -> Option<bool> {
+        self.install.as_ref().and_then(|r| r.outcome)
     }
 
     /// Whether an install is running and still has something to report.
@@ -635,7 +660,11 @@ impl App {
         match self.wizard.step() {
             Step::Welcome => ("Enter  Begin", ButtonStyle::Primary),
             Step::Confirm => ("Enter  Install", ButtonStyle::Primary),
-            Step::Install => ("Working", ButtonStyle::Disabled),
+            Step::Install => match self.install_outcome() {
+                None => ("Working", ButtonStyle::Disabled),
+                Some(true) => ("Enter  Continue", ButtonStyle::Primary),
+                Some(false) => ("F10  Quit", ButtonStyle::Quiet),
+            },
             Step::Done => ("Enter  Restart", ButtonStyle::Primary),
             _ if self.wizard.can_advance() => ("Enter  Continue", ButtonStyle::Primary),
             _ => ("Enter  Continue", ButtonStyle::Disabled),
@@ -1640,6 +1669,44 @@ mod tests {
         a.act(Action::Advance);
         assert!(!a.reported.is_empty(), "no reason was given");
         assert!(a.reported[0].to_lowercase().contains("passphrase"));
+    }
+
+    #[test]
+    fn a_failed_install_cannot_be_walked_past_to_finished() {
+        let mut a = at_confirm();
+        a.act(Action::Advance);
+        assert_eq!(a.wizard.step(), Step::Install);
+        // Whatever the worker is doing, Enter before a successful outcome
+        // must leave the user on the Install screen.
+        if a.install_outcome() != Some(true) {
+            a.act(Action::Advance);
+            assert_eq!(a.wizard.step(), Step::Install);
+        }
+        let (tx, events) = std::sync::mpsc::channel();
+        a.install = Some(super::Running {
+            events,
+            lines: Vec::new(),
+            at: None,
+            outcome: None,
+        });
+        tx.send(crate::execute::Progress::Output(
+            "first\nsecond\n\nthird".into(),
+        ))
+        .unwrap();
+        tx.send(crate::execute::Progress::Done { ok: false })
+            .unwrap();
+        a.tick();
+        assert_eq!(a.install_outcome(), Some(false));
+        a.act(Action::Advance);
+        assert_eq!(
+            a.wizard.step(),
+            Step::Install,
+            "a failed install reached Done"
+        );
+        assert_eq!(a.primary_button().0, "F10  Quit");
+        let lines = a.install_lines();
+        assert!(lines.iter().all(|l| !l.contains('\n')), "{lines:?}");
+        assert!(lines.iter().any(|l| l.trim() == "third"));
     }
 
     #[test]

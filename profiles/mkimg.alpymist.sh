@@ -26,7 +26,11 @@ profile_alpymist() {
 	# What the installer runs, on the image rather than fetched, so installing
 	# works with no network: partitioning, LUKS, filesystems and the bootloader
 	# setup-disk installs into the new system.
-	apks="$apks sfdisk dosfstools cryptsetup grub-efi"
+	apks="$apks sfdisk dosfstools cryptsetup blkid grub-efi"
+	# The kernel is on the image to boot it, but not in its package repository
+	# unless named here, and setup-disk installs it from that repository.
+	# linux-firmware-none is what setup-disk picks for hardware needing none.
+	apks="$apks linux-lts linux-firmware-none"
 	case "$ARCH" in
 		x86*) apks="$apks grub-bios";;
 	esac
@@ -39,5 +43,12 @@ profile_alpymist() {
 	# left to quiet/loglevel, and the installer blanks the text it is drawing
 	# over by putting the VT into graphics mode itself.
 	initfs_cmdline="$initfs_cmdline quiet loglevel=3 vt.global_cursor_default=0"
+	# x86 has no device tree naming a serial console, so without this the
+	# console is the screen and the serial port stays silent: nothing to debug
+	# a failed boot with, and nothing for the CI boot test to read. Serial
+	# last, so boot messages go there rather than under the installer.
+	case "$ARCH" in
+		x86*) initfs_cmdline="$initfs_cmdline console=tty0 console=ttyS0,115200";;
+	esac
 	apkovl="genapkovl-alpymist.sh"
 }

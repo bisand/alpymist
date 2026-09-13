@@ -70,6 +70,12 @@ pub struct Step {
     pub stdin: Option<Input>,
     /// Whether this step can destroy data.
     pub destructive: bool,
+    /// Whether the install may carry on if this step fails.
+    ///
+    /// Only for steps whose failure leaves a working system behind. Stopping
+    /// there instead would leave the new root mounted and the disk unlocked,
+    /// which is worse than the missing piece.
+    pub may_fail: bool,
 }
 
 impl Step {
@@ -80,7 +86,13 @@ impl Step {
             env: Vec::new(),
             stdin: None,
             destructive: false,
+            may_fail: false,
         }
+    }
+
+    fn may_fail(mut self) -> Self {
+        self.may_fail = true;
+        self
     }
 
     fn destructive(mut self) -> Self {
@@ -269,6 +281,11 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
                 "e2fsprogs",
                 "dosfstools",
                 "cryptsetup",
+                // util-linux's blkid, not BusyBox's: setup-disk finds an
+                // encrypted root with `blkid --uuid`, which BusyBox lacks, and
+                // without it silently writes a boot entry that never asks for
+                // the passphrase.
+                "blkid",
             ],
         ),
         // From here on it does.
@@ -350,6 +367,20 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
             ],
         ),
     ]);
+    if encrypt {
+        // The one mistake here that nothing else would catch: a boot entry
+        // without cryptroot never unlocks the disk, so the system installs
+        // "successfully" and then cannot start.
+        steps.push(Step::new(
+            "Checking the system will ask for the passphrase",
+            &[
+                "grep",
+                "-q",
+                "cryptroot=",
+                &format!("{ROOT}/boot/grub/grub.cfg"),
+            ],
+        ));
+    }
     // Without a password the account stays locked, as `adduser -D` leaves it.
     // Feeding chpasswd an empty one would instead allow logging in with none.
     if !a.password.is_empty() {
@@ -365,6 +396,31 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         "Granting administrative access",
         &["chroot", ROOT, "adduser", &a.username, "wheel"],
     ));
+    // The doas package ships no rule for wheel; setup-user normally writes
+    // this one. Without it the account the Account screen promised could use
+    // doas cannot. `persist` so it does not ask again for every command.
+    steps.push(Step::new(
+        "Preparing doas",
+        &["chroot", ROOT, "mkdir", "-p", "/etc/doas.d"],
+    ));
+    steps.push(
+        Step::new(
+            "Letting administrators use doas",
+            &["chroot", ROOT, "tee", "/etc/doas.d/20-wheel.conf"],
+        )
+        .with_input(Input::Text("permit persist :wheel\n".into())),
+    );
+
+    // setup-disk copied the live /etc, runlevels included, and the live
+    // system starts the installer at boot. The installed one must not.
+    steps.push(Step::new(
+        "Removing the installer from startup",
+        &[
+            "rm",
+            "-f",
+            &format!("{ROOT}/etc/runlevels/default/alpymist-install"),
+        ],
+    ));
 
     if matches!(a.network, Some(Network::Dhcp)) {
         steps.push(Step::new(
@@ -373,17 +429,22 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         ));
     }
 
-    steps.push(Step::new(
-        "Installing the desktop",
-        &[
-            "apk",
-            "add",
-            "--root",
-            ROOT,
-            "--no-progress",
-            tier.metapackage(),
-        ],
-    ));
+    // Last of the real work, and allowed to fail: the system is bootable
+    // without it, and a desktop can be added after the first boot.
+    steps.push(
+        Step::new(
+            "Installing the desktop",
+            &[
+                "apk",
+                "add",
+                "--root",
+                ROOT,
+                "--no-progress",
+                tier.metapackage(),
+            ],
+        )
+        .may_fail(),
+    );
 
     steps.push(Step::new(
         "Unmounting the boot partition",
@@ -542,6 +603,67 @@ mod tests {
                 < t.iter().position(|s| s.contains("Formatting the system"))
         );
         assert_eq!(t.last().unwrap(), "Locking the encrypted disk");
+    }
+
+    /// Otherwise the installed system boots straight back into the installer.
+    #[test]
+    fn the_installer_is_taken_out_of_the_new_systems_startup() {
+        let plan = build(&answers()).unwrap();
+        let t = titles(&answers());
+        let removal = t
+            .iter()
+            .position(|s| s.contains("Removing the installer"))
+            .unwrap();
+        assert!(removal > t.iter().position(|s| s.contains("base system")).unwrap());
+        assert!(
+            step(&plan, "Removing the installer")
+                .argv
+                .iter()
+                .any(|a| a.starts_with("/mnt/etc/runlevels/"))
+        );
+    }
+
+    /// Nothing that can leave a disk half-written may be skipped past.
+    #[test]
+    fn only_the_desktop_may_fail() {
+        let plan = build(&encrypted()).unwrap();
+        let optional: Vec<&str> = plan
+            .steps
+            .iter()
+            .filter(|s| s.may_fail)
+            .map(|s| s.title.as_str())
+            .collect();
+        assert_eq!(optional, vec!["Installing the desktop"]);
+    }
+
+    #[test]
+    fn an_encrypted_install_checks_the_boot_entry_unlocks_the_disk() {
+        let plan = build(&encrypted()).unwrap();
+        let t = titles(&encrypted());
+        let check = t
+            .iter()
+            .position(|s| s.contains("ask for the passphrase"))
+            .unwrap();
+        assert!(check > t.iter().position(|s| s.contains("base system")).unwrap());
+        assert!(!step(&plan, "ask for the passphrase").may_fail);
+        assert!(
+            step(&plan, "disk tools")
+                .argv
+                .contains(&"blkid".to_string())
+        );
+        assert!(
+            !titles(&answers())
+                .iter()
+                .any(|s| s.contains("ask for the passphrase"))
+        );
+    }
+
+    #[test]
+    fn the_wheel_group_is_allowed_to_use_doas() {
+        let plan = build(&answers()).unwrap();
+        let rule = step(&plan, "use doas");
+        assert!(rule.argv.contains(&"/etc/doas.d/20-wheel.conf".to_string()));
+        assert!(matches!(&rule.stdin, Some(Input::Text(t)) if t.trim() == "permit persist :wheel"));
     }
 
     #[test]

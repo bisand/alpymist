@@ -50,6 +50,7 @@ mkdir -p "$tmp"/etc/apk
 # reports "libEGL.so.1 could not be loaded" and lands on the Potato tier.
 makefile root:root 0644 "$tmp"/etc/apk/world <<EOF
 alpine-base
+doas
 alpymistctl
 alpymist-install
 alpymist-install-openrc
