@@ -349,6 +349,7 @@ mod tests {
             password: "correct horse battery".into(),
             password_confirm: "correct horse battery".into(),
             hostname: "alpymist".into(),
+            disks: crate::disks::sample(),
             detected_tier: Some(Tier::Lite),
             tier_override: None,
         })

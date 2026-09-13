@@ -778,6 +778,7 @@ mod tests {
         App::new(
             Answers {
                 detected_tier: Some(Tier::Lite),
+                disks: crate::disks::sample(),
                 ..Answers::default()
             },
             1280,
@@ -1095,6 +1096,7 @@ mod tests {
                 encrypt: false,
             }),
             detected_tier: Some(Tier::Lite),
+            disks: crate::disks::sample(),
             ..Answers::default()
         };
         let mut a = App::new(answers, 1280, 800);
@@ -1161,6 +1163,7 @@ mod tests {
             }),
             disk_confirmed: true,
             detected_tier: Some(Tier::Lite),
+            disks: crate::disks::sample(),
             ..Answers::default()
         };
         let mut a = App::new(answers, 1280, 800);
@@ -1202,6 +1205,7 @@ mod tests {
             disk_confirmed: true,
             full_name: "André Biseth".into(),
             detected_tier: Some(Tier::Lite),
+            disks: crate::disks::sample(),
             ..Answers::default()
         };
         let mut a = App::new(answers, 1280, 800);
@@ -1453,6 +1457,7 @@ mod tests {
             password_confirm: "a good passphrase".into(),
             hostname: "alpymist".into(),
             detected_tier: Some(Tier::Lite),
+            disks: crate::disks::sample(),
             ..Answers::default()
         };
         let mut a = App::new(answers, 1280, 800);

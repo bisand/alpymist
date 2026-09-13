@@ -36,6 +36,7 @@ fn answers() -> Answers {
         password: "a good long passphrase".into(),
         password_confirm: "a good long passphrase".into(),
         hostname: "alpymist".into(),
+        disks: alpymist_install::disks::sample(),
         detected_tier: Some(Tier::Lite),
         tier_override: None,
     }

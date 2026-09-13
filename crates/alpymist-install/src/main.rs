@@ -71,8 +71,15 @@ mod run {
         // Probing needs Linux; on a development machine there is nothing to
         // probe, so the Desktop screen simply offers the choice outright.
         let detected_tier = probe_tier();
+        // A development machine may have no /sys/block, or disks nobody wants
+        // offered; the preview shows stand-ins rather than an empty screen.
+        let mut disks = alpymist_install::disks::discover(&alpymist_install::safety::gather());
+        if disks.is_empty() {
+            disks = alpymist_install::disks::sample();
+        }
         let answers = Answers {
             detected_tier,
+            disks,
             ..Answers::default()
         };
 
@@ -174,8 +181,22 @@ mod drm_run {
         let mut input = open_input(size, &mut complained);
 
         let detected_tier = probe_tier();
+        let disks = alpymist_install::disks::discover(&alpymist_install::safety::gather());
+        eprintln!(
+            "disks: {}",
+            if disks.is_empty() {
+                "none offered".to_string()
+            } else {
+                disks
+                    .iter()
+                    .map(|d| d.label())
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            }
+        );
         let answers = Answers {
             detected_tier,
+            disks,
             ..Answers::default()
         };
         let mut app = App::with_mode(answers, size.width, size.height, crate::install_mode());

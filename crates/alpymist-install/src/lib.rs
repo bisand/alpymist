@@ -14,6 +14,7 @@
 
 pub mod answers;
 pub mod app;
+pub mod disks;
 pub mod editing;
 pub mod execute;
 pub mod plan;

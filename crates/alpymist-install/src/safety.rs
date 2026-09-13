@@ -84,7 +84,7 @@ impl SystemFacts {
     ///
     /// Partitions are matched by prefix because `/dev/sda1` lives on `/dev/sda`
     /// — erasing the disk takes the partition with it.
-    fn covers(device: &str, mount_source: &str) -> bool {
+    pub(crate) fn covers(device: &str, mount_source: &str) -> bool {
         mount_source == device
             || (mount_source.starts_with(device)
                 && mount_source[device.len()..]

@@ -196,12 +196,6 @@ pub const TIMEZONES: [(&str, &str); 6] = [
     ("UTC", "UTC"),
 ];
 
-/// Disks the installer would offer. Real detection replaces this.
-pub const DISKS: [(&str, &str); 2] = [
-    ("/dev/sda    238.5 GB   Samsung SSD 860", "/dev/sda"),
-    ("/dev/sdb      3.6 TB   WDC WD40EFRX", "/dev/sdb"),
-];
-
 /// The tiers a user may pick, with what each actually runs.
 pub const TIERS: [(Tier, &str); 4] = [
     (Tier::Full, "Full — Hyprland, animated and composited"),
@@ -247,16 +241,35 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             Row::radio("Set up later", matches!(a.network, Some(Network::Offline))),
         ],
         Step::Disk => {
-            let mut rows: Vec<Row> = DISKS
+            if a.disks.is_empty() {
+                return vec![
+                    Row::note("No disk was found that Alpymist could be installed to."),
+                    Row::gap(),
+                    Row::note("The disk you booted from is never offered."),
+                ];
+            }
+            let mut rows: Vec<Row> = a
+                .disks
                 .iter()
-                .map(|(label, device)| {
-                    Row::radio(
-                        *label,
-                        a.disk.as_ref().is_some_and(|d| d.device() == *device),
-                    )
+                .map(|disk| {
+                    if disk.mounted_at.is_some() {
+                        // Still one row per disk, so row indices stay disk indices.
+                        Row::note(disk.label())
+                    } else {
+                        Row::radio(
+                            disk.label(),
+                            a.disk.as_ref().is_some_and(|d| d.device() == disk.device),
+                        )
+                    }
                 })
                 .collect();
             rows.push(Row::gap());
+            if a.disks.iter().all(|d| d.mounted_at.is_some()) {
+                rows.push(Row::note(
+                    "Every disk here is in use, so none can be erased.",
+                ));
+                return rows;
+            }
             let encrypt = matches!(&a.disk, Some(DiskPlan::WholeDisk { encrypt: true, .. }));
             rows.push(Row::toggle(
                 format!("[{}] Encrypt the root filesystem (LUKS2)", mark(encrypt)),
@@ -395,16 +408,17 @@ pub fn choose(step: Step, index: usize, a: &mut Answers) {
                 _ => Network::Offline,
             });
         }
+        Step::Disk if a.disks.is_empty() => {}
         Step::Disk => match index {
-            i if i < DISKS.len() => {
+            i if i < a.disks.len() && a.disks[i].mounted_at.is_none() => {
                 let encrypt = matches!(&a.disk, Some(DiskPlan::WholeDisk { encrypt: true, .. }));
                 a.disk = Some(DiskPlan::WholeDisk {
-                    device: DISKS[i].1.to_string(),
+                    device: a.disks[i].device.clone(),
                     encrypt,
                 });
             }
-            // The gap row is index DISKS.len(); the two toggles follow it.
-            i if i == DISKS.len() + 1 => {
+            // The gap row follows the disks; the two toggles follow it.
+            i if i == a.disks.len() + 1 => {
                 if let Some(DiskPlan::WholeDisk { device, encrypt }) = &a.disk {
                     a.disk = Some(DiskPlan::WholeDisk {
                         device: device.clone(),
@@ -412,7 +426,7 @@ pub fn choose(step: Step, index: usize, a: &mut Answers) {
                     });
                 }
             }
-            i if i == DISKS.len() + 2 => a.disk_confirmed = !a.disk_confirmed,
+            i if i == a.disks.len() + 2 => a.disk_confirmed = !a.disk_confirmed,
             _ => {}
         },
         Step::Desktop => {
@@ -440,14 +454,46 @@ pub fn selectable(step: Step, a: &Answers) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{DISKS, LAYOUTS, TIERS, TIMEZONES, choose, rows, selectable};
+    use super::{LAYOUTS, TIERS, TIMEZONES, choose, rows, selectable};
     use crate::answers::{Answers, DiskPlan, Network};
     use crate::wizard::Step;
+
+    #[test]
+    fn a_disk_in_use_is_shown_but_cannot_be_chosen() {
+        let mut a = answers();
+        a.disks[0].mounted_at = Some("/".into());
+        assert!(!selectable(Step::Disk, &a).contains(&0));
+        assert!(rows(Step::Disk, &a)[0].text.contains("in use at /"));
+        choose(Step::Disk, 0, &mut a);
+        assert_eq!(a.disk, None);
+        choose(Step::Disk, 1, &mut a);
+        assert_eq!(a.disk.as_ref().map(DiskPlan::device), Some("/dev/sdb"));
+    }
+
+    #[test]
+    fn a_machine_with_no_free_disk_says_so_and_offers_no_toggles() {
+        let mut a = answers();
+        for d in &mut a.disks {
+            d.mounted_at = Some("/".into());
+        }
+        assert!(selectable(Step::Disk, &a).is_empty());
+        let none = Answers::default();
+        assert!(selectable(Step::Disk, &none).is_empty());
+        assert!(rows(Step::Disk, &none)[0].text.contains("No disk"));
+    }
+
+    /// Answers on a machine that has the sample disks.
+    fn answers() -> Answers {
+        Answers {
+            disks: crate::disks::sample(),
+            ..Answers::default()
+        }
+    }
     use alpymist_core::Tier;
 
     #[test]
     fn every_screen_offers_at_least_one_row() {
-        let a = Answers::default();
+        let a = answers();
         for step in Step::ALL {
             assert!(!rows(step, &a).is_empty(), "{step:?} shows nothing");
         }
@@ -455,7 +501,7 @@ mod tests {
 
     #[test]
     fn the_screens_that_ask_something_have_somewhere_for_the_cursor_to_go() {
-        let a = Answers::default();
+        let a = answers();
         for step in [
             Step::Keyboard,
             Step::Region,
@@ -472,7 +518,7 @@ mod tests {
 
     #[test]
     fn the_screens_that_only_report_have_nothing_to_select() {
-        let a = Answers::default();
+        let a = answers();
         for step in [Step::Welcome, Step::Confirm, Step::Install, Step::Done] {
             assert!(
                 selectable(step, &a).is_empty(),
@@ -483,7 +529,7 @@ mod tests {
 
     #[test]
     fn choosing_a_layout_records_both_layout_and_variant() {
-        let mut a = Answers::default();
+        let mut a = answers();
         let dead_keys = LAYOUTS
             .iter()
             .position(|(l, ..)| *l == "Norwegian — no dead keys")
@@ -495,7 +541,7 @@ mod tests {
 
     #[test]
     fn choosing_a_plain_layout_clears_any_previous_variant() {
-        let mut a = Answers::default();
+        let mut a = answers();
         choose(Step::Keyboard, 1, &mut a); // no + nodeadkeys
         choose(Step::Keyboard, 0, &mut a); // plain no
         assert_eq!(a.keyboard_variant, None, "a stale variant would survive");
@@ -503,7 +549,7 @@ mod tests {
 
     #[test]
     fn the_chosen_row_is_the_one_marked_chosen() {
-        let mut a = Answers::default();
+        let mut a = answers();
         choose(Step::Region, 2, &mut a);
         let marked: Vec<usize> = rows(Step::Region, &a)
             .iter()
@@ -517,9 +563,9 @@ mod tests {
 
     #[test]
     fn choosing_a_disk_keeps_the_encryption_setting() {
-        let mut a = Answers::default();
+        let mut a = answers();
         choose(Step::Disk, 0, &mut a);
-        choose(Step::Disk, DISKS.len() + 1, &mut a); // toggle encryption on
+        choose(Step::Disk, crate::disks::sample().len() + 1, &mut a); // toggle encryption on
         assert!(matches!(
             &a.disk,
             Some(DiskPlan::WholeDisk { encrypt: true, .. })
@@ -534,9 +580,9 @@ mod tests {
 
     #[test]
     fn the_erase_confirmation_toggles() {
-        let mut a = Answers::default();
+        let mut a = answers();
         choose(Step::Disk, 0, &mut a);
-        let confirm_row = DISKS.len() + 2;
+        let confirm_row = crate::disks::sample().len() + 2;
         choose(Step::Disk, confirm_row, &mut a);
         assert!(a.disk_confirmed);
         choose(Step::Disk, confirm_row, &mut a);
@@ -547,7 +593,7 @@ mod tests {
     fn choosing_a_tier_records_it_as_an_override() {
         let mut a = Answers {
             detected_tier: Some(Tier::Potato),
-            ..Answers::default()
+            ..answers()
         };
         let full = TIERS.iter().position(|(t, _)| *t == Tier::Full).unwrap();
         choose(Step::Desktop, full + 2, &mut a); // two preamble rows
@@ -560,7 +606,7 @@ mod tests {
     fn choosing_an_unselectable_row_does_nothing() {
         let mut a = Answers {
             detected_tier: Some(Tier::Lite),
-            ..Answers::default()
+            ..answers()
         };
         let before = a.clone();
         choose(Step::Desktop, 0, &mut a); // the "reports:" heading
@@ -570,7 +616,7 @@ mod tests {
 
     #[test]
     fn choosing_past_the_end_of_a_screen_does_nothing() {
-        let mut a = Answers::default();
+        let mut a = answers();
         let before = a.clone();
         choose(Step::Region, 999, &mut a);
         assert_eq!(a, before);
@@ -581,7 +627,7 @@ mod tests {
         for (index, expect_dhcp, expect_offline) in
             [(0, true, false), (1, false, false), (2, false, true)]
         {
-            let mut a = Answers::default();
+            let mut a = answers();
             choose(Step::Network, index, &mut a);
             assert_eq!(
                 matches!(a.network, Some(Network::Dhcp)),
@@ -613,7 +659,7 @@ mod tests {
             password_confirm: "secret".into(),
             hostname: "alpymist".into(),
             detected_tier: Some(Tier::Lite),
-            ..Answers::default()
+            ..answers()
         }
     }
 
@@ -679,7 +725,7 @@ mod tests {
         let a = Answers {
             password: "hunter2".into(),
             password_confirm: "hunter2".into(),
-            ..Answers::default()
+            ..answers()
         };
         for row in rows(Step::Account, &a) {
             assert!(

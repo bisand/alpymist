@@ -239,6 +239,7 @@ mod tests {
             password: "a good passphrase".into(),
             password_confirm: "a good passphrase".into(),
             hostname: "alpymist".into(),
+            disks: crate::disks::sample(),
             detected_tier: Some(Tier::Lite),
             tier_override: None,
         }

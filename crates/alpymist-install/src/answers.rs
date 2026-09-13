@@ -119,6 +119,8 @@ pub struct Answers {
     pub password_confirm: String,
     /// System hostname.
     pub hostname: String,
+    /// Disks found on this machine, offered on the disk screen.
+    pub disks: Vec<crate::disks::Disk>,
     /// Desktop tier the probe detected, if it ran.
     pub detected_tier: Option<Tier>,
     /// Tier the user chose instead, if they overrode the detection.
