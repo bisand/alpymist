@@ -155,10 +155,32 @@ mod drm_run {
         if let Some(console) = console.as_mut() {
             let _ = console.restore();
         }
-        result
+        if result? {
+            restart()?;
+        }
+        Ok(())
     }
 
-    fn run(console: &mut Option<Console>) -> Result<(), Box<dyn std::error::Error>> {
+    /// Restart the machine, after the console has been handed back.
+    ///
+    /// Through `reboot` rather than the syscall, so OpenRC stops services and
+    /// unmounts filesystems properly. A dry run never restarts: it is how the
+    /// installer is tried on machines nobody wants rebooted.
+    fn restart() -> Result<(), Box<dyn std::error::Error>> {
+        if crate::dry_run() {
+            eprintln!("dry run: would restart now; quitting instead");
+            return Ok(());
+        }
+        eprintln!("restarting");
+        let status = std::process::Command::new("reboot").status()?;
+        if !status.success() {
+            return Err(format!("reboot failed: {status}").into());
+        }
+        Ok(())
+    }
+
+    /// Returns whether the user asked to restart.
+    fn run(console: &mut Option<Console>) -> Result<bool, Box<dyn std::error::Error>> {
         let _ = console;
 
         // Stopping the service sends SIGTERM, and a signal's default action
@@ -254,7 +276,7 @@ mod drm_run {
             app.tick();
             if app.quitting || stop.load(Ordering::Relaxed) {
                 eprintln!("stopping; giving the console back");
-                return Ok(());
+                return Ok(app.restart_requested);
             }
 
             {
@@ -481,9 +503,14 @@ mod unattended {
 /// for — but every *library* default is the opposite, so a disk can only be
 /// destroyed by running the installer, never by omitting an argument.
 #[cfg(any(feature = "winit", feature = "drm"))]
+/// Whether this run must not touch the machine: no disk writes, no restart.
+fn dry_run() -> bool {
+    std::env::var_os("ALPYMIST_DRY_RUN").is_some()
+}
+
 fn install_mode() -> alpymist_install::execute::Mode {
     use alpymist_install::execute::Mode;
-    if std::env::var_os("ALPYMIST_DRY_RUN").is_some() {
+    if dry_run() {
         eprintln!("mode: dry run — nothing will be written to any disk");
         Mode::DryRun
     } else {

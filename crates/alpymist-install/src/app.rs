@@ -190,6 +190,10 @@ pub struct App {
     pub pointer: Option<(i32, i32)>,
     /// Set when the user asks to quit.
     pub quitting: bool,
+    /// Set when the user asks to restart from the Done screen. The caller
+    /// reboots once it has handed the console back; the app cannot, because
+    /// it does not own the console.
+    pub restart_requested: bool,
     /// Fira Mono where available, the built-in bitmap otherwise.
     pub face: Typeface,
     /// The mouse pointer sprite, hidden until the pointer moves.
@@ -230,6 +234,7 @@ impl App {
             caret: 0,
             pointer: None,
             quitting: false,
+            restart_requested: false,
             face: typeface::load(),
             pointer_sprite: new_cursor(),
             theme: denise::theme::DARK,
@@ -441,6 +446,11 @@ impl App {
             // while it runs, or after it failed, must not announce "installed".
             Action::Advance
                 if self.wizard.step() == Step::Install && self.install_outcome() != Some(true) => {}
+            // There is no screen after Done: its button restarts the machine.
+            Action::Advance if self.wizard.step() == Step::Done => {
+                self.restart_requested = true;
+                self.quitting = true;
+            }
             Action::Advance => match self.wizard.advance() {
                 Ok(step) => {
                     self.reported.clear();
@@ -1722,6 +1732,28 @@ mod tests {
             text.contains("erased"),
             "the consequence is not stated: {text}"
         );
+    }
+
+    #[test]
+    fn enter_on_the_done_screen_asks_for_a_restart() {
+        let mut a = app();
+        assert!(!a.restart_requested);
+        while a.wizard.step() != Step::Done {
+            a.wizard.answers = at_confirm().wizard.answers;
+            if a.wizard.advance().is_err() {
+                break;
+            }
+        }
+        assert_eq!(a.wizard.step(), Step::Done);
+        a.act(Action::Advance);
+        assert!(a.restart_requested && a.quitting);
+    }
+
+    #[test]
+    fn quitting_is_not_restarting() {
+        let mut a = app();
+        a.act(Action::Quit);
+        assert!(a.quitting && !a.restart_requested);
     }
 
     #[test]
