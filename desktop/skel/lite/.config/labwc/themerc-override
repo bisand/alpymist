@@ -1,0 +1,14 @@
+# Alpymist: window decorations in the installer's palette.
+window.active.title.bg.color: #0b121e
+window.inactive.title.bg.color: #070c14
+window.active.label.text.color: #eaf0f6
+window.inactive.label.text.color: #9aabbd
+window.active.border.color: #7fb8d9
+window.inactive.border.color: #3a4c63
+window.active.button.unpressed.image.color: #eaf0f6
+window.inactive.button.unpressed.image.color: #9aabbd
+menu.items.bg.color: #0b121e
+menu.items.text.color: #eaf0f6
+menu.items.active.bg.color: #3a4c63
+menu.items.active.text.color: #eaf0f6
+border.width: 2

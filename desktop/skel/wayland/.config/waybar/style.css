@@ -1,0 +1,43 @@
+/* Alpymist: the top bar. Colours are the installer's palette. */
+* {
+  font-family: "Fira Mono", monospace;
+  font-size: 13px;
+  border: none;
+  border-radius: 0;
+  min-height: 0;
+}
+
+window#waybar {
+  background: rgba(11, 18, 30, 0.88);
+  color: #eaf0f6;
+  border-bottom: 1px solid #3a4c63;
+}
+
+#custom-alpymist {
+  color: #7fb8d9;
+  font-weight: bold;
+  padding: 0 14px;
+}
+
+#workspaces button,
+#taskbar button {
+  color: #9aabbd;
+  padding: 0 8px;
+  background: transparent;
+}
+
+#workspaces button.active,
+#taskbar button.active {
+  color: #eaf0f6;
+  box-shadow: inset 0 -2px #7fb8d9;
+}
+
+#clock { color: #eaf0f6; }
+
+#cpu, #memory, #network, #pulseaudio, #battery, #tray {
+  color: #9aabbd;
+  padding: 0 8px;
+}
+
+#battery.warning { color: #d9a07f; }
+#battery.critical, #network.disconnected { color: #d98f7f; }

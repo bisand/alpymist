@@ -6,6 +6,7 @@ members = [
     "crates/alpymist-install",
     "crates/alpymist-splash",
     "crates/alpymist-ui",
+    "crates/alpymist-wallpaper",
     "crates/alpymist-hwprobe",
     "crates/alpymistctl",
     "xtask",

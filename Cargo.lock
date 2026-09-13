@@ -112,6 +112,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpymist-wallpaper"
+version = "0.0.1"
+dependencies = [
+ "alpymist-ui",
+ "denise",
+ "denise-render",
+ "png",
+]
+
+[[package]]
 name = "alpymistctl"
 version = "0.0.1"
 dependencies = [

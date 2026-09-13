@@ -1,0 +1,11 @@
+# PAM for Alpymist desktop logins through greetd: Alpine's base stack, plus
+# pam_rundir, which creates /run/user/<uid> and sets XDG_RUNTIME_DIR — without
+# it every Wayland session exits the moment it starts — and pam_env, which
+# reads the keyboard layout the installer recorded in /etc/alpymist/session.env
+# so the desktop types the way the console does.
+auth		include		base-auth
+account		include		base-account
+password	include		base-password
+session		include		base-session
+session		optional	pam_rundir.so
+session		optional	pam_env.so conffile=/dev/null readenv=1 envfile=/etc/alpymist/session.env

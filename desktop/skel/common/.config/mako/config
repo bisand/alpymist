@@ -1,0 +1,8 @@
+# Alpymist: notifications.
+font=Fira Mono 10
+background-color=#0b121eee
+text-color=#eaf0f6
+border-color=#7fb8d9
+border-size=2
+border-radius=8
+default-timeout=6000

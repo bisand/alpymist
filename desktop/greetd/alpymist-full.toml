@@ -10,5 +10,5 @@ service = "alpymist-greetd"
 vt = 7
 
 [default_session]
-command = "tuigreet --time --remember --asterisks --cmd 'dbus-run-session Hyprland'"
+command = "tuigreet --time --remember --asterisks --cmd 'dbus-run-session start-hyprland'"
 user = "greetd"

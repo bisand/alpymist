@@ -1,0 +1,32 @@
+// Alpymist: the top bar under labwc.
+{
+  "modules-left": ["custom/alpymist", "wlr/taskbar"],
+  "modules-center": ["clock"],
+  "modules-right": ["tray", "network", "pulseaudio", "cpu", "memory", "battery"],
+  "wlr/taskbar": { "format": "{title:.30}", "on-click": "activate", "on-click-middle": "close" },
+
+  "layer": "top",
+  "position": "top",
+  "height": 30,
+  "spacing": 6,
+  "custom/alpymist": {
+    "format": "alpymist",
+    "tooltip": false,
+    "on-click": "fuzzel"
+  },
+  "clock": {
+    "format": "{:%a %d %b  %H:%M}",
+    "tooltip-format": "{:%A %d %B %Y}"
+  },
+  "cpu": { "format": "cpu {usage}%", "interval": 5 },
+  "memory": { "format": "mem {percentage}%", "interval": 10 },
+  "network": {
+    "format-wifi": "wifi {signalStrength}%",
+    "format-ethernet": "wired",
+    "format-disconnected": "offline",
+    "tooltip-format": "{ifname} {ipaddr}"
+  },
+  "pulseaudio": { "format": "vol {volume}%", "format-muted": "muted", "on-click": "pavucontrol" },
+  "battery": { "format": "bat {capacity}%", "states": { "warning": 25, "critical": 10 } },
+  "tray": { "spacing": 8 }
+}

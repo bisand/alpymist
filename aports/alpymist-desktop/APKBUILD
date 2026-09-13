@@ -1,11 +1,14 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 #
-# Metapackages: which Alpine packages make up each Alpymist desktop tier.
-# Nothing is compiled. The base package is what every tier shares; each tier
-# subpackage adds its compositor or window manager and a greetd configuration
-# that starts it. The installer picks the tier (alpymist_core::Tier) and points
-# greetd at that tier's file.
+# The Alpymist desktop: which Alpine packages make up each tier, and the
+# configuration that makes them look and behave as one system. The only thing
+# compiled is the wallpaper, rendered by the same code that draws the splash
+# and installer. Configuration lives in the repository under desktop/.
+#
+# User-facing configuration is installed to /etc/skel, which adduser copies into
+# the new account: it becomes the user's own to change, as on Omarchy, rather
+# than system files an upgrade would overwrite.
 pkgname=alpymist-desktop
 pkgver=0.0.1
 pkgrel=0
@@ -20,12 +23,12 @@ license="MIT OR Apache-2.0"
 # applications are installed (ADR 0001).
 depends="
 	adwaita-icon-theme
+	alpymist-shell=$pkgver-r$pkgrel
 	brightnessctl
 	dbus
 	flatpak
 	font-dejavu
 	font-fira-ttf
-	foot
 	greetd
 	greetd-tuigreet
 	mesa-dri-gallium
@@ -37,25 +40,63 @@ depends="
 	wireplumber
 	xdg-user-dirs
 	"
+makedepends="cargo"
 subpackages="
+	alpymist-shell:_shell
 	$pkgname-wayland:_wayland
 	$pkgname-full:_full
 	$pkgname-lite:_lite
 	$pkgname-legacy:_legacy
 	"
-source="
-	alpymist-greetd.pam
-	alpymist-full.toml
-	alpymist-lite.toml
-	alpymist-potato.toml
-	alpymist-legacy.toml
-	"
-options="!check"  # nothing to test: these are dependency lists and config
+options="!check"  # the test suite runs in CI, not in the package build
+source=""
+builddir="$srcdir"
+
+prepare() {
+	# Same as alpymistctl: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cargo build --release --locked -p alpymist-wallpaper
+	./target/release/alpymist-wallpaper "$builddir"/alpymist.png 2560 1440
+}
+
+# Copy one of desktop/skel's parts into a package's /etc/skel.
+_skel() {
+	mkdir -p "$2"/etc/skel
+	cp -a "$builddir"/desktop/skel/"$1"/. "$2"/etc/skel/
+}
 
 package() {
+	install -Dm644 "$builddir"/alpymist.png \
+		"$pkgdir"/usr/share/backgrounds/alpymist/alpymist.png
 	# A PAM service of our own rather than an edit to greetd's, which belongs
 	# to the greetd package; each tier's configuration names it.
-	install -Dm644 "$srcdir"/alpymist-greetd.pam "$pkgdir"/etc/pam.d/alpymist-greetd
+	install -Dm644 "$builddir"/desktop/alpymist-greetd.pam \
+		"$pkgdir"/etc/pam.d/alpymist-greetd
+	install -d "$pkgdir"/etc/alpymist
+	_skel common "$pkgdir"
+}
+
+# zsh with oh-my-zsh, the two plugins most people add first, and starship. In
+# the image's world rather than the desktop's, because adduser makes zsh the
+# login shell: it must be installed even if the desktop is not.
+_shell() {
+	pkgdesc="Alpymist shell: zsh, oh-my-zsh and starship"
+	depends="
+		oh-my-zsh
+		starship
+		zsh
+		zsh-autosuggestions
+		zsh-completions
+		zsh-syntax-highlighting
+		"
+	_skel shell "$subpkgdir"
 }
 
 # The Wayland tools the Full and Lite tiers share. Hyprland's own wallpaper,
@@ -65,9 +106,11 @@ _wayland() {
 	pkgdesc="Alpymist desktop: tools shared by the Wayland tiers"
 	depends="
 		$pkgname=$pkgver-r$pkgrel
+		foot
 		fuzzel
 		grim
 		mako
+		pavucontrol
 		slurp
 		swaybg
 		swayidle
@@ -76,14 +119,15 @@ _wayland() {
 		wl-clipboard
 		xdg-desktop-portal-wlr
 		"
-	mkdir -p "$subpkgdir"
+	_skel wayland "$subpkgdir"
 }
 
 _full() {
 	pkgdesc="Alpymist desktop, Full tier: Hyprland"
 	depends="$pkgname-wayland=$pkgver-r$pkgrel hyprland"
-	install -Dm644 "$srcdir"/alpymist-full.toml \
+	install -Dm644 "$builddir"/desktop/greetd/alpymist-full.toml \
 		"$subpkgdir"/etc/greetd/alpymist-full.toml
+	_skel full "$subpkgdir"
 }
 
 # Lite and Potato are the same packages; Potato's session only tells labwc to
@@ -91,26 +135,37 @@ _full() {
 _lite() {
 	pkgdesc="Alpymist desktop, Lite and Potato tiers: labwc"
 	depends="$pkgname-wayland=$pkgver-r$pkgrel labwc"
-	install -Dm644 "$srcdir"/alpymist-lite.toml \
+	install -Dm644 "$builddir"/desktop/greetd/alpymist-lite.toml \
 		"$subpkgdir"/etc/greetd/alpymist-lite.toml
-	install -Dm644 "$srcdir"/alpymist-potato.toml \
+	install -Dm644 "$builddir"/desktop/greetd/alpymist-potato.toml \
 		"$subpkgdir"/etc/greetd/alpymist-potato.toml
+	_skel lite "$subpkgdir"
 }
 
+# The X11 tier, made to feel like the Hyprland one: i3 with gaps, polybar as
+# the top bar, rofi as the launcher, picom for rounded corners and fades.
 _legacy() {
 	pkgdesc="Alpymist desktop, Legacy tier: X11 with i3"
 	depends="
 		$pkgname=$pkgver-r$pkgrel
-		dmenu
+		dunst
 		eudev
+		feh
 		i3lock
-		i3status
 		i3wm
+		picom
+		polybar
+		rofi
+		setxkbmap
 		xf86-input-libinput
 		xinit
 		xorg-server
+		xrdb
 		xterm
 		"
-	install -Dm644 "$srcdir"/alpymist-legacy.toml \
+	install -Dm644 "$builddir"/desktop/greetd/alpymist-legacy.toml \
 		"$subpkgdir"/etc/greetd/alpymist-legacy.toml
+	install -Dm644 "$builddir"/desktop/xorg/Xwrapper.config \
+		"$subpkgdir"/etc/X11/Xwrapper.config
+	_skel legacy "$subpkgdir"
 }

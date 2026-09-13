@@ -25,6 +25,7 @@
 //! passphrase prompt at boot types the way the user chose.
 
 use crate::answers::{Answers, DiskPlan, Firmware, Network};
+use std::fmt::Write as _;
 
 /// Bytes a step is given on standard input.
 #[derive(Clone, PartialEq, Eq)]
@@ -190,6 +191,28 @@ const CRYPT_NAME: &str = "root";
 /// Boot partition size in MiB. Holds kernels and initramfs, so not the bare
 /// minimum a FAT32 EFI partition needs; matches `setup-disk`'s encrypted layout.
 const BOOT_MIB: u32 = 300;
+/// Where the installed system fetches packages and security updates.
+const MIRROR: &str = "https://dl-cdn.alpinelinux.org/alpine";
+/// The Alpine release the image is built from; `ci/build-iso.sh` must agree.
+const ALPINE_VERSION: &str = "v3.24";
+/// Which of that release's repositories to use.
+const REPOSITORIES: [&str; 2] = ["main", "community"];
+/// The login shell for the account the installer creates.
+const LOGIN_SHELL: &str = "/bin/zsh";
+/// The session environment the login's PAM service loads.
+const SESSION_ENV: &str = "/etc/alpymist/session.env";
+
+/// The xkb variant for a console keymap from `kbd-bkeymaps`.
+///
+/// Those keymaps are generated from xkb and named `<layout>-<variant>`, so
+/// `no-mac` is layout `no`, variant `mac`; the plain `no` has no variant.
+#[must_use]
+pub fn xkb_variant<'a>(layout: &str, keymap: &'a str) -> &'a str {
+    keymap
+        .strip_prefix(layout)
+        .and_then(|rest| rest.strip_prefix('-'))
+        .unwrap_or("")
+}
 
 /// The `n`th partition of a disk, as the kernel names it.
 ///
@@ -354,19 +377,25 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
             &["setup-disk", "-m", "sys", ROOT],
         )
         .with_env("BOOTLOADER", "grub"),
-        Step::new(
-            "Creating your account",
-            &[
-                "chroot",
-                ROOT,
-                "adduser",
-                "-D",
-                "-g",
-                &a.full_name,
-                &a.username,
-            ],
-        ),
     ]);
+
+    // setup-disk leaves the new system with only the install medium's
+    // repository, commented out: a system that could never be updated. It gets
+    // Alpine's own, over HTTPS, for the release the image was built from.
+    steps.push(
+        Step::new(
+            "Adding Alpine's package repositories",
+            &["chroot", ROOT, "tee", "/etc/apk/repositories"],
+        )
+        .with_input(Input::Text(REPOSITORIES.iter().fold(
+            String::new(),
+            |mut out, r| {
+                let _ = writeln!(out, "{MIRROR}/{ALPINE_VERSION}/{r}");
+                out
+            },
+        ))),
+    );
+
     // udev rather than BusyBox mdev: libinput finds keyboards and mice through
     // udev, and a Wayland compositor with no input devices refuses to start.
     // setup-devd does the same, but also starts the services, which in a
@@ -410,6 +439,51 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
             ],
         ));
     }
+
+    // Allowed to fail: the system is bootable without it, and a desktop can be
+    // added after the first boot. So is everything below marked may_fail,
+    // which only makes sense once it is installed.
+    //
+    // Before the account, because the desktop's configuration is installed to
+    // /etc/skel and adduser copies it into the new home: the bar, wallpaper and
+    // keys are there from the first login, and they are the user's to change.
+    //
+    // The live system's repositories, not the new one's: the install medium is
+    // where the desktop is when there is no network.
+    steps.push(
+        Step::new(
+            "Installing the desktop",
+            &[
+                "apk",
+                "add",
+                "--root",
+                ROOT,
+                "--repositories-file",
+                "/etc/apk/repositories",
+                "--no-progress",
+                tier.metapackage(),
+            ],
+        )
+        .may_fail(),
+    );
+
+    // zsh is in the image's world, not the desktop's, so it is installed even
+    // when the desktop is not: a login shell that does not exist is a login
+    // that does not work.
+    steps.push(Step::new(
+        "Creating your account",
+        &[
+            "chroot",
+            ROOT,
+            "adduser",
+            "-D",
+            "-s",
+            LOGIN_SHELL,
+            "-g",
+            &a.full_name,
+            &a.username,
+        ],
+    ));
     // Without a password the account stays locked, as `adduser -D` leaves it.
     // Feeding chpasswd an empty one would instead allow logging in with none.
     if !a.password.is_empty() {
@@ -440,47 +514,6 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         .with_input(Input::Text("permit persist :wheel\n".into())),
     );
 
-    // setup-disk copied the live /etc, runlevels included, and the live
-    // system starts the installer at boot. The installed one must not.
-    steps.push(Step::new(
-        "Removing the installer from startup",
-        &[
-            "rm",
-            "-f",
-            &format!("{ROOT}/etc/runlevels/default/alpymist-install"),
-        ],
-    ));
-
-    if matches!(a.network, Some(Network::Dhcp)) {
-        steps.push(Step::new(
-            "Enabling networking",
-            &["chroot", ROOT, "rc-update", "add", "networking", "boot"],
-        ));
-    }
-
-    // Last of the real work, and allowed to fail: the system is bootable
-    // without it, and a desktop can be added after the first boot. So is all
-    // that follows it here, which only makes sense once it is installed.
-    //
-    // The live system's repositories, not the new one's: setup-disk comments
-    // out the install medium's repository in the new system, and the medium
-    // is where the desktop is when there is no network.
-    steps.push(
-        Step::new(
-            "Installing the desktop",
-            &[
-                "apk",
-                "add",
-                "--root",
-                ROOT,
-                "--repositories-file",
-                "/etc/apk/repositories",
-                "--no-progress",
-                tier.metapackage(),
-            ],
-        )
-        .may_fail(),
-    );
     for service in ["dbus", "seatd", "greetd"] {
         steps.push(
             Step::new(
@@ -513,6 +546,42 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         )))
         .may_fail(),
     );
+
+    // The console keymap does not reach a desktop: Wayland and X11 read xkb
+    // names. The login's PAM service loads this file into the session, where
+    // labwc reads it directly and the Hyprland and i3 configurations hand it on.
+    steps.push(Step::new(
+        "Preparing the session settings",
+        &["chroot", ROOT, "mkdir", "-p", "/etc/alpymist"],
+    ));
+    steps.push(
+        Step::new(
+            "Recording the keyboard layout for the desktop",
+            &["chroot", ROOT, "tee", SESSION_ENV],
+        )
+        .with_input(Input::Text(format!(
+            "XKB_DEFAULT_LAYOUT={keyboard}\nXKB_DEFAULT_VARIANT={}\n",
+            xkb_variant(keyboard, variant)
+        ))),
+    );
+
+    // setup-disk copied the live /etc, runlevels included, and the live
+    // system starts the installer at boot. The installed one must not.
+    steps.push(Step::new(
+        "Removing the installer from startup",
+        &[
+            "rm",
+            "-f",
+            &format!("{ROOT}/etc/runlevels/default/alpymist-install"),
+        ],
+    ));
+
+    if matches!(a.network, Some(Network::Dhcp)) {
+        steps.push(Step::new(
+            "Enabling networking",
+            &["chroot", ROOT, "rc-update", "add", "networking", "boot"],
+        ));
+    }
 
     steps.push(Step::new(
         "Unmounting the boot partition",
@@ -691,24 +760,100 @@ mod tests {
         );
     }
 
-    /// Nothing that can leave a disk half-written may be skipped past: only
-    /// the desktop and the steps that set it up may fail and let the install
-    /// carry on, and all of them come after the system is complete.
+    /// Nothing that can leave a disk half-written or a system unusable may be
+    /// skipped past: only the desktop and the steps that configure it.
     #[test]
-    fn only_the_desktop_may_fail() {
+    fn only_the_desktop_and_its_setup_may_fail() {
         let plan = build(&encrypted()).unwrap();
-        let first = plan.steps.iter().position(|s| s.may_fail).unwrap();
-        assert_eq!(plan.steps[first].title, "Installing the desktop");
-        let t = titles(&encrypted());
-        assert!(first > t.iter().position(|s| s.contains("passphrase")).unwrap());
-        for s in &plan.steps[first..] {
-            assert_eq!(
-                s.may_fail,
-                !s.title.starts_with("Unmounting") && !s.title.starts_with("Locking"),
-                "{}",
-                s.title
+        let optional: Vec<&str> = plan
+            .steps
+            .iter()
+            .filter(|s| s.may_fail)
+            .map(|s| s.title.as_str())
+            .collect();
+        assert_eq!(optional[0], "Installing the desktop");
+        for title in &optional[1..] {
+            assert!(
+                title.starts_with("Starting ")
+                    || title.starts_with("Adding your account to ")
+                    || *title == "Choosing the desktop session",
+                "{title} may fail but is not desktop setup"
             );
         }
+        let t = titles(&encrypted());
+        let desktop = t
+            .iter()
+            .position(|s| s == "Installing the desktop")
+            .unwrap();
+        assert!(desktop > t.iter().position(|s| s.contains("passphrase")).unwrap());
+    }
+
+    /// adduser copies /etc/skel, where the desktop's configuration is.
+    #[test]
+    fn the_account_is_created_after_the_desktop_with_zsh() {
+        let plan = build(&answers()).unwrap();
+        let t = titles(&answers());
+        let at = |n: &str| t.iter().position(|s| s.contains(n)).unwrap();
+        assert!(at("Creating your account") > at("Installing the desktop"));
+        let add = step(&plan, "Creating your account");
+        assert!(
+            add.argv.windows(2).any(|w| w == ["-s", "/bin/zsh"]),
+            "{:?}",
+            add.argv
+        );
+    }
+
+    /// Otherwise the installed system could never be updated.
+    #[test]
+    fn the_new_system_gets_alpines_repositories_over_https() {
+        let plan = build(&answers()).unwrap();
+        let repos = step(&plan, "package repositories");
+        assert_eq!(
+            repos.argv,
+            ["chroot", "/mnt", "tee", "/etc/apk/repositories"]
+        );
+        let Some(Input::Text(text)) = &repos.stdin else {
+            panic!("no repositories written");
+        };
+        assert_eq!(
+            text,
+            "https://dl-cdn.alpinelinux.org/alpine/v3.24/main\n\
+             https://dl-cdn.alpinelinux.org/alpine/v3.24/community\n"
+        );
+        assert!(!repos.may_fail);
+    }
+
+    /// The image and the installed system must be the same release.
+    #[test]
+    fn the_repositories_are_for_the_release_the_image_is_built_from() {
+        let script = include_str!("../../../ci/build-iso.sh");
+        assert!(
+            script.contains(&format!("ALPINE_VERSION:-{}", super::ALPINE_VERSION)),
+            "ci/build-iso.sh builds a different release than plan.rs points at"
+        );
+    }
+
+    #[test]
+    fn the_desktop_is_told_the_keyboard_layout_in_xkb_terms() {
+        let plan = build(&answers()).unwrap(); // no, no-nodeadkeys
+        let Some(Input::Text(env)) = &step(&plan, "keyboard layout for the desktop").stdin else {
+            panic!("no session environment");
+        };
+        assert_eq!(
+            env,
+            "XKB_DEFAULT_LAYOUT=no\nXKB_DEFAULT_VARIANT=nodeadkeys\n"
+        );
+    }
+
+    #[test]
+    fn console_keymaps_map_onto_xkb_variants() {
+        use super::xkb_variant;
+        assert_eq!(xkb_variant("no", "no"), "");
+        assert_eq!(xkb_variant("no", "no-mac"), "mac");
+        assert_eq!(xkb_variant("us", "us-altgr-intl"), "altgr-intl");
+        assert_eq!(xkb_variant("gb", "gb-colemak_dh"), "colemak_dh");
+        // Not a variant of this layout at all: no guess.
+        assert_eq!(xkb_variant("no", "nodeadkeys"), "");
     }
 
     #[test]

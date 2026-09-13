@@ -1,0 +1,8 @@
+! Alpymist: xterm, the terminal on the X11 desktop.
+XTerm*faceName: Fira Mono
+XTerm*faceSize: 11
+XTerm*background: #0b121e
+XTerm*foreground: #eaf0f6
+XTerm*cursorColor: #7fb8d9
+XTerm*internalBorder: 8
+XTerm*selectToClipboard: true

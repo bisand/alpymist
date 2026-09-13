@@ -1,0 +1,66 @@
+# Alpymist: i3, for machines that cannot run Wayland.
+#
+# Made to feel like the Hyprland tier: gaps, thin accent borders, a top bar
+# (polybar) and a launcher (rofi), with the same keys. Yours to change.
+
+set $mod Mod4
+font pango:Fira Mono 10
+
+gaps inner 6
+gaps outer 6
+default_border pixel 2
+default_floating_border pixel 2
+hide_edge_borders none
+
+#                       border   background text     indicator child_border
+client.focused          #7fb8d9 #0b121e   #eaf0f6 #7fb8d9   #7fb8d9
+client.focused_inactive #3a4c63 #0b121e #9aabbd #3a4c63 #3a4c63
+client.unfocused        #3a4c63 #070c14 #9aabbd #3a4c63 #3a4c63
+
+# The keyboard layout the installer chose, handed to X from the session.
+exec --no-startup-id sh -c '[ -n "$XKB_DEFAULT_LAYOUT" ] && setxkbmap -layout "$XKB_DEFAULT_LAYOUT" -variant "$XKB_DEFAULT_VARIANT"'
+exec --no-startup-id xrdb -merge ~/.Xresources
+exec --no-startup-id feh --no-fehbg --bg-fill /usr/share/backgrounds/alpymist/alpymist.png
+# xrender, not glx: machines on this tier are the ones without usable GL.
+exec --no-startup-id picom --backend xrender
+exec --no-startup-id dunst
+exec --no-startup-id /usr/libexec/pipewire-launcher
+exec_always --no-startup-id sh -c 'pkill -x polybar; exec polybar alpymist'
+
+floating_modifier $mod
+
+bindsym $mod+Return exec xterm
+bindsym $mod+q exec xterm
+bindsym $mod+space exec rofi -show drun
+bindsym $mod+w kill
+bindsym $mod+f fullscreen toggle
+bindsym $mod+v floating toggle
+bindsym $mod+l exec i3lock -c 0b121e
+bindsym $mod+Shift+e exit
+bindsym $mod+Shift+r restart
+
+bindsym $mod+Left focus left
+bindsym $mod+Right focus right
+bindsym $mod+Up focus up
+bindsym $mod+Down focus down
+bindsym $mod+Shift+Left move left
+bindsym $mod+Shift+Right move right
+
+bindsym $mod+1 workspace number 1
+bindsym $mod+Shift+1 move container to workspace number 1
+bindsym $mod+2 workspace number 2
+bindsym $mod+Shift+2 move container to workspace number 2
+bindsym $mod+3 workspace number 3
+bindsym $mod+Shift+3 move container to workspace number 3
+bindsym $mod+4 workspace number 4
+bindsym $mod+Shift+4 move container to workspace number 4
+bindsym $mod+5 workspace number 5
+bindsym $mod+Shift+5 move container to workspace number 5
+bindsym $mod+6 workspace number 6
+bindsym $mod+Shift+6 move container to workspace number 6
+bindsym $mod+7 workspace number 7
+bindsym $mod+Shift+7 move container to workspace number 7
+bindsym $mod+8 workspace number 8
+bindsym $mod+Shift+8 move container to workspace number 8
+bindsym $mod+9 workspace number 9
+bindsym $mod+Shift+9 move container to workspace number 9

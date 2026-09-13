@@ -1,0 +1,19 @@
+# Alpymist: the starship prompt.
+
+# On a slow machine a module that stalls stalls every prompt; give up instead.
+command_timeout = 300
+scan_timeout = 20
+
+[character]
+success_symbol = "[❯](bold #7fb8d9)"
+error_symbol = "[❯](bold #d98f7f)"
+
+[directory]
+style = "bold #eaf0f6"
+
+[hostname]
+ssh_only = true
+style = "#9aabbd"
+
+[username]
+style_user = "#9aabbd"

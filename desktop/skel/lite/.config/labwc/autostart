@@ -1,0 +1,8 @@
+# Alpymist: started with labwc. The keyboard layout needs nothing here: labwc
+# reads XKB_DEFAULT_LAYOUT, which the login sets from what the installer chose.
+# Sound first: the bar's volume module retries a missing audio server until
+# it runs out of file descriptors and takes the whole bar down with it.
+/usr/libexec/pipewire-launcher >/dev/null 2>&1 &
+swaybg -m fill -i /usr/share/backgrounds/alpymist/alpymist.png >/dev/null 2>&1 &
+waybar -c ~/.config/waybar/labwc.jsonc -s ~/.config/waybar/style.css >/dev/null 2>&1 &
+mako >/dev/null 2>&1 &

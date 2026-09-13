@@ -1,8 +1,0 @@
-# PAM for Alpymist desktop logins through greetd: Alpine's base stack, plus
-# pam_rundir, which creates /run/user/<uid> and sets XDG_RUNTIME_DIR.
-# Without it every Wayland session exits the moment it starts.
-auth		include		base-auth
-account		include		base-account
-password	include		base-password
-session		include		base-session
-session		optional	pam_rundir.so
