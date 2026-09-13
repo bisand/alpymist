@@ -30,12 +30,23 @@ for pkg in alpymistctl alpymist-install; do
 done
 
 echo ">>> [3/4] fetching Alpine image scripts ($ALPINE_BRANCH)"
+# GitHub's mirror first: Alpine's GitLab challenges clients it takes for bots,
+# which includes CI runners, and every CI build failed here until this changed.
+# Errors are left visible — this step failed silently for weeks.
 if [ ! -d /tmp/aports ]; then
-	git clone --filter=blob:none --no-checkout --depth 1 -b "$ALPINE_BRANCH" \
-		https://gitlab.alpinelinux.org/alpine/aports.git /tmp/aports >/dev/null 2>&1
-	git -C /tmp/aports sparse-checkout init --cone >/dev/null
-	git -C /tmp/aports sparse-checkout set scripts >/dev/null
-	git -C /tmp/aports checkout >/dev/null 2>&1
+	for url in https://github.com/alpinelinux/aports.git \
+		https://gitlab.alpinelinux.org/alpine/aports.git; do
+		echo "    cloning $url"
+		if git clone --quiet --filter=blob:none --no-checkout --depth 1 \
+			-b "$ALPINE_BRANCH" "$url" /tmp/aports; then
+			break
+		fi
+		rm -rf /tmp/aports
+	done
+	[ -d /tmp/aports ] || { echo "could not fetch aports from any mirror" >&2; exit 1; }
+	git -C /tmp/aports sparse-checkout init --cone
+	git -C /tmp/aports sparse-checkout set scripts
+	git -C /tmp/aports checkout --quiet
 fi
 cp /src/profiles/mkimg.alpymist.sh /src/profiles/genapkovl-alpymist.sh /tmp/aports/scripts/
 chmod +x /tmp/aports/scripts/genapkovl-alpymist.sh
