@@ -59,6 +59,13 @@ mesa-dri-gallium
 font-fira-ttf
 EOF
 
+# evdev exposes keyboards, mice and touchpads as /dev/input/event*, which is
+# the only way the installer can read them. It is a module, not built in, and
+# nothing else asks for it on a system with no display server.
+makefile root:root 0644 "$tmp"/etc/modules <<EOF
+evdev
+EOF
+
 # Hardware probing on first boot. This is a real product service, not test
 # scaffolding: the installer and the desktop metapackages both read the tier
 # it records. The automated boot test just happens to assert on the same
@@ -91,6 +98,11 @@ rc_add devfs sysinit
 rc_add dmesg sysinit
 rc_add mdev sysinit
 rc_add hwdrivers sysinit
+# modloop mounts /lib/modules from the image. This overlay replaces the whole
+# runlevel set, so leaving it out means only drivers built into the initramfs
+# ever load — which is how the installer booted with a keyboard and a mouse
+# the kernel could see and no /dev/input to read them from.
+rc_add modloop sysinit
 
 rc_add modules boot
 rc_add sysctl boot

@@ -117,6 +117,9 @@ mod drm_run {
     use denise_drm::{DrmSurface, SurfaceConfig};
     use denise_evdev::{Console, InputBackend};
     use denise_render::Canvas;
+    use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::{Duration, Instant};
 
     /// Run the installer on the console.
@@ -146,6 +149,16 @@ mod drm_run {
 
     fn run(console: &mut Option<Console>) -> Result<(), Box<dyn std::error::Error>> {
         let _ = console;
+
+        // Stopping the service sends SIGTERM, and a signal's default action
+        // ends the process without running Drop — so the console would stay
+        // in graphics mode with its keyboard muted, a machine that looks dead.
+        // Catching the signals turns them into an ordinary loop exit, and the
+        // console is handed back on the way out like any other.
+        let stop = Arc::new(AtomicBool::new(false));
+        for signal in [SIGTERM, SIGINT, SIGHUP] {
+            signal_hook::flag::register(signal, Arc::clone(&stop))?;
+        }
         let mut surface = DrmSurface::open(SurfaceConfig::default())?;
         let size = surface.size();
 
@@ -187,7 +200,8 @@ mod drm_run {
                 }
             }
             app.tick();
-            if app.quitting {
+            if app.quitting || stop.load(Ordering::Relaxed) {
+                eprintln!("stopping; giving the console back");
                 return Ok(());
             }
 
@@ -240,12 +254,171 @@ mod drm_run {
 
 #[cfg(all(feature = "winit", not(feature = "drm")))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(outcome) = unattended_main() {
+        return outcome;
+    }
     run::main()
 }
 
 #[cfg(feature = "drm")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(outcome) = unattended_main() {
+        return outcome;
+    }
     drm_run::main()
+}
+
+/// Handle `--unattended` if it was asked for.
+#[cfg(any(feature = "winit", feature = "drm"))]
+fn unattended_main() -> Option<Result<(), Box<dyn std::error::Error>>> {
+    let args: Vec<String> = std::env::args().collect();
+    let parsed = unattended::parse(&args)?;
+    Some(match parsed.and_then(|o| unattended::run(&o)) {
+        Ok(()) => Ok(()),
+        Err(why) => {
+            eprintln!("{why}");
+            Err(why.into())
+        }
+    })
+}
+
+/// A non-interactive install, for machines with no input and for testing.
+///
+/// The wizard cannot be walked without a keyboard, and a VM frequently has
+/// none — which also makes this the only way the destructive path can be
+/// exercised automatically. It takes the same plan and the same safety checks
+/// as the wizard; only the answers arrive differently.
+#[cfg(any(feature = "winit", feature = "drm"))]
+mod unattended {
+    use alpymist_core::Tier;
+    use alpymist_install::answers::{Answers, DiskPlan, Network};
+    use alpymist_install::execute::{self, Mode, Progress};
+    use alpymist_install::plan;
+
+    /// Command-line answers.
+    pub struct Options {
+        /// Disk to install to.
+        pub disk: String,
+        /// Login name.
+        pub user: String,
+        /// System hostname.
+        pub hostname: String,
+        /// Keyboard layout.
+        pub keyboard: String,
+        /// IANA timezone.
+        pub timezone: String,
+        /// Whether to really do it.
+        pub mode: Mode,
+    }
+
+    /// Parse the arguments, or explain what they should have been.
+    ///
+    /// Returns `None` when `--unattended` was not asked for.
+    pub fn parse(args: &[String]) -> Option<Result<Options, String>> {
+        if !args.iter().any(|a| a == "--unattended") {
+            return None;
+        }
+        let value = |name: &str| -> Option<String> {
+            args.iter()
+                .position(|a| a == name)
+                .and_then(|i| args.get(i + 1))
+                .cloned()
+        };
+        let Some(disk) = value("--disk") else {
+            return Some(Err("--unattended needs --disk /dev/...".into()));
+        };
+        Some(Ok(Options {
+            disk,
+            user: value("--user").unwrap_or_else(|| "alpymist".into()),
+            hostname: value("--hostname").unwrap_or_else(|| "alpymist".into()),
+            keyboard: value("--keyboard").unwrap_or_else(|| "us".into()),
+            timezone: value("--timezone").unwrap_or_else(|| "UTC".into()),
+            // Unattended defaults to *dry run*, unlike the wizard: a
+            // command line that erases a disk when you forget a word is a
+            // trap, and this one is easy to run by accident over ssh.
+            mode: if args.iter().any(|a| a == "--commit") {
+                Mode::Commit
+            } else {
+                Mode::DryRun
+            },
+        }))
+    }
+
+    /// Build the answers this implies.
+    fn answers(o: &Options) -> Answers {
+        Answers {
+            keyboard: Some(o.keyboard.clone()),
+            timezone: Some(o.timezone.clone()),
+            network: Some(Network::Dhcp),
+            disk: Some(DiskPlan::WholeDisk {
+                device: o.disk.clone(),
+                encrypt: false,
+            }),
+            disk_confirmed: true,
+            username: o.user.clone(),
+            full_name: o.user.clone(),
+            hostname: o.hostname.clone(),
+            detected_tier: Some(Tier::Potato),
+            ..Answers::default()
+        }
+    }
+
+    /// Run it, printing what happens.
+    ///
+    /// # Errors
+    /// Returns why it could not be planned or was refused.
+    pub fn run(o: &Options) -> Result<(), String> {
+        let answers = answers(o);
+        let plan = plan::build(&answers).map_err(|e| e.message())?;
+
+        println!("target: {}", plan.target);
+        println!(
+            "mode:   {}",
+            if o.mode == Mode::Commit {
+                "COMMIT — this will erase the disk"
+            } else {
+                "dry run"
+            }
+        );
+        for (i, step) in plan.steps.iter().enumerate() {
+            println!(
+                "  {}. {}{}",
+                i + 1,
+                step.title,
+                if step.destructive {
+                    "  [destructive]"
+                } else {
+                    ""
+                }
+            );
+        }
+        println!("---");
+
+        let mut failed = None;
+        let ok = execute::run(&plan, o.mode, &mut |progress| match progress {
+            Progress::Starting {
+                index,
+                total,
+                title,
+                command,
+            } => {
+                println!("[{}/{total}] {title}", index + 1);
+                println!("        {command}");
+            }
+            Progress::Output(line) => println!("        {line}"),
+            Progress::Finished { .. } => {}
+            Progress::Refused(reasons) => {
+                failed = Some(format!("refused: {}", reasons.join("; ")));
+            }
+            Progress::Done { ok } => println!("--- {}", if ok { "done" } else { "stopped" }),
+        });
+
+        match (ok, failed) {
+            (true, _) => Ok(()),
+            (false, Some(why)) => Err(why),
+            (false, None) => Err("a step failed; see the output above".into()),
+        }
+    }
 }
 
 /// Whether this run will really write to a disk.

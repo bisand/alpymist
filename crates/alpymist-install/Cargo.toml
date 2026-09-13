@@ -25,12 +25,13 @@ denise-ui = { workspace = true }
 denise-winit = { workspace = true, optional = true }
 denise-drm = { workspace = true, optional = true }
 denise-evdev = { workspace = true, optional = true }
+signal-hook = { version = "0.3", optional = true }
 
 [features]
 default = ["winit"]
 winit = ["dep:denise-winit"]
 # The real target: KMS plus evdev, no compositor and no window system.
-drm = ["dep:denise-drm", "dep:denise-evdev"]
+drm = ["dep:denise-drm", "dep:denise-evdev", "dep:signal-hook"]
 
 [dev-dependencies]
 png = "0.17"
