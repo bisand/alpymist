@@ -46,9 +46,16 @@ const PANEL_WIDTH_PCT: i32 = 74;
 const PANEL_HEIGHT_PCT: i32 = 62;
 /// How far down the screen the panel starts, in percent. Keeps the horizon
 /// clear at every size, including the small ones.
-const TOP_MARGIN_PCT: i32 = 38;
+const TOP_MARGIN_PCT: i32 = 34;
+/// Bottom margins to try, in percent of the height, most generous first. Without
+/// a cap the margin would match the sides, which on a wide screen costs the body
+/// the rows the longest page needs.
+const BOTTOM_MARGIN_STEPS: [i32; 3] = [12, 10, 8];
 /// Height of the built-in font cell, before scaling.
 const CELL_HEIGHT: i32 = 8;
+/// Body rows the longest screen needs. The installer's own test checks every
+/// real screen against the panel, so this cannot silently drift below it.
+pub const MIN_BODY_ROWS: i32 = 8;
 /// Advance width of one glyph cell, before scaling.
 const CELL_ADVANCE: i32 = 6;
 
@@ -69,13 +76,41 @@ impl Chrome {
         let w = px(width.max(1));
         let h = px(height.max(1));
 
-        let text_scale = if w >= 1600 {
+        // The largest text that still leaves room for the longest screen.
+        // A height threshold was tried first and guessed wrong in both
+        // directions: it overflowed a 1366x768 laptop at one setting and made
+        // a 1024x600 netbook's text needlessly tiny at the next. Measuring the
+        // body at each scale cannot guess wrong.
+        let widest = if w >= 1600 {
             3
         } else if w >= 1024 {
             2
         } else {
             1
         };
+        //
+        // Readable text wins over a perfectly proportioned margin: at each
+        // scale the bottom margin may give ground first, down to a floor that
+        // still reads as balanced, and only then does the text get smaller.
+        // Without that, a 1366x768 laptop fell to 8 px text one row short of
+        // fitting, with most of its panel empty.
+        (1..=widest)
+            .rev()
+            .flat_map(|scale| BOTTOM_MARGIN_STEPS.iter().map(move |pct| (scale, *pct)))
+            .map(|(scale, pct)| Self::layout(w, h, scale, pct))
+            .find(|c| c.body_rows() >= MIN_BODY_ROWS && c.bottom_is_balanced(h))
+            .unwrap_or_else(|| Self::layout(w, h, 1, BOTTOM_MARGIN_STEPS[0]))
+    }
+
+    /// Whether the gap under the panel still reads as a margin rather than as
+    /// the panel sitting on the floor.
+    fn bottom_is_balanced(&self, h: i32) -> bool {
+        let bottom = h - (self.panel.1 + self.panel.3);
+        bottom >= self.padding * 2 && bottom * 3 >= self.panel.0
+    }
+
+    /// Lay out the panel for one text scale and bottom margin.
+    fn layout(w: i32, h: i32, text_scale: i32, bottom_pct: i32) -> Self {
         let title_scale = text_scale + 1;
         let padding = (text_scale * 12).max(10);
 
@@ -86,8 +121,16 @@ impl Chrome {
         // worth looking at.
         let top_margin = h * TOP_MARGIN_PCT / 100;
         let panel_w = (w * PANEL_WIDTH_PCT / 100).min(w - padding * 2).max(0);
+
+        // The panel sits low, but not on the floor. Growing it down to fill
+        // everything below the top margin left a 24 px gap at 1280x800 against
+        // 166 px at the sides, so it looked like it was sliding off the screen.
+        // The bottom margin follows the side margins, capped so a very wide
+        // screen does not squeeze the body until the longest page stops fitting.
+        let side_margin = (w - panel_w) / 2;
+        let bottom_margin = side_margin.min(h * bottom_pct / 100).max(padding * 2);
         let panel_h = (h * PANEL_HEIGHT_PCT / 100)
-            .min(h - top_margin - padding)
+            .min(h - top_margin - bottom_margin)
             .max(0);
         let panel_x = (w - panel_w) / 2;
         let panel_y = top_margin;
@@ -388,6 +431,40 @@ mod tests {
                 c.advisory_at.1 >= c.footer.1,
                 "{w}x{h}: advisory sits above the footer"
             );
+        }
+    }
+
+    /// The bug this guards: the panel grew to the bottom edge and left a
+    /// margin a seventh the size of the ones beside it.
+    #[test]
+    fn the_panel_does_not_sit_on_the_bottom_edge() {
+        for (w, h) in SIZES {
+            let c = Chrome::for_screen(w, h);
+            let (x, y, _, ph) = c.panel;
+            let bottom = px(h) - (y + ph);
+            assert!(
+                bottom >= c.padding * 2,
+                "{w}x{h}: bottom margin only {bottom}px"
+            );
+            assert!(
+                bottom * 3 >= x,
+                "{w}x{h}: bottom margin {bottom}px is out of proportion to the sides ({x}px)"
+            );
+        }
+    }
+
+    /// Shrinking the text is the last resort, not the first. Every size with
+    /// room for scale 2 at width must get scale 2 at the heights we support.
+    #[test]
+    fn ordinary_laptop_screens_keep_readable_text() {
+        for (w, h) in [(1024, 768), (1280, 800), (1366, 768), (1920, 1080)] {
+            let c = Chrome::for_screen(w, h);
+            assert!(
+                c.text_scale >= 2,
+                "{w}x{h}: text fell to scale {}",
+                c.text_scale
+            );
+            assert!(c.body_rows() >= super::MIN_BODY_ROWS, "{w}x{h}");
         }
     }
 

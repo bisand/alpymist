@@ -219,7 +219,10 @@ pub const TIERS: [(Tier, &str); 4] = [
 pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
     match step {
         Step::Welcome => vec![
-            Row::note("Alpymist will be set up on this machine."),
+            // The subtitle already says what this is; the body says what to
+            // expect, which is what someone about to commit a disk wants to know.
+            Row::note("You will be asked about your keyboard, time zone,"),
+            Row::note("network, disk and account. It takes a few minutes."),
             Row::gap(),
             Row::note("Nothing is written to any disk until you confirm."),
         ],
@@ -303,7 +306,14 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             )),
             Row::note(format!("Network     {}", describe_network(a))),
             Row::note(format!("Disk        {}", describe_disk(a))),
-            Row::note(String::new()),
+            Row::note(format!("Account     {} on {}", a.username, a.hostname)),
+            Row::note(format!(
+                "Desktop     {}",
+                a.effective_tier().map_or("-".into(), |t| format!("{t:?}"))
+            )),
+            // Last, after everything it summarises, so it is the final thing
+            // read before pressing Install.
+            Row::gap(),
             Row::note(match a.disk.as_ref() {
                 Some(plan) if plan.is_destructive() => format!(
                     "Everything on {} will be erased when you continue.",
@@ -311,11 +321,6 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
                 ),
                 _ => "No disk will be erased.".into(),
             }),
-            Row::note(format!("Account     {} on {}", a.username, a.hostname)),
-            Row::note(format!(
-                "Desktop     {}",
-                a.effective_tier().map_or("-".into(), |t| format!("{t:?}"))
-            )),
         ],
         Step::Install => vec![
             Row::note("Partitioning the disk"),
@@ -325,9 +330,9 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             Row::note("Configuring the bootloader"),
         ],
         Step::Done => vec![
-            Row::note("Alpymist is installed."),
+            Row::note("Remove the installation media, then restart."),
             Row::gap(),
-            Row::note("Remove the installation media and restart."),
+            Row::note("Sign in with the account you just created."),
         ],
     }
 }
@@ -588,6 +593,84 @@ mod tests {
                 expect_offline,
                 "row {index}"
             );
+        }
+    }
+
+    /// A fully answered wizard, so every screen shows its longest form.
+    fn full() -> Answers {
+        Answers {
+            keyboard: Some("no".into()),
+            timezone: Some("Europe/Oslo".into()),
+            network: Some(Network::Dhcp),
+            disk: Some(DiskPlan::WholeDisk {
+                device: "/dev/sda".into(),
+                encrypt: true,
+            }),
+            disk_confirmed: true,
+            username: "andre".into(),
+            full_name: "André Biseth".into(),
+            password: "secret".into(),
+            password_confirm: "secret".into(),
+            hostname: "alpymist".into(),
+            detected_tier: Some(Tier::Lite),
+            ..Answers::default()
+        }
+    }
+
+    /// The panel is smaller than it used to be; no screen may overflow it at
+    /// any resolution we claim to support, including a 1024x600 netbook.
+    #[test]
+    fn every_screen_fits_inside_the_panel_at_every_supported_size() {
+        use alpymist_ui::chrome::Chrome;
+        let a = full();
+        for (w, h) in [
+            (640, 480),
+            (800, 600),
+            (1024, 600),
+            (1024, 768),
+            (1280, 800),
+            (1366, 768),
+            (1920, 1080),
+            (2560, 1440),
+        ] {
+            let room = usize::try_from(Chrome::for_screen(w, h).body_rows()).unwrap();
+            for step in Step::ALL {
+                let needed = rows(step, &a).len();
+                assert!(
+                    needed <= room,
+                    "{w}x{h}: {step:?} needs {needed} rows, panel has {room}"
+                );
+            }
+        }
+    }
+
+    /// Catches a body line restating the subtitle above it, as the Welcome
+    /// screen did: two sentences sharing nearly all their words.
+    #[test]
+    fn no_screen_repeats_its_subtitle_in_the_body() {
+        let words = |s: &str| -> std::collections::BTreeSet<String> {
+            s.split(|c: char| !c.is_alphanumeric())
+                .filter(|w| !w.is_empty())
+                .map(str::to_lowercase)
+                .collect()
+        };
+        let a = full();
+        for step in Step::ALL {
+            let sub = words(step.subtitle());
+            for row in rows(step, &a) {
+                let body = words(&row.text);
+                if body.is_empty() || sub.is_empty() {
+                    continue;
+                }
+                let shared = sub.intersection(&body).count();
+                let union = sub.union(&body).count();
+                assert!(
+                    shared * 10 < union * 6,
+                    "{step:?}: {:?} repeats the subtitle {:?}",
+                    row.text,
+                    step.subtitle()
+                );
+            }
         }
     }
 

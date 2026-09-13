@@ -498,8 +498,12 @@ impl App {
                 if let Some((index, total)) = running.at {
                     lines.push(format!("Step {} of {total}", index + 1));
                 }
-                // Only the tail fits, and the tail is what matters.
-                let shown = running.lines.len().saturating_sub(12);
+                // Only the tail fits, and the tail is what matters. Two rows
+                // are kept for the step counter and the final outcome.
+                let room = usize::try_from(self.chrome.body_rows() - 2)
+                    .unwrap_or(1)
+                    .max(1);
+                let shown = running.lines.len().saturating_sub(room);
                 lines.extend(running.lines[shown..].iter().cloned());
                 match running.outcome {
                     Some(true) => lines.push("Finished.".into()),
