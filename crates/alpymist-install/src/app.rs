@@ -12,7 +12,7 @@ use alpymist_ui::backdrop::Backdrop;
 use alpymist_ui::chrome::Chrome;
 use alpymist_ui::palette::Palette;
 use alpymist_ui::render::{
-    ButtonStyle, button_ink, button_label_at, colour, paint_backdrop, paint_button, paint_panel,
+    ButtonStyle, button_ink, colour, paint_backdrop, paint_button, paint_panel,
 };
 use alpymist_ui::typeface::{self, Typeface};
 use denise::geom::Point;
@@ -467,14 +467,10 @@ impl App {
                 self.primary_button().1,
             ),
         ] {
-            let (x, y) = button_label_at(rect, label, chrome.text_scale);
-            self.face.draw(
-                pen,
-                Point::new(x, y),
-                px_for(chrome.text_scale),
-                label,
-                colour(button_ink(style, &palette)),
-            );
+            let size_px = px_for(chrome.text_scale);
+            let at = self.face.centre_in(rect, size_px, label);
+            self.face
+                .draw(pen, at, size_px, label, colour(button_ink(style, &palette)));
         }
     }
 }

@@ -191,16 +191,6 @@ pub fn button_ink(style: ButtonStyle, palette: &Palette) -> Rgb {
     }
 }
 
-/// Where a label starts so it sits centred in a button.
-#[must_use]
-pub fn button_label_at(rect: (i32, i32, i32, i32), label: &str, text_scale: i32) -> (i32, i32) {
-    let (x, y, w, h) = rect;
-    let chars = i32::try_from(label.chars().count()).unwrap_or(0);
-    let text_w = chars * 6 * text_scale - text_scale;
-    let text_h = 8 * text_scale;
-    (x + (w - text_w) / 2, y + (h - text_h) / 2)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{FX_SHIFT, colour, to_fixed};
@@ -225,22 +215,6 @@ mod tests {
         assert_eq!(to_fixed(i32::MAX), i32::MAX);
         assert_eq!(to_fixed(i32::MIN), i32::MIN);
         assert!(to_fixed(100_000_000) > 0, "must not wrap negative");
-    }
-
-    #[test]
-    fn a_button_label_is_centred_within_its_button() {
-        let rect = (100, 200, 180, 40);
-        let (x, y) = super::button_label_at(rect, "Continue", 2);
-        let text_w = 8 * 6 * 2 - 2;
-        assert_eq!(
-            x - rect.0,
-            rect.2 - text_w - (x - rect.0),
-            "not horizontally centred"
-        );
-        assert!(
-            y > rect.1 && y + 16 < rect.1 + rect.3,
-            "not vertically inside"
-        );
     }
 
     #[test]

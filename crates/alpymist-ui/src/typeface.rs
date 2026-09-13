@@ -116,6 +116,24 @@ impl Typeface {
         self.engine.draw(pen, style, at, text, colour)
     }
 
+    /// Where to draw `label` so it sits centred in `rect`.
+    ///
+    /// Measured rather than calculated from a glyph cell. The layout was first
+    /// written against Denise's 5x8 bitmap, whose advance and line height are
+    /// fixed multiples; a real font's are neither, so assuming them put every
+    /// button label a few pixels low and slightly off-centre.
+    ///
+    /// `TextEngine::draw` takes the top-left of the line box, not the baseline,
+    /// so centring the measured extent is all that is needed — no ascent or
+    /// descent arithmetic, and nothing that changes when the font does.
+    pub fn centre_in(&mut self, rect: (i32, i32, i32, i32), size_px: u16, label: &str) -> Point {
+        let extent = self.measure(size_px, label);
+        let (x, y, w, h) = rect;
+        let text_w = i32::try_from(extent.width).unwrap_or(0);
+        let text_h = i32::try_from(extent.height).unwrap_or(0);
+        Point::new(x + (w - text_w) / 2, y + (h - text_h) / 2)
+    }
+
     /// How much room `text` would take.
     pub fn measure(&mut self, size_px: u16, text: &str) -> Size {
         let style = self.style(size_px);
@@ -214,6 +232,52 @@ mod tests {
         if std::env::var(FONT_PATH_ENV).is_err() {
             assert_eq!(font_path(), FONT_PATH);
         }
+    }
+
+    /// The bug this replaces: labels were centred using bitmap glyph metrics,
+    /// which are wrong for any real font.
+    #[test]
+    fn a_label_is_centred_in_its_button_by_measurement() {
+        let mut face = load_from("/nonexistent/NoSuch.ttf");
+        let rect = (100, 200, 220, 48);
+        let label = "Enter  Continue";
+        let at = face.centre_in(rect, 16, label);
+        let extent = face.measure(16, label);
+
+        let left = at.x - rect.0;
+        let right = (rect.0 + rect.2) - (at.x + i32::try_from(extent.width).unwrap());
+        assert!(
+            (left - right).abs() <= 1,
+            "horizontally off by {}",
+            (left - right).abs()
+        );
+
+        let top = at.y - rect.1;
+        let bottom = (rect.1 + rect.3) - (at.y + i32::try_from(extent.height).unwrap());
+        assert!(
+            (top - bottom).abs() <= 1,
+            "vertically off by {}",
+            (top - bottom).abs()
+        );
+    }
+
+    #[test]
+    fn a_longer_label_starts_further_left_but_stays_centred() {
+        let mut face = load_from("/nonexistent/NoSuch.ttf");
+        let rect = (0, 0, 400, 40);
+        let short = face.centre_in(rect, 16, "Back").x;
+        let long = face.centre_in(rect, 16, "Enter  Continue").x;
+        assert!(long < short, "longer label should start further left");
+    }
+
+    #[test]
+    fn a_label_wider_than_its_button_is_not_pushed_off_to_the_right() {
+        let mut face = load_from("/nonexistent/NoSuch.ttf");
+        let at = face.centre_in((50, 50, 10, 10), 16, "far too long for this");
+        assert!(
+            at.x <= 50,
+            "an overflowing label should overhang evenly, not shift right"
+        );
     }
 
     #[test]
