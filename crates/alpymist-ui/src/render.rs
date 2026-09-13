@@ -9,9 +9,12 @@ use crate::chrome::Chrome;
 use crate::convert::px;
 use crate::palette::{Palette, Rgb};
 use denise::color::Color;
+use denise::geom::Point;
 use denise::geom::Rect;
 use denise::paint::Paint;
-use denise::painter::Painter;
+use denise::painter::{Painter, Pen};
+use denise::theme::Theme;
+use denise_ui::cursor::{ARROW, Cursor};
 
 /// The rasteriser takes polygon vertices in 8.8 fixed point.
 const FX_SHIFT: u32 = 8;
@@ -188,6 +191,34 @@ pub fn button_ink(style: ButtonStyle, palette: &Palette) -> Rgb {
         ButtonStyle::Primary => palette.ink,
         ButtonStyle::Quiet => palette.ink_dim,
         ButtonStyle::Disabled => palette.ink_dim.mix(palette.sky_high, 55),
+    }
+}
+
+/// Paint the mouse pointer, if it has ever moved.
+///
+/// Composited into the frame rather than put on the hardware cursor plane.
+/// The plane is the better answer for a panel redrawing at speed — it moves the
+/// pointer without touching the framebuffer — but this screen only repaints
+/// when something changes, and a cursor that leaves a trail when the display
+/// is otherwise idle would be worse than one that costs a repaint. The plane is
+/// available behind `denise-drm`'s `CursorPlane` if that trade ever changes.
+pub fn paint_cursor(pen: &mut Pen<'_>, cursor: &Cursor, theme: &Theme) {
+    if cursor.visible {
+        cursor.paint(theme, pen);
+    }
+}
+
+/// The pointer sprite, hidden until the pointer first moves.
+///
+/// Hidden to begin with on purpose: a machine with no mouse should never show
+/// one, and on this hardware that is a real possibility rather than a corner
+/// case.
+#[must_use]
+pub fn new_cursor() -> Cursor {
+    Cursor {
+        image: &ARROW,
+        position: Point::new(0, 0),
+        visible: false,
     }
 }
 

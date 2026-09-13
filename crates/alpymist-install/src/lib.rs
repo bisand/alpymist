@@ -15,6 +15,9 @@
 pub mod answers;
 pub mod app;
 pub mod editing;
+pub mod plan;
+pub mod pointer;
+pub mod safety;
 pub mod screens;
 pub mod wizard;
 

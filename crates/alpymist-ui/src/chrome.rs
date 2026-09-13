@@ -139,18 +139,37 @@ impl Chrome {
         }
     }
 
+    /// The rectangle a body row occupies, for hit testing a pointer.
+    ///
+    /// Full body width rather than the width of the text, so clicking anywhere
+    /// along a row selects it — aiming at the glyphs would be needlessly fussy,
+    /// especially on a touchpad.
+    #[must_use]
+    pub fn row_rect(&self, index: i32) -> (i32, i32, i32, i32) {
+        (
+            self.body.0,
+            self.body_row(index),
+            self.body.2,
+            self.row_height(),
+        )
+    }
+
+    /// The vertical distance between one body row and the next.
+    #[must_use]
+    pub fn row_height(&self) -> i32 {
+        CELL_HEIGHT * self.text_scale + self.text_scale * 4
+    }
+
     /// The y of a body row, `index` lines down from the top of the body.
     #[must_use]
     pub fn body_row(&self, index: i32) -> i32 {
-        let line = CELL_HEIGHT * self.text_scale + self.text_scale * 4;
-        self.body.1 + index * line
+        self.body.1 + index * self.row_height()
     }
 
     /// How many rows fit in the body.
     #[must_use]
     pub fn body_rows(&self) -> i32 {
-        let line = CELL_HEIGHT * self.text_scale + self.text_scale * 4;
-        (self.body.3 / line.max(1)).max(1)
+        (self.body.3 / self.row_height().max(1)).max(1)
     }
 }
 
@@ -291,6 +310,29 @@ mod tests {
                 "{w}x{h}: header not left-aligned"
             );
         }
+    }
+
+    #[test]
+    fn a_row_rectangle_spans_the_body_and_sits_on_its_row() {
+        let chrome = Chrome::for_screen(1280, 800);
+        for index in 0..3 {
+            let (left, top, width, height) = chrome.row_rect(index);
+            assert_eq!(left, chrome.body.0);
+            assert_eq!(
+                width, chrome.body.2,
+                "rows are clickable across the whole body"
+            );
+            assert_eq!(top, chrome.body_row(index));
+            assert!(height > 0);
+        }
+    }
+
+    #[test]
+    fn row_rectangles_touch_without_overlapping() {
+        let c = Chrome::for_screen(1280, 800);
+        let (_, y0, _, h0) = c.row_rect(0);
+        let (_, y1, _, _) = c.row_rect(1);
+        assert_eq!(y0 + h0, y1, "a gap here would be a dead strip between rows");
     }
 
     #[test]

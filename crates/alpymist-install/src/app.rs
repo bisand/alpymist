@@ -6,19 +6,23 @@
 
 use crate::answers::Answers;
 use crate::editing;
+use crate::pointer;
 use crate::screens::{self, Row, TextTarget};
 use crate::wizard::{Step, Wizard};
 use alpymist_ui::backdrop::Backdrop;
 use alpymist_ui::chrome::Chrome;
 use alpymist_ui::palette::Palette;
 use alpymist_ui::render::{
-    ButtonStyle, button_ink, colour, paint_backdrop, paint_button, paint_panel,
+    ButtonStyle, button_ink, colour, new_cursor, paint_backdrop, paint_button, paint_cursor,
+    paint_panel,
 };
 use alpymist_ui::typeface::{self, Typeface};
 use denise::geom::Point;
 use denise::input::{ElementState, InputEvent, KeyCode};
 use denise::painter::Pen;
+use denise::theme::Theme;
 use denise_render::Canvas;
+use denise_ui::cursor::Cursor;
 
 /// Translate an input event into an action, or ignore it.
 ///
@@ -35,6 +39,20 @@ use denise_render::Canvas;
 /// `Text` events, already composed, so `¨` then `o` yields one `ö`.
 #[must_use]
 pub fn action_for(event: &InputEvent, editing_text: bool) -> Option<Action> {
+    match event {
+        InputEvent::PointerMoved { position } => {
+            return Some(Action::PointerTo(position.x, position.y));
+        }
+        InputEvent::PointerButton {
+            button,
+            state,
+            position,
+            ..
+        } if *button == denise::input::PointerButton::Left && *state == ElementState::Down => {
+            return Some(Action::ClickAt(position.x, position.y));
+        }
+        _ => {}
+    }
     if let InputEvent::Text { ch } = event {
         // Control characters have their own keys; only real text belongs here.
         return (editing_text && !ch.is_control()).then_some(Action::Type(*ch));
@@ -105,6 +123,10 @@ pub enum Action {
     CaretHome,
     /// Move the caret to the end of the field.
     CaretEnd,
+    /// The pointer moved to this surface position.
+    PointerTo(i32, i32),
+    /// The primary pointer button went down at this position.
+    ClickAt(i32, i32),
 }
 
 /// The installer's interactive state.
@@ -125,10 +147,22 @@ pub struct App {
     pub reported: Vec<String>,
     /// Caret position within the focused text field, in characters.
     caret: usize,
+    /// Where the pointer is, once it has moved at all.
+    ///
+    /// `None` until the first motion, which is what keeps a keyboard-only
+    /// machine from showing a pointer it has no way to move.
+    pub pointer: Option<(i32, i32)>,
     /// Set when the user asks to quit.
     pub quitting: bool,
     /// Fira Mono where available, the built-in bitmap otherwise.
     pub face: Typeface,
+    /// The mouse pointer sprite, hidden until the pointer moves.
+    ///
+    /// Named apart from `cursor`, which in this app means the keyboard
+    /// selection — two different things that both want that word.
+    pointer_sprite: Cursor,
+    /// Colours for the cursor sprite.
+    theme: Theme,
 }
 
 impl App {
@@ -145,8 +179,11 @@ impl App {
             size: (width, height),
             reported: Vec::new(),
             caret: 0,
+            pointer: None,
             quitting: false,
             face: typeface::load(),
+            pointer_sprite: new_cursor(),
+            theme: denise::theme::DARK,
         };
         app.snap_cursor();
         app
@@ -284,7 +321,45 @@ impl App {
                     self.snap_cursor();
                 }
             }
+            Action::PointerTo(x, y) => {
+                self.pointer = Some((x, y));
+                self.pointer_sprite.position = Point::new(x, y);
+                // First motion is what reveals it; see new_cursor.
+                self.pointer_sprite.visible = true;
+            }
+            Action::ClickAt(x, y) => {
+                self.pointer = Some((x, y));
+                self.click(x, y);
+            }
             Action::Quit => self.quitting = true,
+        }
+    }
+
+    /// Act on a click at a surface position.
+    ///
+    /// Clicking a row both moves the cursor there and chooses it. Keyboard
+    /// navigation separates those — arrow then Space — because the cursor has
+    /// to pass over rows on its way. A pointer does not pass over anything, so
+    /// requiring a second click to confirm what was just aimed at would be
+    /// pure ceremony.
+    fn click(&mut self, x: i32, y: i32) {
+        let rows = screens::rows(self.wizard.step(), &self.wizard.answers);
+        match pointer::hit_test(&self.chrome, rows.len(), x, y) {
+            pointer::Hit::Row(index) => {
+                if rows.get(index).is_some_and(Row::selectable) {
+                    self.cursor = index;
+                    self.place_caret();
+                    // A text field only takes focus; anything else is a choice.
+                    if rows[index].text_target().is_none() {
+                        self.act(Action::Choose);
+                    } else {
+                        self.reported.clear();
+                    }
+                }
+            }
+            pointer::Hit::Next => self.act(Action::Advance),
+            pointer::Hit::Back => self.act(Action::Back),
+            pointer::Hit::Nothing => {}
         }
     }
 
@@ -357,6 +432,9 @@ impl App {
 
         self.draw_rows(&mut pen);
         self.draw_footer_text(&mut pen);
+
+        // Last, so it is over everything.
+        paint_cursor(&mut pen, &self.pointer_sprite, &self.theme);
     }
 
     /// The button shapes, which need a painter rather than a pen.
@@ -482,6 +560,7 @@ mod tests {
     use crate::screens::{self, TextTarget};
     use crate::wizard::Step;
     use alpymist_core::Tier;
+    use denise::geom::Point;
     use denise::input::{ElementState, InputEvent, KeyCode};
 
     fn app() -> App {
@@ -974,6 +1053,118 @@ mod tests {
         type_text(&mut a, "hello");
         a.act(Action::Backspace);
         assert_eq!(a.wizard.answers, before);
+    }
+
+    fn point(x: i32, y: i32) -> InputEvent {
+        InputEvent::PointerMoved {
+            position: Point::new(x, y),
+        }
+    }
+
+    fn click(x: i32, y: i32) -> InputEvent {
+        InputEvent::PointerButton {
+            button: denise::input::PointerButton::Left,
+            state: ElementState::Down,
+            position: Point::new(x, y),
+            modifiers: denise::input::Modifiers::default(),
+        }
+    }
+
+    #[test]
+    fn pointer_motion_and_clicks_map_to_actions() {
+        assert_eq!(
+            super::action_for(&point(10, 20), false),
+            Some(Action::PointerTo(10, 20))
+        );
+        assert_eq!(
+            super::action_for(&click(30, 40), false),
+            Some(Action::ClickAt(30, 40))
+        );
+    }
+
+    /// A keyboard-only machine must never show a pointer it cannot move.
+    #[test]
+    fn the_pointer_is_hidden_until_it_actually_moves() {
+        let mut a = app();
+        assert!(
+            a.pointer.is_none(),
+            "a pointer exists before anything moved"
+        );
+        a.act(Action::PointerTo(100, 100));
+        assert_eq!(a.pointer, Some((100, 100)));
+    }
+
+    #[test]
+    fn releasing_the_button_is_not_a_second_click() {
+        let release = InputEvent::PointerButton {
+            button: denise::input::PointerButton::Left,
+            state: ElementState::Up,
+            position: Point::new(5, 5),
+            modifiers: denise::input::Modifiers::default(),
+        };
+        assert_eq!(super::action_for(&release, false), None);
+    }
+
+    #[test]
+    fn clicking_a_row_selects_it_in_one_click() {
+        let mut a = app();
+        a.act(Action::Advance); // Keyboard
+        let chrome = alpymist_ui::chrome::Chrome::for_screen(1280, 800);
+        let (left, top, width, height) = chrome.row_rect(2);
+        a.act(Action::ClickAt(left + width / 2, top + height / 2));
+        assert_eq!(a.cursor(), 2, "the click did not move the selection");
+        assert!(
+            a.wizard.answers.keyboard.is_some(),
+            "the click did not choose"
+        );
+    }
+
+    #[test]
+    fn clicking_the_primary_button_advances() {
+        let mut a = app();
+        let chrome = alpymist_ui::chrome::Chrome::for_screen(1280, 800);
+        let (left, top, width, height) = chrome.next_button;
+        a.act(Action::ClickAt(left + width / 2, top + height / 2));
+        assert_eq!(
+            a.wizard.step(),
+            Step::Keyboard,
+            "welcome should have advanced"
+        );
+    }
+
+    #[test]
+    fn clicking_back_goes_back() {
+        let mut a = app();
+        a.act(Action::Advance);
+        a.act(Action::Choose);
+        a.act(Action::Advance); // Region
+        let chrome = alpymist_ui::chrome::Chrome::for_screen(1280, 800);
+        let (left, top, width, height) = chrome.back_button;
+        a.act(Action::ClickAt(left + width / 2, top + height / 2));
+        assert_eq!(a.wizard.step(), Step::Keyboard);
+    }
+
+    #[test]
+    fn clicking_the_backdrop_changes_nothing() {
+        let mut a = app();
+        a.act(Action::Advance);
+        let before = (a.cursor(), a.wizard.step(), a.wizard.answers.clone());
+        a.act(Action::ClickAt(3, 3));
+        assert_eq!(
+            (a.cursor(), a.wizard.step(), a.wizard.answers.clone()),
+            before
+        );
+    }
+
+    /// A text field takes focus on click but must not be "chosen" — there is
+    /// nothing to choose, and firing Choose there would be a no-op at best.
+    #[test]
+    fn clicking_a_text_field_focuses_it_without_choosing() {
+        let mut a = at_account();
+        let chrome = alpymist_ui::chrome::Chrome::for_screen(1280, 800);
+        let (left, top, width, height) = chrome.row_rect(3); // Confirm password
+        a.act(Action::ClickAt(left + width / 2, top + height / 2));
+        assert_eq!(a.focused_field(), Some(TextTarget::PasswordConfirm));
     }
 
     #[test]
