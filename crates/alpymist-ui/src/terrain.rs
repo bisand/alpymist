@@ -125,7 +125,7 @@ impl Ridge {
                 // Through i64: these are sub-pixel units, so the products are
                 // 256 times what they used to be.
                 let step = i32::try_from(
-                    i64::from(b - a) * i64::from(within as u32)
+                    i64::from(b - a) * i64::from(u32::try_from(within).unwrap_or(0))
                         / i64::from(u32::try_from(width.max(1)).unwrap_or(1)),
                 )
                 .unwrap_or(0);
