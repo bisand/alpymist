@@ -51,6 +51,9 @@ mkdir -p "$tmp"/etc/apk
 makefile root:root 0644 "$tmp"/etc/apk/world <<EOF
 alpine-base
 doas
+eudev
+udev-init-scripts
+udev-init-scripts-openrc
 alpymistctl
 alpymist-install
 alpymist-install-openrc

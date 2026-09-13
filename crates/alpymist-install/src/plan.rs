@@ -367,6 +367,35 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
             ],
         ),
     ]);
+    // udev rather than BusyBox mdev: libinput finds keyboards and mice through
+    // udev, and a Wayland compositor with no input devices refuses to start.
+    // setup-devd does the same, but also starts the services, which in a
+    // chroot would start them on the live system. eudev is in the image's
+    // world, so setup-disk has already installed it.
+    for (service, runlevel) in [
+        ("udev", "sysinit"),
+        ("udev-trigger", "sysinit"),
+        ("udev-settle", "sysinit"),
+        ("udev-postmount", "default"),
+    ] {
+        steps.push(Step::new(
+            &format!("Using udev for devices ({service})"),
+            &["chroot", ROOT, "rc-update", "add", service, runlevel],
+        ));
+    }
+    for service in ["mdev", "hwdrivers"] {
+        steps.push(Step::new(
+            &format!("Retiring {service}"),
+            &["chroot", ROOT, "rc-update", "del", service, "sysinit"],
+        ));
+    }
+    // The live image's root has no password, and setup-disk copies its
+    // /etc/shadow. Left alone, the installed system would take `root` with
+    // no password at all. Administration is through doas.
+    steps.push(Step::new(
+        "Locking the root account",
+        &["chroot", ROOT, "passwd", "-l", "root"],
+    ));
     if encrypt {
         // The one mistake here that nothing else would catch: a boot entry
         // without cryptroot never unlocks the disk, so the system installs
@@ -430,7 +459,12 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
     }
 
     // Last of the real work, and allowed to fail: the system is bootable
-    // without it, and a desktop can be added after the first boot.
+    // without it, and a desktop can be added after the first boot. So is all
+    // that follows it here, which only makes sense once it is installed.
+    //
+    // The live system's repositories, not the new one's: setup-disk comments
+    // out the install medium's repository in the new system, and the medium
+    // is where the desktop is when there is no network.
     steps.push(
         Step::new(
             "Installing the desktop",
@@ -439,10 +473,44 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
                 "add",
                 "--root",
                 ROOT,
+                "--repositories-file",
+                "/etc/apk/repositories",
                 "--no-progress",
                 tier.metapackage(),
             ],
         )
+        .may_fail(),
+    );
+    for service in ["dbus", "seatd", "greetd"] {
+        steps.push(
+            Step::new(
+                &format!("Starting {service} at boot"),
+                &["chroot", ROOT, "rc-update", "add", service, "default"],
+            )
+            .may_fail(),
+        );
+    }
+    // seat for seatd, video and input for the devices a compositor opens,
+    // audio for pipewire.
+    for group in ["seat", "video", "input", "audio"] {
+        steps.push(
+            Step::new(
+                &format!("Adding your account to {group}"),
+                &["chroot", ROOT, "adduser", &a.username, group],
+            )
+            .may_fail(),
+        );
+    }
+    steps.push(
+        Step::new(
+            "Choosing the desktop session",
+            &["chroot", ROOT, "tee", "/etc/conf.d/greetd"],
+        )
+        .with_input(Input::Text(format!(
+            "# Written by the Alpymist installer: the {tier:?} tier's session.\n\
+             cfgfile=\"{}\"\n",
+            tier.greeter_config()
+        )))
         .may_fail(),
     );
 
@@ -623,17 +691,49 @@ mod tests {
         );
     }
 
-    /// Nothing that can leave a disk half-written may be skipped past.
+    /// Nothing that can leave a disk half-written may be skipped past: only
+    /// the desktop and the steps that set it up may fail and let the install
+    /// carry on, and all of them come after the system is complete.
     #[test]
     fn only_the_desktop_may_fail() {
         let plan = build(&encrypted()).unwrap();
-        let optional: Vec<&str> = plan
-            .steps
-            .iter()
-            .filter(|s| s.may_fail)
-            .map(|s| s.title.as_str())
-            .collect();
-        assert_eq!(optional, vec!["Installing the desktop"]);
+        let first = plan.steps.iter().position(|s| s.may_fail).unwrap();
+        assert_eq!(plan.steps[first].title, "Installing the desktop");
+        let t = titles(&encrypted());
+        assert!(first > t.iter().position(|s| s.contains("passphrase")).unwrap());
+        for s in &plan.steps[first..] {
+            assert_eq!(
+                s.may_fail,
+                !s.title.starts_with("Unmounting") && !s.title.starts_with("Locking"),
+                "{}",
+                s.title
+            );
+        }
+    }
+
+    #[test]
+    fn the_desktop_comes_from_the_install_medium_and_starts_at_boot() {
+        let mut a = answers();
+        a.tier_override = Some(Tier::Potato);
+        let plan = build(&a).unwrap();
+        let desktop = step(&plan, "Installing the desktop");
+        assert!(
+            desktop
+                .argv
+                .windows(2)
+                .any(|w| w == ["--repositories-file", "/etc/apk/repositories"])
+        );
+        for service in ["dbus", "seatd", "greetd"] {
+            assert!(titles(&a).contains(&format!("Starting {service} at boot")));
+        }
+        let Some(Input::Text(conf)) = &step(&plan, "desktop session").stdin else {
+            panic!("no greetd configuration");
+        };
+        assert!(
+            conf.contains("cfgfile=\"/etc/greetd/alpymist-potato.toml\""),
+            "{conf}"
+        );
+        assert!(titles(&a).contains(&"Adding your account to seat".to_string()));
     }
 
     #[test]
@@ -656,6 +756,41 @@ mod tests {
                 .iter()
                 .any(|s| s.contains("ask for the passphrase"))
         );
+    }
+
+    /// The live image's root has an empty password and its /etc is copied.
+    #[test]
+    fn the_new_systems_root_account_is_locked() {
+        for a in [answers(), encrypted()] {
+            let plan = build(&a).unwrap();
+            let lock = step(&plan, "Locking the root account");
+            assert_eq!(lock.argv, ["chroot", "/mnt", "passwd", "-l", "root"]);
+            assert!(!lock.may_fail, "an unlocked root must stop the install");
+            let t = titles(&a);
+            let at = |n: &str| t.iter().position(|s| s.contains(n)).unwrap();
+            assert!(at("Locking the root") > at("base system"));
+            assert!(at("Locking the root") < at("Installing the desktop"));
+        }
+    }
+
+    #[test]
+    fn devices_are_managed_by_udev_not_mdev() {
+        let plan = build(&answers()).unwrap();
+        let t = titles(&answers());
+        for s in ["udev", "udev-trigger", "udev-settle"] {
+            assert!(
+                plan.steps
+                    .iter()
+                    .any(|x| x.argv == ["chroot", "/mnt", "rc-update", "add", s, "sysinit"]),
+                "{s}"
+            );
+        }
+        let at = |n: &str| t.iter().position(|s| s.contains(n)).unwrap();
+        assert!(
+            at("Retiring mdev") > at("(udev-settle)"),
+            "mdev must go only after udev is in place"
+        );
+        assert!(!step(&plan, "Retiring mdev").may_fail);
     }
 
     #[test]

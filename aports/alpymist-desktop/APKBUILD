@@ -1,0 +1,116 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+#
+# Metapackages: which Alpine packages make up each Alpymist desktop tier.
+# Nothing is compiled. The base package is what every tier shares; each tier
+# subpackage adds its compositor or window manager and a greetd configuration
+# that starts it. The installer picks the tier (alpymist_core::Tier) and points
+# greetd at that tier's file.
+pkgname=alpymist-desktop
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="Alpymist desktop: what every tier shares"
+url="https://github.com/bisand/alpymist"
+arch="noarch"
+license="MIT OR Apache-2.0"
+# greetd on VT 7, with tuigreet as the greeter; seatd hands the compositor its
+# devices without running it as root; pam-rundir gives each login the
+# XDG_RUNTIME_DIR a Wayland compositor refuses to start without, which on
+# Alpine elogind would otherwise provide; pipewire for sound; flatpak is how
+# applications are installed (ADR 0001).
+depends="
+	adwaita-icon-theme
+	brightnessctl
+	dbus
+	flatpak
+	font-dejavu
+	font-fira-ttf
+	foot
+	greetd
+	greetd-tuigreet
+	mesa-dri-gallium
+	pam-rundir
+	pipewire
+	pipewire-pulse
+	polkit
+	seatd
+	wireplumber
+	xdg-user-dirs
+	"
+subpackages="
+	$pkgname-wayland:_wayland
+	$pkgname-full:_full
+	$pkgname-lite:_lite
+	$pkgname-legacy:_legacy
+	"
+source="
+	alpymist-greetd.pam
+	alpymist-full.toml
+	alpymist-lite.toml
+	alpymist-potato.toml
+	alpymist-legacy.toml
+	"
+options="!check"  # nothing to test: these are dependency lists and config
+
+package() {
+	# A PAM service of our own rather than an edit to greetd's, which belongs
+	# to the greetd package; each tier's configuration names it.
+	install -Dm644 "$srcdir"/alpymist-greetd.pam "$pkgdir"/etc/pam.d/alpymist-greetd
+}
+
+# The Wayland tools the Full and Lite tiers share. Hyprland's own wallpaper,
+# lock and idle daemons are not packaged for Alpine 3.24; the sway ones work
+# under any wlroots-style compositor, Hyprland included.
+_wayland() {
+	pkgdesc="Alpymist desktop: tools shared by the Wayland tiers"
+	depends="
+		$pkgname=$pkgver-r$pkgrel
+		fuzzel
+		grim
+		mako
+		slurp
+		swaybg
+		swayidle
+		swaylock
+		waybar
+		wl-clipboard
+		xdg-desktop-portal-wlr
+		"
+	mkdir -p "$subpkgdir"
+}
+
+_full() {
+	pkgdesc="Alpymist desktop, Full tier: Hyprland"
+	depends="$pkgname-wayland=$pkgver-r$pkgrel hyprland"
+	install -Dm644 "$srcdir"/alpymist-full.toml \
+		"$subpkgdir"/etc/greetd/alpymist-full.toml
+}
+
+# Lite and Potato are the same packages; Potato's session only tells labwc to
+# render on the CPU, so both greetd files ship here.
+_lite() {
+	pkgdesc="Alpymist desktop, Lite and Potato tiers: labwc"
+	depends="$pkgname-wayland=$pkgver-r$pkgrel labwc"
+	install -Dm644 "$srcdir"/alpymist-lite.toml \
+		"$subpkgdir"/etc/greetd/alpymist-lite.toml
+	install -Dm644 "$srcdir"/alpymist-potato.toml \
+		"$subpkgdir"/etc/greetd/alpymist-potato.toml
+}
+
+_legacy() {
+	pkgdesc="Alpymist desktop, Legacy tier: X11 with i3"
+	depends="
+		$pkgname=$pkgver-r$pkgrel
+		dmenu
+		eudev
+		i3lock
+		i3status
+		i3wm
+		xf86-input-libinput
+		xinit
+		xorg-server
+		xterm
+		"
+	install -Dm644 "$srcdir"/alpymist-legacy.toml \
+		"$subpkgdir"/etc/greetd/alpymist-legacy.toml
+}

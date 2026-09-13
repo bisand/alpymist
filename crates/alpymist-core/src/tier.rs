@@ -66,6 +66,21 @@ impl Tier {
             Self::Legacy => "alpymist-desktop-legacy",
         }
     }
+
+    /// The greetd configuration, shipped by [`metapackage`](Self::metapackage),
+    /// that starts this tier's session.
+    ///
+    /// Lite and Potato share packages but not this: Potato's session tells the
+    /// compositor to render on the CPU.
+    #[must_use]
+    pub fn greeter_config(self) -> &'static str {
+        match self {
+            Self::Full => "/etc/greetd/alpymist-full.toml",
+            Self::Lite => "/etc/greetd/alpymist-lite.toml",
+            Self::Potato => "/etc/greetd/alpymist-potato.toml",
+            Self::Legacy => "/etc/greetd/alpymist-legacy.toml",
+        }
+    }
 }
 
 /// Why a given tier was chosen — surfaced to the user and written to the
@@ -188,6 +203,29 @@ pub fn select_tier(caps: &Capabilities) -> Rationale {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The installer names packages and files that the packaging must provide;
+    /// a rename on either side would otherwise surface only mid-install.
+    #[test]
+    fn every_tier_names_a_package_and_session_the_packaging_ships() {
+        let apkbuild = include_str!("../../../aports/alpymist-desktop/APKBUILD");
+        for tier in [Tier::Full, Tier::Lite, Tier::Potato, Tier::Legacy] {
+            let sub = tier
+                .metapackage()
+                .strip_prefix("alpymist-desktop-")
+                .expect("a desktop subpackage");
+            assert!(
+                apkbuild.contains(&format!("$pkgname-{sub}:_{sub}")),
+                "{tier:?}: no subpackage {}",
+                tier.metapackage()
+            );
+            assert!(
+                apkbuild.contains(&format!("\"$subpkgdir\"{}", tier.greeter_config())),
+                "{tier:?}: {} is not installed by the APKBUILD",
+                tier.greeter_config()
+            );
+        }
+    }
     use crate::capabilities::{GlesInfo, GpuDevice, Virtualisation};
 
     /// Build capabilities with a hardware renderer at the given GL ES version.

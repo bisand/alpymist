@@ -31,6 +31,9 @@ profile_alpymist() {
 	# unless named here, and setup-disk installs it from that repository.
 	# linux-firmware-none is what setup-disk picks for hardware needing none.
 	apks="$apks linux-lts linux-firmware-none"
+	# Every desktop tier, so the installer can put any of them on a machine
+	# with no network. About 170 MiB more on the image.
+	apks="$apks alpymist-desktop-full alpymist-desktop-lite alpymist-desktop-legacy"
 	case "$ARCH" in
 		x86*) apks="$apks grub-bios";;
 	esac

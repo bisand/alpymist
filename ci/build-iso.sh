@@ -21,7 +21,7 @@ echo ">>> [1/4] generating a local package signing key"
 abuild-keygen -a -i -n >/dev/null 2>&1
 
 echo ">>> [2/4] building Alpymist packages"
-for pkg in alpymistctl alpymist-install; do
+for pkg in alpymistctl alpymist-install alpymist-desktop; do
 	mkdir -p ~/ap/"$pkg"
 	cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
 	echo "    $pkg"
