@@ -1,0 +1,5 @@
+[Icon Theme]
+# Alpymist: the pointer every toolkit falls back to.
+Name=Default
+Comment=Alpymist default cursor
+Inherits=Breeze_Light

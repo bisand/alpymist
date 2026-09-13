@@ -6,3 +6,7 @@ XTerm*foreground: #eaf0f6
 XTerm*cursorColor: #7fb8d9
 XTerm*internalBorder: 8
 XTerm*selectToClipboard: true
+
+! The pointer, for applications that ask X rather than the cursor theme file.
+Xcursor.theme: Breeze_Light
+Xcursor.size: 24

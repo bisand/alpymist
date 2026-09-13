@@ -27,8 +27,10 @@ depends="
 	brightnessctl
 	dbus
 	flatpak
+	breeze-cursors
 	font-dejavu
 	font-fira-ttf
+	font-nerd-fonts-symbols
 	greetd
 	greetd-tuigreet
 	mesa-dri-gallium

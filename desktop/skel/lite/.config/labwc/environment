@@ -1,0 +1,4 @@
+# Alpymist: labwc's session environment. The keyboard layout comes from the
+# login (see /etc/alpymist/session.env); this is the pointer.
+XCURSOR_THEME=Breeze_Light
+XCURSOR_SIZE=24

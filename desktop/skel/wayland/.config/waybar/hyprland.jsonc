@@ -1,32 +1,88 @@
 // Alpymist: the top bar under Hyprland.
+//
+// Slim, solid and icon-led: the desktop is the wallpaper, not the bar. Details
+// live in tooltips rather than on screen, and every icon comes from the Nerd
+// Font symbols, with Fira Mono for text.
 {
-  "modules-left": ["custom/alpymist", "hyprland/workspaces"],
-  "modules-center": ["clock"],
-  "modules-right": ["tray", "network", "pulseaudio", "cpu", "memory", "battery"],
-  "hyprland/workspaces": { "format": "{id}", "on-click": "activate" },
-
   "layer": "top",
   "position": "top",
-  "height": 30,
-  "spacing": 6,
+  "height": 26,
+  "spacing": 0,
+
+  "modules-left": ["custom/alpymist", "hyprland/workspaces"],
+  "modules-center": ["clock"],
+  "modules-right": ["group/tray-drawer", "bluetooth", "network", "pulseaudio", "cpu", "memory", "battery", "custom/session"],
+
   "custom/alpymist": {
-    "format": "alpymist",
-    "tooltip": false,
+    "format": "󰋵",
+    "tooltip-format": "Applications",
     "on-click": "fuzzel"
   },
+
+  "hyprland/workspaces": {
+    "format": "{name}",
+    "on-click": "activate",
+    "persistent-workspaces": { "*": 5 }
+  },
+
   "clock": {
-    "format": "{:%a %d %b  %H:%M}",
-    "tooltip-format": "{:%A %d %B %Y}"
+    "format": "{:%a %H:%M}",
+    "format-alt": "{:%A %d %B %H:%M}",
+    "tooltip-format": "<tt>{calendar}</tt>"
   },
-  "cpu": { "format": "cpu {usage}%", "interval": 5 },
-  "memory": { "format": "mem {percentage}%", "interval": 10 },
+
+  "group/tray-drawer": {
+    "orientation": "inherit",
+    "drawer": { "transition-duration": 300, "children-class": "tray-item", "transition-left-to-right": false },
+    "modules": ["custom/tray-arrow", "tray"]
+  },
+  "custom/tray-arrow": { "format": "󰅁", "tooltip-format": "Background applications" },
+  "tray": { "spacing": 10 },
+
+  "bluetooth": {
+    "format": "󰂯",
+    "format-connected": "󰂱",
+    "format-disabled": "",
+    "format-off": "",
+    "format-no-controller": "",
+    "tooltip-format": "{controller_alias}",
+    "tooltip-format-connected": "{device_enumerate}"
+  },
+
   "network": {
-    "format-wifi": "wifi {signalStrength}%",
-    "format-ethernet": "wired",
-    "format-disconnected": "offline",
-    "tooltip-format": "{ifname} {ipaddr}"
+    "interval": 5,
+    "format-wifi": "󰖩",
+    "format-ethernet": "󰈀",
+    "format-disconnected": "󰖪",
+    "tooltip-format-wifi": "{essid}  {signalStrength}%\n{ipaddr}",
+    "tooltip-format-ethernet": "{ifname}\n{ipaddr}",
+    "tooltip-format-disconnected": "No network"
   },
-  "pulseaudio": { "format": "vol {volume}%", "format-muted": "muted", "on-click": "pavucontrol" },
-  "battery": { "format": "bat {capacity}%", "states": { "warning": 25, "critical": 10 } },
-  "tray": { "spacing": 8 }
+
+  "pulseaudio": {
+    "format": "{icon}",
+    "format-muted": "󰝟",
+    "format-icons": { "default": ["󰕿", "󰖀", "󰕾"] },
+    "tooltip-format": "{desc}  {volume}%",
+    "on-click": "pavucontrol",
+    "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+    "scroll-step": 5
+  },
+
+  "cpu": { "interval": 5, "format": "󰍛", "tooltip-format": "Processor  {usage}%" },
+  "memory": { "interval": 10, "format": "󰘚", "tooltip-format": "Memory  {percentage}%  ({used:0.1f}G of {total:0.1f}G)" },
+
+  "battery": {
+    "format": "{icon}",
+    "format-charging": "󰂄",
+    "format-icons": ["", "", "", "", ""],
+    "tooltip-format": "Battery {capacity}%  {timeTo}",
+    "states": { "warning": 20, "critical": 10 }
+  },
+
+  "custom/session": {
+    "format": "󰐥",
+    "tooltip-format": "Session",
+    "on-click": "sh -c 'case $(printf \"Lock\\nLog out\\nRestart\\nShut down\" | fuzzel --dmenu --lines 4) in Lock) swaylock -f -c 0b121e;; \"Log out\") hyprctl dispatch exit;; Restart) doas reboot;; \"Shut down\") doas poweroff;; esac'"
+  }
 }
