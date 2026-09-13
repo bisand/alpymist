@@ -74,6 +74,12 @@ pub struct SystemFacts {
 }
 
 impl SystemFacts {
+    /// The facts for the machine this is running on.
+    #[must_use]
+    pub fn default_for_host() -> Self {
+        gather()
+    }
+
     /// Whether `device` is, or contains, the mount source at `mounted`.
     ///
     /// Partitions are matched by prefix because `/dev/sda1` lives on `/dev/sda`
@@ -135,6 +141,68 @@ pub fn check(device: &str, confirmed: bool, facts: &SystemFacts) -> Result<(), V
     } else {
         Err(refusals)
     }
+}
+
+/// Read what the running system knows about its disks.
+///
+/// Linux-only, and best-effort by design: anything it fails to learn is left
+/// empty, and an empty fact makes [`check`] *more* likely to refuse, never
+/// less. A guard that silently weakens when it cannot read `/proc` would be
+/// worse than no guard at all.
+#[must_use]
+pub fn gather() -> SystemFacts {
+    SystemFacts {
+        existing_devices: block_devices(),
+        mounts: mounts(),
+        install_medium: install_medium(),
+    }
+}
+
+/// Whole disks, from `/sys/block`.
+fn block_devices() -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir("/sys/block") else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+        .map(|name| format!("/dev/{name}"))
+        .collect()
+}
+
+/// Everything currently mounted, as `(source, mount point)`.
+fn mounts() -> Vec<(String, String)> {
+    let Ok(text) = std::fs::read_to_string("/proc/mounts") else {
+        return Vec::new();
+    };
+    parse_mounts(&text)
+}
+
+/// Parse `/proc/mounts`. Split out so it can be tested against real content.
+fn parse_mounts(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let source = fields.next()?;
+            let target = fields.next()?;
+            // Only real block devices can be destroyed by writing to a disk.
+            source
+                .starts_with("/dev/")
+                .then(|| (source.to_string(), target.to_string()))
+        })
+        .collect()
+}
+
+/// The device Alpymist itself is running from, if it can be identified.
+///
+/// On a live image the ISO is mounted under `/media`, and the module loop is
+/// backed by a file on it. Either is enough to recognise the medium; both are
+/// checked because a machine booted in an unusual way may show only one.
+fn install_medium() -> Option<String> {
+    mounts()
+        .into_iter()
+        .find(|(_, target)| target.starts_with("/media") || target.starts_with("/.modloop"))
+        .map(|(source, _)| source)
 }
 
 #[cfg(test)]
@@ -242,6 +310,42 @@ mod tests {
         assert!(
             refusals.len() >= 2,
             "expected several reasons, got {refusals:?}"
+        );
+    }
+
+    #[test]
+    fn mounts_are_parsed_and_non_block_sources_ignored() {
+        let text = "\
+proc /proc proc rw,nosuid 0 0
+/dev/sr0 /media/sr0 iso9660 ro 0 0
+tmpfs /run tmpfs rw 0 0
+/dev/sda1 / ext4 rw,relatime 0 0
+";
+        let mounts = super::parse_mounts(text);
+        assert_eq!(
+            mounts,
+            vec![
+                ("/dev/sr0".to_string(), "/media/sr0".to_string()),
+                ("/dev/sda1".to_string(), "/".to_string()),
+            ],
+            "only block devices can be destroyed, so only they matter here"
+        );
+    }
+
+    #[test]
+    fn a_malformed_mounts_line_is_skipped_rather_than_panicking() {
+        assert!(super::parse_mounts("/dev/sda1\n\n   \n").is_empty());
+    }
+
+    /// If the facts cannot be read, the checks must get stricter, not laxer.
+    #[test]
+    fn empty_facts_refuse_everything() {
+        let empty = SystemFacts::default();
+        let refusals = check("/dev/sda", true, &empty).unwrap_err();
+        assert!(
+            refusals
+                .iter()
+                .any(|r| matches!(r, Refusal::Missing { .. }))
         );
     }
 

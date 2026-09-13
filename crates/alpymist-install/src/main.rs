@@ -10,6 +10,10 @@
 //!
 //! Arrows move, Space chooses, Enter continues, Esc goes back, F10 quits.
 //! Set `ALPYMIST_FONT` to a Fira Mono TTF to preview with the real typeface.
+//!
+//! On a real machine this installs. Set `ALPYMIST_DRY_RUN=1` to walk the whole
+//! wizard and have the install step report what it *would* run without
+//! touching a disk — which is how it is exercised in a VM and in tests.
 
 #![forbid(unsafe_code)]
 
@@ -42,7 +46,10 @@ mod run {
             // Any action can change the whole panel — the cursor, the button
             // states and the advisory line all move together — so there is
             // nothing to gain from tracking finer damage here.
-            if changed {
+            // The install reports progress on its own thread, so the screen has
+            // to keep repainting even when nobody has touched anything.
+            self.app.tick();
+            if changed || self.app.installing() {
                 damage.add_full();
             }
         }
@@ -70,7 +77,7 @@ mod run {
         };
 
         let size = Size::new(1280, 800);
-        let app = App::new(answers, size.width, size.height);
+        let app = App::with_mode(answers, size.width, size.height, crate::install_mode());
         eprintln!("{}", app.face.status.describe());
         match detected_tier {
             Some(tier) => eprintln!("hardware: reports {tier:?}"),
@@ -158,7 +165,7 @@ mod drm_run {
             detected_tier,
             ..Answers::default()
         };
-        let mut app = App::new(answers, size.width, size.height);
+        let mut app = App::with_mode(answers, size.width, size.height, crate::install_mode());
         eprintln!("{}", app.face.status.describe());
 
         let mut events: Vec<InputEvent> = Vec::new();
@@ -179,6 +186,7 @@ mod drm_run {
                     app.act(action);
                 }
             }
+            app.tick();
             if app.quitting {
                 return Ok(());
             }
@@ -238,6 +246,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "drm")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     drm_run::main()
+}
+
+/// Whether this run will really write to a disk.
+///
+/// A real machine installs; `ALPYMIST_DRY_RUN` makes it only report. The
+/// default here is the destructive one, because that is what an installer is
+/// for — but every *library* default is the opposite, so a disk can only be
+/// destroyed by running the installer, never by omitting an argument.
+#[cfg(any(feature = "winit", feature = "drm"))]
+fn install_mode() -> alpymist_install::execute::Mode {
+    use alpymist_install::execute::Mode;
+    if std::env::var_os("ALPYMIST_DRY_RUN").is_some() {
+        eprintln!("mode: dry run — nothing will be written to any disk");
+        Mode::DryRun
+    } else {
+        eprintln!("mode: install — the chosen disk will be erased once confirmed");
+        Mode::Commit
+    }
 }
 
 #[cfg(not(any(feature = "winit", feature = "drm")))]

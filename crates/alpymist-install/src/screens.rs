@@ -151,6 +151,16 @@ impl Row {
         matches!(self.kind, RowKind::Radio)
     }
 
+    /// A line of live progress. Read-only, like a note.
+    #[must_use]
+    pub fn progress(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            kind: RowKind::Static,
+            chosen: false,
+        }
+    }
+
     /// A row that is only there to be read.
     fn note(text: impl Into<String>) -> Self {
         Self {
@@ -293,6 +303,14 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             )),
             Row::note(format!("Network     {}", describe_network(a))),
             Row::note(format!("Disk        {}", describe_disk(a))),
+            Row::note(String::new()),
+            Row::note(match a.disk.as_ref() {
+                Some(plan) if plan.is_destructive() => format!(
+                    "Everything on {} will be erased when you continue.",
+                    plan.device()
+                ),
+                _ => "No disk will be erased.".into(),
+            }),
             Row::note(format!("Account     {} on {}", a.username, a.hostname)),
             Row::note(format!(
                 "Desktop     {}",

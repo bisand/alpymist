@@ -6,6 +6,8 @@
 
 use crate::answers::Answers;
 use crate::editing;
+use crate::execute::{Mode, Progress};
+use crate::plan;
 use crate::pointer;
 use crate::screens::{self, Row, TextTarget};
 use crate::wizard::{Step, Wizard};
@@ -23,6 +25,7 @@ use denise::painter::Pen;
 use denise::theme::Theme;
 use denise_render::Canvas;
 use denise_ui::cursor::Cursor;
+use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 /// Translate an input event into an action, or ignore it.
 ///
@@ -129,6 +132,21 @@ pub enum Action {
     ClickAt(i32, i32),
 }
 
+/// An install in flight.
+///
+/// The work runs on its own thread so the screen keeps redrawing — an
+/// installer that freezes while partitioning looks exactly like one that has
+/// hung, and this is the worst possible moment to look like that.
+struct Running {
+    events: Receiver<Progress>,
+    /// What has been reported, newest last.
+    lines: Vec<String>,
+    /// `(step, total)` currently running.
+    at: Option<(usize, usize)>,
+    /// Set when the plan finished, with whether it succeeded.
+    outcome: Option<bool>,
+}
+
 /// The installer's interactive state.
 pub struct App {
     /// Where we are and what has been answered.
@@ -163,12 +181,25 @@ pub struct App {
     pointer_sprite: Cursor,
     /// Colours for the cursor sprite.
     theme: Theme,
+    /// Whether an install would really be carried out.
+    mode: Mode,
+    /// The install, once it has started.
+    install: Option<Running>,
 }
 
 impl App {
     /// Start at the welcome screen.
     #[must_use]
     pub fn new(answers: Answers, width: u32, height: u32) -> Self {
+        Self::with_mode(answers, width, height, Mode::DryRun)
+    }
+
+    /// Start with an explicit install mode.
+    ///
+    /// `DryRun` is the default everywhere else, so nothing can destroy a disk
+    /// by omitting an argument.
+    #[must_use]
+    pub fn with_mode(answers: Answers, width: u32, height: u32, mode: Mode) -> Self {
         let palette = Palette::alpymist();
         let mut app = Self {
             wizard: Wizard::new(answers),
@@ -184,6 +215,8 @@ impl App {
             face: typeface::load(),
             pointer_sprite: new_cursor(),
             theme: denise::theme::DARK,
+            mode,
+            install: None,
         };
         app.snap_cursor();
         app
@@ -307,9 +340,12 @@ impl App {
                 self.reported.clear();
             }
             Action::Advance => match self.wizard.advance() {
-                Ok(_) => {
+                Ok(step) => {
                     self.reported.clear();
                     self.snap_cursor();
+                    if step == Step::Install {
+                        self.begin_install();
+                    }
                 }
                 Err(blockers) => {
                     self.reported = blockers.into_iter().map(|i| i.message).collect();
@@ -363,6 +399,118 @@ impl App {
         }
     }
 
+    /// Build the plan and start carrying it out.
+    ///
+    /// Failure to plan is reported on the screen rather than thrown away: the
+    /// reasons are things the user can go back and fix.
+    fn begin_install(&mut self) {
+        if self.install.is_some() {
+            return;
+        }
+        let plan = match plan::build(&self.wizard.answers) {
+            Ok(plan) => plan,
+            Err(why) => {
+                self.reported = vec![why.message()];
+                return;
+            }
+        };
+
+        let (tx, events) = channel();
+        let mode = self.mode;
+        // Its own thread, so the screen keeps redrawing while a disk is being
+        // partitioned. The plan is moved in; nothing is shared.
+        std::thread::spawn(move || {
+            crate::execute::run(&plan, mode, &mut |progress| {
+                // The receiver going away means the installer is shutting down,
+                // which is not this thread's problem.
+                let _ = tx.send(progress);
+            });
+        });
+
+        self.install = Some(Running {
+            events,
+            lines: Vec::new(),
+            at: None,
+            outcome: None,
+        });
+    }
+
+    /// Advance anything that happens on its own, without drawing.
+    ///
+    /// Separate from [`draw`](Self::draw) deliberately. Draining progress only
+    /// while rendering would tie the install's visible state to the redraw
+    /// rate, so a screen that stopped repainting would look like an install
+    /// that had frozen — and would be untestable without a framebuffer.
+    pub fn tick(&mut self) {
+        self.drain_install();
+    }
+
+    /// Take whatever the install thread has reported since the last frame.
+    fn drain_install(&mut self) {
+        let Some(running) = self.install.as_mut() else {
+            return;
+        };
+        loop {
+            match running.events.try_recv() {
+                Ok(Progress::Starting {
+                    index,
+                    total,
+                    title,
+                    ..
+                }) => {
+                    running.at = Some((index, total));
+                    running.lines.push(title);
+                }
+                Ok(Progress::Output(line)) => running.lines.push(format!("   {line}")),
+                Ok(Progress::Finished { .. }) => {}
+                Ok(Progress::Refused(reasons)) => {
+                    running.lines.push("Refused to write to this disk:".into());
+                    running
+                        .lines
+                        .extend(reasons.into_iter().map(|r| format!("   {r}")));
+                }
+                Ok(Progress::Done { ok }) => running.outcome = Some(ok),
+                Err(TryRecvError::Empty) => break,
+                // The thread finished and dropped the sender.
+                Err(TryRecvError::Disconnected) => {
+                    if running.outcome.is_none() {
+                        running.outcome = Some(false);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Whether an install is running and still has something to report.
+    #[must_use]
+    pub fn installing(&self) -> bool {
+        self.install.as_ref().is_some_and(|r| r.outcome.is_none())
+    }
+
+    /// What the Install screen should show right now.
+    #[must_use]
+    pub fn install_lines(&self) -> Vec<String> {
+        match self.install.as_ref() {
+            None => vec!["Preparing".into()],
+            Some(running) => {
+                let mut lines = Vec::new();
+                if let Some((index, total)) = running.at {
+                    lines.push(format!("Step {} of {total}", index + 1));
+                }
+                // Only the tail fits, and the tail is what matters.
+                let shown = running.lines.len().saturating_sub(12);
+                lines.extend(running.lines[shown..].iter().cloned());
+                match running.outcome {
+                    Some(true) => lines.push("Finished.".into()),
+                    Some(false) => lines.push("Stopped. Nothing further was done.".into()),
+                    None => {}
+                }
+                lines
+            }
+        }
+    }
+
     /// Recompose for a new screen size. Returns whether anything changed.
     pub fn resize(&mut self, width: u32, height: u32) -> bool {
         if self.size == (width, height) {
@@ -391,6 +539,7 @@ impl App {
     pub fn draw(&mut self, canvas: &mut Canvas<'_>) {
         let size = canvas.size();
         self.resize(size.width, size.height);
+        self.tick();
 
         let chrome = self.chrome;
         let palette = self.palette;
@@ -456,7 +605,16 @@ impl App {
     fn draw_rows(&mut self, pen: &mut Pen<'_>) {
         let chrome = self.chrome;
         let palette = self.palette;
-        let rows: Vec<Row> = screens::rows(self.wizard.step(), &self.wizard.answers);
+        // The Install screen reports what is actually happening rather than a
+        // fixed list of what was going to happen.
+        let rows: Vec<Row> = if self.wizard.step() == Step::Install {
+            self.install_lines()
+                .into_iter()
+                .map(Row::progress)
+                .collect()
+        } else {
+            screens::rows(self.wizard.step(), &self.wizard.answers)
+        };
 
         for (index, row) in rows.iter().enumerate() {
             if row.text.is_empty() {
@@ -1165,6 +1323,91 @@ mod tests {
         let (left, top, width, height) = chrome.row_rect(3); // Confirm password
         a.act(Action::ClickAt(left + width / 2, top + height / 2));
         assert_eq!(a.focused_field(), Some(TextTarget::PasswordConfirm));
+    }
+
+    /// A wizard with everything answered, sitting one step before Install.
+    fn at_confirm() -> App {
+        let answers = Answers {
+            keyboard: Some("no".into()),
+            timezone: Some("Europe/Oslo".into()),
+            network: Some(Network::Dhcp),
+            disk: Some(DiskPlan::WholeDisk {
+                device: "/dev/sdb".into(),
+                encrypt: false,
+            }),
+            disk_confirmed: true,
+            username: "andre".into(),
+            full_name: "André Biseth".into(),
+            password: "a good passphrase".into(),
+            password_confirm: "a good passphrase".into(),
+            hostname: "alpymist".into(),
+            detected_tier: Some(Tier::Lite),
+            ..Answers::default()
+        };
+        let mut a = App::new(answers, 1280, 800);
+        while a.wizard.step() != Step::Confirm {
+            a.act(Action::Advance);
+        }
+        a
+    }
+
+    #[test]
+    fn reaching_the_install_step_starts_the_install() {
+        let mut a = at_confirm();
+        a.act(Action::Advance);
+        assert_eq!(a.wizard.step(), Step::Install);
+        // Give the worker a moment; the point is that one exists at all.
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        a.tick();
+        let lines = a.install_lines();
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("Step ") || l.contains("would run")),
+            "the install never reported anything: {lines:?}"
+        );
+    }
+
+    /// The installer's own default must be the harmless one.
+    #[test]
+    fn an_app_built_without_saying_otherwise_does_not_touch_a_disk() {
+        let mut a = at_confirm();
+        a.act(Action::Advance);
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        a.tick();
+        let lines = a.install_lines().join("\n");
+        assert!(
+            lines.contains("would run"),
+            "a default App must dry-run, but it reported: {lines}"
+        );
+    }
+
+    #[test]
+    fn an_install_that_cannot_be_planned_says_why_instead_of_starting() {
+        let mut a = at_confirm();
+        // Encryption has no plan yet; the wizard should report that, not hang.
+        a.wizard.answers.disk = Some(DiskPlan::WholeDisk {
+            device: "/dev/sdb".into(),
+            encrypt: true,
+        });
+        a.act(Action::Advance);
+        assert!(!a.reported.is_empty(), "no reason was given");
+        assert!(a.reported[0].to_lowercase().contains("encryption"));
+    }
+
+    #[test]
+    fn the_confirm_screen_names_the_disk_that_will_be_erased() {
+        let a = at_confirm();
+        let text: String = screens::rows(Step::Confirm, &a.wizard.answers)
+            .iter()
+            .map(|r| r.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("/dev/sdb"), "the target is not named: {text}");
+        assert!(
+            text.contains("erased"),
+            "the consequence is not stated: {text}"
+        );
     }
 
     #[test]
