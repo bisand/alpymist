@@ -51,6 +51,8 @@ mkdir -p "$tmp"/etc/apk
 makefile root:root 0644 "$tmp"/etc/apk/world <<EOF
 alpine-base
 alpymistctl
+alpymist-install
+alpymist-install-openrc
 mesa-egl
 mesa-gles
 mesa-dri-gallium
@@ -97,6 +99,7 @@ rc_add bootmisc boot
 rc_add syslog boot
 rc_add networking boot
 rc_add alpymist-probe boot
+rc_add alpymist-install default
 
 rc_add mount-ro shutdown
 rc_add killprocs shutdown

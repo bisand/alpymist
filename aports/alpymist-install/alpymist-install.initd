@@ -1,0 +1,41 @@
+#!/sbin/openrc-run
+
+description="Alpymist graphical installer"
+
+# The installer needs a display and input, so it waits for the kernel to have
+# finished finding them. It does not need the network: an offline install is a
+# supported outcome, not a degraded one.
+depend() {
+	need localmount
+	after modules hwdrivers alpymist-probe
+}
+
+start() {
+	ebegin "Starting the Alpymist installer"
+
+	# The installer takes the VT out of text mode itself, but the kernel's own
+	# cursor is drawn before that happens and would blink through the first
+	# frame. Turning it off here costs nothing when it is already off.
+	if [ -w /sys/class/graphics/fbcon/cursor_blink ]; then
+		echo 0 > /sys/class/graphics/fbcon/cursor_blink
+	fi
+
+	# start-stop-daemon rather than a bare `&`: backgrounding by hand reports
+	# the success of the shell forking, not of the installer starting, so a
+	# binary that dies immediately would still be announced as started.
+	start-stop-daemon --start \
+		--exec /usr/bin/alpymist-install \
+		--pidfile /run/alpymist-install.pid --make-pidfile \
+		--background \
+		--stdout /var/log/alpymist-install.log \
+		--stderr /var/log/alpymist-install.log
+	eend $? "Failed to start the installer; see /var/log/alpymist-install.log"
+}
+
+stop() {
+	ebegin "Stopping the Alpymist installer"
+	start-stop-daemon --stop \
+		--exec /usr/bin/alpymist-install \
+		--pidfile /run/alpymist-install.pid
+	eend $?
+}

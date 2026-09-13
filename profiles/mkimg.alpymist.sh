@@ -21,6 +21,16 @@ profile_alpymist() {
 	# font-fira-ttf carries Fira Mono, which the splash and installer draw with.
 	# Without it they fall back to Denise's built-in bitmap and still read
 	# correctly, including Norwegian — just more crudely.
-	apks="$apks alpymistctl mesa-egl mesa-gles mesa-dri-gallium font-fira-ttf"
+	apks="$apks alpymistctl alpymist-install alpymist-install-openrc"
+	apks="$apks mesa-egl mesa-gles mesa-dri-gallium font-fira-ttf"
+	# Boot quietly into the installer rather than into a login prompt.
+	#
+	# Deliberately *not* console=tty2. Redirecting the console to an unused VT
+	# does hide boot messages, but it also silences the serial console — which
+	# is the only way to see what a machine did when it fails to come up, and
+	# the only way this image can be tested under QEMU at all. Suppression is
+	# left to quiet/loglevel, and the installer blanks the text it is drawing
+	# over by putting the VT into graphics mode itself.
+	initfs_cmdline="$initfs_cmdline quiet loglevel=3 vt.global_cursor_default=0"
 	apkovl="genapkovl-alpymist.sh"
 }

@@ -1,0 +1,53 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-install
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="Alpymist graphical installer, drawn straight to DRM/KMS"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+makedepends="cargo"
+# font-fira-ttf is a runtime suggestion rather than a dependency: without it the
+# installer falls back to Denise's built-in bitmap, which still reads correctly
+# in Norwegian. It is in the image regardless, via the mkimage profile.
+depends=""
+install=""
+subpackages="$pkgname-openrc"
+options="!check"  # the test suite runs in CI, not in the package build
+source="alpymist-install.initd"
+builddir="$srcdir"
+
+prepare() {
+	# The workspace is bind-mounted at /src by the builder container. Copy the
+	# whole tree rather than a list of members: cargo needs every workspace
+	# member's manifest to resolve.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	# No default features: the desktop window backend must not be linked into
+	# something that runs on a bare console.
+	cargo build --release --locked --offline \
+		-p alpymist-install --no-default-features --features drm \
+		|| cargo build --release --locked \
+			-p alpymist-install --no-default-features --features drm
+}
+
+package() {
+	install -Dm755 "$builddir"/target/release/alpymist-install \
+		"$pkgdir"/usr/bin/alpymist-install
+	install -Dm755 "$srcdir"/alpymist-install.initd \
+		"$pkgdir"/etc/init.d/alpymist-install
+}
+
+# Filled in by `abuild checksum` at build time. The source is a file in this
+# repository rather than a remote tarball, so git is what guarantees it has not
+# changed; a checksum committed here would only ever restate that, and would
+# have to be regenerated on every edit to the init script.
+sha512sums=""

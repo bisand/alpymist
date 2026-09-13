@@ -21,9 +21,13 @@ echo ">>> [1/4] generating a local package signing key"
 abuild-keygen -a -i -n >/dev/null 2>&1
 
 echo ">>> [2/4] building Alpymist packages"
-mkdir -p ~/ap/alpymistctl
-cp /src/aports/alpymistctl/APKBUILD ~/ap/alpymistctl/
-( cd ~/ap/alpymistctl && abuild -r >/dev/null )
+for pkg in alpymistctl alpymist-install; do
+	mkdir -p ~/ap/"$pkg"
+	cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
+	echo "    $pkg"
+	# Local sources, so the checksum is computed here rather than committed.
+	( cd ~/ap/"$pkg" && abuild checksum >/dev/null && abuild -r >/dev/null )
+done
 
 echo ">>> [3/4] fetching Alpine image scripts ($ALPINE_BRANCH)"
 if [ ! -d /tmp/aports ]; then

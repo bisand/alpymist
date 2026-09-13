@@ -77,6 +77,8 @@ dependencies = [
  "alpymist-hwprobe",
  "alpymist-ui",
  "denise",
+ "denise-drm",
+ "denise-evdev",
  "denise-render",
  "denise-winit",
  "png",
@@ -231,6 +233,18 @@ name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
+
+[[package]]
+name = "bitvec"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddcec3d12c579d40898fe0a9a358a803c23e9c52ca3c425707f81c9436211837"
+dependencies = [
+ "funty",
+ "radium",
+ "tap",
+ "wyz",
+]
 
 [[package]]
 name = "block2"
@@ -439,9 +453,9 @@ dependencies = [
 
 [[package]]
 name = "crc32fast"
-version = "1.5.1"
+version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8498c871161e1742aaa9d52551b2d6ebdd4c3d45a3be423e3728f33b955be550"
+checksum = "01a7799fd6b852db0e61728dde9a204c423b44d689dbd432522543614b490e78"
 dependencies = [
  "cfg-if",
 ]
@@ -469,18 +483,18 @@ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
 name = "denise"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3723086fc67df7045184218556ae774f39884971926c9455c5f1d4f467b305c2"
+checksum = "e8accd11881d8ce2526d1acfb54022ff2645306adca42da8adb1477fc98a5099"
 dependencies = [
  "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "denise-drm"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4873472d6108b3b68dc9c6064ee322f4b1d12871833e5b1b0d80d7037921953"
+checksum = "198f547fd6925e69ec6b528bbf13e973a8af00d46c3593c1f720c78cc5e08361"
 dependencies = [
  "denise",
  "drm 0.15.0",
@@ -490,10 +504,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "denise-fbdev"
-version = "0.24.0"
+name = "denise-evdev"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "befd5bf8061b5cc11ebbdf104d801ccc4f6edab69a1d3a5e482158a728f864d3"
+checksum = "7a80b771302f7c6a138565276d103345869204f57f2193c96c891459a6f3fbd4"
+dependencies = [
+ "denise",
+ "denise-layout",
+ "evdev",
+ "rustix 1.1.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "denise-fbdev"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83b562f33c229a973c99af6d461e74779c5df9bfe2220106cb82b28e08d1c31e"
 dependencies = [
  "bytemuck",
  "denise",
@@ -502,10 +529,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "denise-macos"
-version = "0.24.0"
+name = "denise-layout"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "546e729c014df62f76f37cfd8b606734212d91e8fe75f43408f80a26d364fefe"
+checksum = "77b4cbf8703e8530a3034daa6f1085a57a325755eefab7e0e0895457e6899451"
+dependencies = [
+ "denise",
+]
+
+[[package]]
+name = "denise-macos"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "207172945e97cc99af80dc134b27ddae679ad4d62cf026d0e850480319c154a2"
 dependencies = [
  "denise",
  "objc2 0.6.4",
@@ -520,18 +556,18 @@ dependencies = [
 
 [[package]]
 name = "denise-render"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3db9c0a369831bef6666745ee5c27183624a34ac68f20a7c21d20637f8184aab"
+checksum = "fbf06b8d8ed1ce4916d610f766cfbd559bbf5249e9e3eccecf9c2e8565c92de3"
 dependencies = [
  "denise",
 ]
 
 [[package]]
 name = "denise-text"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "611e9e747e1bedfd631975420f5bf06c79d52a123bcc95a3f4bb71d463aec98c"
+checksum = "8be62231c885c8840386769c3137180172ecc7588e2d3f35ceda07c467a4b921"
 dependencies = [
  "denise",
  "denise-render",
@@ -540,9 +576,9 @@ dependencies = [
 
 [[package]]
 name = "denise-winit"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d647f859c3ef25c9bc164fa60095a8bed668363a449a98065145efe62e643b2"
+checksum = "a09acd176ccd66c7334a57d7fa91416be338d795eb3ed46d29ee0b7171738d52"
 dependencies = [
  "denise",
  "denise-macos",
@@ -672,6 +708,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "evdev"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25b686663ba7f08d92880ff6ba22170f1df4e83629341cba34cf82cd65ebea99"
+dependencies = [
+ "bitvec",
+ "cfg-if",
+ "libc",
+ "nix",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -745,6 +793,12 @@ name = "foreign-types-shared"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
+
+[[package]]
+name = "funty"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 
 [[package]]
 name = "futures-core"
@@ -1064,6 +1118,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee6cda3051665f1fb8d9e08fc35c96d5a244fb1be711a03b71118828afc9a873"
 dependencies = [
  "jni-sys 0.3.1",
+]
+
+[[package]]
+name = "nix"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
+dependencies = [
+ "bitflags 2.13.2",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
 ]
 
 [[package]]
@@ -1524,6 +1590,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
+name = "radium"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
+
+[[package]]
 name = "raw-window-handle"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1815,6 +1887,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "tap"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1983,9 +2061,9 @@ dependencies = [
 
 [[package]]
 name = "wasip2"
-version = "1.0.1+wasi-0.2.4"
+version = "1.0.4+wasi-0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0562428422c63773dad2c345a1882263bbf4d65cf3f42e90921f787ef5ad58e7"
+checksum = "b67efb37e106e55ce722a510d6b5f9c17f083e5fc79afc2badeb12cc313d9487"
 dependencies = [
  "wit-bindgen",
 ]
@@ -2095,9 +2173,9 @@ dependencies = [
 
 [[package]]
 name = "wayland-protocols"
-version = "0.32.12"
+version = "0.32.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "563a85523cade2429938e790815fd7319062103b9f4a2dc806e9b53b95982d8f"
+checksum = "23d0c813de3daa2ed6520af85a3bd49b0e722a3078506899aa9686fea58dc4b6"
 dependencies = [
  "bitflags 2.13.2",
  "wayland-backend",
@@ -2343,9 +2421,18 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen"
-version = "0.46.0"
+version = "0.57.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
+checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+
+[[package]]
+name = "wyz"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed"
+dependencies = [
+ "tap",
+]
 
 [[package]]
 name = "x11-dl"

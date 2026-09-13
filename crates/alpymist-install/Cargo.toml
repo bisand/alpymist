@@ -22,10 +22,14 @@ alpymist-ui = { workspace = true, features = ["render"] }
 denise = { workspace = true }
 denise-render = { workspace = true }
 denise-winit = { workspace = true, optional = true }
+denise-drm = { workspace = true, optional = true }
+denise-evdev = { workspace = true, optional = true }
 
 [features]
 default = ["winit"]
 winit = ["dep:denise-winit"]
+# The real target: KMS plus evdev, no compositor and no window system.
+drm = ["dep:denise-drm", "dep:denise-evdev"]
 
 [dev-dependencies]
 png = "0.17"
