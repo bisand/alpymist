@@ -130,7 +130,9 @@ _wayland() {
 
 _full() {
 	pkgdesc="Alpymist desktop, Full tier: Hyprland"
-	depends="$pkgname-wayland=$pkgver-r$pkgrel hyprland"
+	# Ghostty on this tier only: it draws through GTK4 and wants the GPU the
+	# Full tier assumes. The other tiers keep foot, which is fastest on a CPU.
+	depends="$pkgname-wayland=$pkgver-r$pkgrel ghostty hyprland"
 	install -Dm644 "$builddir"/desktop/greetd/alpymist-full.toml \
 		"$subpkgdir"/etc/greetd/alpymist-full.toml
 	_skel full "$subpkgdir"

@@ -21,7 +21,9 @@ echo ">>> [1/4] generating a local package signing key"
 abuild-keygen -a -i -n >/dev/null 2>&1
 
 echo ">>> [2/4] building Alpymist packages"
-for pkg in alpymistctl alpymist-install alpymist-desktop; do
+# ghostty is a backport from Alpine edge/testing, where it is packaged but not
+# yet in a stable branch; `cargo xtask ghostty-check` reports when that changes.
+for pkg in alpymistctl alpymist-install alpymist-desktop ghostty; do
 	mkdir -p ~/ap/"$pkg"
 	cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
 	echo "    $pkg"

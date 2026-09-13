@@ -52,6 +52,14 @@ jobs:
       # x86_64 is the architecture Alpymist actually targets — old laptops are
       # overwhelmingly x86. Development happens on aarch64 Macs, so this job is
       # what stops the real target from rotting (ADR 0003).
+      - uses: dtolnay/rust-toolchain@1.96
+
+      # Ghostty is not in a stable Alpine branch, so we carry a copy of their
+      # testing aport. This says when theirs has moved, or when ghostty has
+      # reached a stable branch and the backport can go.
+      - name: Check the ghostty backport
+        run: cargo run -p xtask -- ghostty-check
+
       - name: Build the builder container
         run: docker build -t alpymist-builder builder
 
@@ -73,8 +81,6 @@ jobs:
           else
             echo "no /dev/kvm on this runner; the boot will be emulated"
           fi
-
-      - uses: dtolnay/rust-toolchain@1.96
 
       # Potato, not Lite: virtio-gpu without virgl gives the guest no hardware
       # GL, so Mesa falls back to llvmpipe and the tier logic correctly refuses

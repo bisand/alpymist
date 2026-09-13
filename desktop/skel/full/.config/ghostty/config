@@ -1,0 +1,36 @@
+# Alpymist: Ghostty, the terminal on the Full tier.
+#
+# Yours to change: the installer copied this into your home. The other tiers
+# use foot, which is faster where there is no GPU to draw with.
+
+font-family = Fira Mono
+font-size = 11
+
+window-padding-x = 10
+window-padding-y = 8
+window-decoration = false
+confirm-close-surface = false
+
+# The installer's palette.
+background = 0b121e
+foreground = eaf0f6
+cursor-color = 7fb8d9
+selection-background = 3a4c63
+selection-foreground = eaf0f6
+
+palette = 0=#070c14
+palette = 1=#d98f7f
+palette = 2=#9fcf9f
+palette = 3=#d9a07f
+palette = 4=#7fb8d9
+palette = 5=#b79fd9
+palette = 6=#afc2d6
+palette = 7=#9aabbd
+palette = 8=#3a4c63
+palette = 9=#e6a89a
+palette = 10=#b8e0b8
+palette = 11=#e6bb9a
+palette = 12=#a3cde6
+palette = 13=#cbb6e6
+palette = 14=#d0dde9
+palette = 15=#eaf0f6

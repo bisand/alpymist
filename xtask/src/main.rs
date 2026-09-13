@@ -6,6 +6,7 @@
 
 #![forbid(unsafe_code)]
 
+mod ghostty;
 mod installer_data;
 mod qemu;
 mod serial;
@@ -42,6 +43,15 @@ enum Command {
         /// Print the whole serial log, not just the probe report.
         #[arg(long)]
         verbose: bool,
+    },
+    /// Check the ghostty backport against Alpine's aport.
+    ///
+    /// Ghostty is not in a stable Alpine branch, so we carry a copy of their
+    /// testing aport. This says when theirs has moved.
+    GhosttyCheck {
+        /// Our copy.
+        #[arg(long, default_value = "aports/ghostty/APKBUILD")]
+        apkbuild: PathBuf,
     },
     /// Regenerate the installer's keyboard layout and time zone lists.
     ///
@@ -85,6 +95,7 @@ fn main() -> Result<()> {
             expect_tier.as_deref(),
             verbose,
         ),
+        Command::GhosttyCheck { apkbuild } => ghostty::check(&apkbuild),
         Command::InstallerData {
             bkeymaps,
             zoneinfo,
