@@ -4,6 +4,7 @@ members = [
     "crates/alpymist-core",
     "crates/alpymist-glesprobe",
     "crates/alpymist-install",
+    "crates/alpymist-menu",
     "crates/alpymist-splash",
     "crates/alpymist-ui",
     "crates/alpymist-wallpaper",
@@ -55,3 +56,13 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# The menu is judged on how soon it is on screen and how quickly it follows a
+# keystroke, and nearly all of that time is spent rasterising glyphs. Size is
+# the wrong trade there; everything else keeps it.
+[profile.release.package.alpymist-menu]
+opt-level = 3
+[profile.release.package.denise-render]
+opt-level = 3
+[profile.release.package.denise-text]
+opt-level = 3

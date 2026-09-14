@@ -16,8 +16,8 @@
   "custom/alpymist": {
     // The mark is an image, drawn by our own code; see the stylesheet.
     "format": " ",
-    "tooltip-format": "Applications",
-    "on-click": "fuzzel"
+    "tooltip-format": "Menu",
+    "on-click": "alpymist-menu"
   },
 
   "hyprland/workspaces": {
@@ -84,6 +84,6 @@
   "custom/session": {
     "format": "󰐥",
     "tooltip-format": "Session",
-    "on-click": "sh -c 'case $(printf \"Lock\\nLog out\\nRestart\\nShut down\" | fuzzel --dmenu --lines 4) in Lock) swaylock -f -c 0b121e;; \"Log out\") hyprctl dispatch exit;; Restart) doas reboot;; \"Shut down\") doas poweroff;; esac'"
+    "on-click": "alpymist-menu system"
   }
 }

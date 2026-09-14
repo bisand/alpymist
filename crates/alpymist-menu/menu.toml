@@ -1,0 +1,130 @@
+# Alpymist menu.
+#
+# To make it yours, save a copy as ~/.config/alpymist/menu.toml — the Setup ›
+# Config › Menu entry does that for you — and change anything. That file is
+# used instead of this one, whole; a menu it does not define does not exist.
+#
+# Each [menu.NAME] is a submenu. An entry either runs a command (exec) or opens
+# another menu by name (menu). `apps` is built in: every installed application.
+#
+#   name      what the entry is called
+#   icon      a glyph from the icon font — https://www.nerdfonts.com/cheat-sheet
+#   detail    dimmer text after the name
+#   keywords  other words to find it by: keywords = ["poweroff", "halt"]
+#   exec      run through /bin/sh, so pipes, $VARIABLES and ~ all work
+#   terminal  run exec in a terminal
+#   hold      with terminal, keep it open until Enter
+#   menu      open [menu.NAME]
+#
+# Run `alpymist-menu NAME` to open straight at a submenu, and
+# `alpymist-menu --check` to find out whether this file parses.
+
+# How `terminal = true` runs a command: the terminal, then whatever flags come
+# before the command. Left out, the menu uses $TERMINAL, then ghostty, then foot.
+# terminal = ["ghostty", "-e"]
+
+[appearance]
+# Every key is optional. Sizes are logical pixels; colours are #rrggbb or #rrggbbaa.
+# font = "/usr/share/fonts/TTF/FiraSans-Regular.ttf"
+# icon_font = "/usr/share/fonts/nerd-fonts/SymbolsNerdFontMono-Regular.ttf"
+# font_size = 16
+# width = 560
+# rows = 9
+# background = "#0b121ef2"
+# border = "#7fb8d9"
+# text = "#eaf0f6"
+# dim = "#9aabbd"
+# accent = "#7fb8d9"
+# selection = "#3a4c63"
+
+[menu.root]
+title = "Alpymist"
+items = [
+  { name = "Apps", icon = "󰀻", menu = "apps", keywords = ["launch", "applications", "programs"] },
+  { name = "Capture", icon = "󰄀", menu = "capture", keywords = ["screenshot"] },
+  { name = "Toggle", icon = "󰔡", menu = "toggle" },
+  { name = "Setup", icon = "", menu = "setup", keywords = ["settings", "configure"] },
+  { name = "Install", icon = "󰏗", menu = "install" },
+  { name = "Remove", icon = "󰆴", menu = "remove", keywords = ["uninstall"] },
+  { name = "Update", icon = "󰚰", menu = "update", keywords = ["upgrade"] },
+  { name = "Learn", icon = "󰧑", menu = "learn", keywords = ["help", "documentation"] },
+  { name = "About", icon = "", exec = "alpymistctl probe", terminal = true, hold = true, detail = "What this machine can drive" },
+  { name = "System", icon = "󰐥", menu = "system", keywords = ["power", "session"] },
+]
+
+[menu.capture]
+title = "Capture"
+items = [
+  { name = "Region to clipboard", icon = "󰩭", exec = "grim -g \"$(slurp)\" - | wl-copy --type image/png" },
+  { name = "Region to file", icon = "󰩭", exec = "grim -g \"$(slurp)\" \"$HOME/screenshot-$(date +%Y%m%d-%H%M%S).png\"" },
+  { name = "Screen to file", icon = "󰍹", exec = "grim \"$HOME/screenshot-$(date +%Y%m%d-%H%M%S).png\"" },
+  { name = "Screen to clipboard", icon = "󰍹", exec = "grim - | wl-copy --type image/png" },
+]
+
+[menu.toggle]
+title = "Toggle"
+items = [
+  { name = "Top bar", icon = "󰍜", exec = "pkill -x waybar || waybar -c ~/.config/waybar/hyprland.jsonc -s ~/.config/waybar/style.css", keywords = ["waybar", "panel"] },
+  { name = "Do not disturb", icon = "󰂛", exec = "makoctl mode -t do-not-disturb", keywords = ["notifications", "silence"] },
+]
+
+[menu.setup]
+title = "Setup"
+items = [
+  { name = "Audio", icon = "󰕾", exec = "pavucontrol", keywords = ["sound", "volume", "speakers", "microphone"] },
+  { name = "Config", icon = "", menu = "config", keywords = ["edit", "dotfiles"] },
+  { name = "Reload desktop", icon = "󰑓", exec = "hyprctl reload", keywords = ["hyprland"] },
+]
+
+[menu.config]
+title = "Config"
+items = [
+  { name = "Hyprland", icon = "", exec = "${EDITOR:-nano} ~/.config/hypr/hyprland.conf", terminal = true, keywords = ["keybindings", "windows"] },
+  { name = "Top bar", icon = "󰍜", exec = "${EDITOR:-nano} ~/.config/waybar/hyprland.jsonc ~/.config/waybar/style.css", terminal = true, keywords = ["waybar"] },
+  { name = "Menu", icon = "󰍉", exec = "f=${XDG_CONFIG_HOME:-$HOME/.config}/alpymist/menu.toml; [ -e \"$f\" ] || { mkdir -p \"${f%/*}\" && alpymist-menu --print-config > \"$f\"; }; ${EDITOR:-nano} \"$f\"", terminal = true },
+  { name = "Terminal", icon = "", exec = "${EDITOR:-nano} ~/.config/ghostty/config", terminal = true, keywords = ["ghostty"] },
+  { name = "Shell", icon = "", exec = "${EDITOR:-nano} ~/.zshrc", terminal = true, keywords = ["zsh"] },
+  { name = "Prompt", icon = "\U000F14DE", exec = "${EDITOR:-nano} ~/.config/starship.toml", terminal = true, keywords = ["starship"] },
+  { name = "Notifications", icon = "󰂚", exec = "${EDITOR:-nano} ~/.config/mako/config", terminal = true, keywords = ["mako"] },
+]
+
+[menu.install]
+title = "Install"
+items = [
+  { name = "Application from Flathub", icon = "󰏗", exec = "printf 'Search Flathub for: '; read -r q && flatpak search \"$q\" && printf '\\nApplication ID to install, or Enter to skip: ' && read -r id && [ -n \"$id\" ] && flatpak install flathub \"$id\"", terminal = true, hold = true, keywords = ["flatpak"] },
+  { name = "Alpine package", icon = "", exec = "printf 'Package to install: '; read -r p && [ -n \"$p\" ] && doas apk add $p", terminal = true, hold = true, keywords = ["apk"] },
+]
+
+[menu.remove]
+title = "Remove"
+items = [
+  { name = "Flatpak application", icon = "󰏗", exec = "flatpak list --app --columns=application,name && printf '\\nApplication ID to remove, or Enter to skip: ' && read -r id && [ -n \"$id\" ] && flatpak uninstall \"$id\"", terminal = true, hold = true, keywords = ["flatpak", "uninstall"] },
+  { name = "Alpine package", icon = "", exec = "printf 'Package to remove: '; read -r p && [ -n \"$p\" ] && doas apk del $p", terminal = true, hold = true, keywords = ["apk", "uninstall"] },
+]
+
+[menu.update]
+title = "Update"
+items = [
+  { name = "Everything", icon = "󰚰", exec = "doas apk upgrade -U && flatpak update -y", terminal = true, hold = true },
+  { name = "System packages", icon = "", exec = "doas apk upgrade -U", terminal = true, hold = true, keywords = ["apk", "alpine"] },
+  { name = "Flatpak applications", icon = "󰏗", exec = "flatpak update", terminal = true, hold = true },
+]
+
+[menu.learn]
+title = "Learn"
+items = [
+  { name = "Keybindings", icon = "", exec = "grep -E '^bindm? *=' ~/.config/hypr/hyprland.conf | sed 's/^bindm\\? *= *//' | less", terminal = true, keywords = ["shortcuts", "keys"] },
+  { name = "Alpymist", icon = "󰊤", exec = "${BROWSER:-librewolf} https://github.com/bisand/alpymist" },
+  { name = "Hyprland wiki", icon = "", exec = "${BROWSER:-librewolf} https://wiki.hypr.land" },
+  { name = "Alpine wiki", icon = "", exec = "${BROWSER:-librewolf} https://wiki.alpinelinux.org" },
+  { name = "Flathub", icon = "󰏗", exec = "${BROWSER:-librewolf} https://flathub.org" },
+]
+
+[menu.system]
+title = "System"
+items = [
+  { name = "Lock", icon = "", exec = "swaylock -f -c 0b121e", keywords = ["screen"] },
+  { name = "Log out", icon = "󰍃", exec = "case \"$XDG_CURRENT_DESKTOP\" in Hyprland) hyprctl dispatch exit ;; *) labwc --exit ;; esac", keywords = ["exit", "session", "sign out"] },
+  { name = "Restart", icon = "󰜉", exec = "doas reboot", keywords = ["reboot"] },
+  { name = "Shut down", icon = "󰐥", exec = "doas poweroff", keywords = ["poweroff", "halt", "turn off"] },
+]

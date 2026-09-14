@@ -1,0 +1,31 @@
+[package]
+name = "alpymist-menu"
+description = "The Alpymist menu: a searchable, configurable launcher and system menu, drawn with Denise on a Wayland layer surface."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Fonts parsed lazily; see src/font.rs for why not Denise's fontdue source.
+ab_glyph = { version = "0.2", default-features = false, features = ["std"] }
+alpymist-ui = { workspace = true }
+denise = { workspace = true }
+denise-render = { workspace = true }
+denise-text = { workspace = true }
+serde = { workspace = true }
+toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
+
+# The window is a wlr layer surface over wl_shm: no GPU context to create and no
+# toolkit to start, which is most of why it is on screen within a frame or two.
+# Linux only, so the logic and the offscreen preview still build on a Mac.
+[target.'cfg(target_os = "linux")'.dependencies]
+bytemuck = "1"
+smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop", "xkbcommon"] }
+
+[dev-dependencies]
+png = "0.17"
+
+[lints]
+workspace = true
