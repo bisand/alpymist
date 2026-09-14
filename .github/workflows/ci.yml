@@ -13,7 +13,7 @@ jobs:
     name: Rust (lint + test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Pinned to match Alpine 3.24's Rust and rust-toolchain.toml (ADR 0005).
       - uses: dtolnay/rust-toolchain@1.96
         with:
