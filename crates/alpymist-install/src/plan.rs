@@ -368,8 +368,13 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         )
         .with_input(Input::Text(table))
         .destructive(),
-        // mdev creates the new partition nodes; setup-disk does the same.
-        Step::new("Waiting for the new partitions", &["mdev", "-s"]),
+        // The kernel creates the new partition nodes; waiting for udev to
+        // finish with them means they exist before anything is written to
+        // them. The live image runs udev, so mdev must not be run beside it.
+        Step::new(
+            "Waiting for the new partitions",
+            &["udevadm", "settle", "--timeout=15"],
+        ),
         Step::new("Formatting the boot partition", &mkfs_boot).destructive(),
     ];
 
@@ -490,10 +495,18 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
             &["chroot", ROOT, "rc-update", "add", service, runlevel],
         ));
     }
+    // The live image no longer runs mdev, so the runlevels setup-disk copied
+    // should not name it; but a system that did would run two device managers
+    // at once. Removing the links, rather than rc-update del, is certain either
+    // way: rc-update del fails on a service that is not there.
     for service in ["mdev", "hwdrivers"] {
         steps.push(Step::new(
             &format!("Retiring {service}"),
-            &["chroot", ROOT, "rc-update", "del", service, "sysinit"],
+            &[
+                "rm",
+                "-f",
+                &format!("{ROOT}/etc/runlevels/sysinit/{service}"),
+            ],
         ));
     }
     // The live image's root has no password, and setup-disk copies its
@@ -1103,6 +1116,18 @@ mod tests {
             "mdev must go only after udev is in place"
         );
         assert!(!step(&plan, "Retiring mdev").may_fail);
+        assert_eq!(
+            step(&plan, "Retiring mdev").argv,
+            ["rm", "-f", "/mnt/etc/runlevels/sysinit/mdev"],
+            "rc-update del fails when the live image already had no mdev"
+        );
+        assert!(
+            !plan
+                .steps
+                .iter()
+                .any(|s| s.argv.first().is_some_and(|p| p == "mdev")),
+            "mdev must not run beside the live image's udev"
+        );
     }
 
     /// setup-disk takes firmware only from the medium; this is what fetches

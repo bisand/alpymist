@@ -103,7 +103,10 @@ description="Probe the hardware and record which Alpymist desktop tier it suppor
 
 depend() {
 	need localmount
-	after modules hwdrivers
+	# udev-settle: every driver udev is going to load has loaded, the GPU's
+	# included. Probing before that reports a machine with no accelerated
+	# driver, and a tier lower than it can drive.
+	after modules udev-settle
 }
 
 start() {
@@ -121,8 +124,17 @@ EOF
 
 rc_add devfs sysinit
 rc_add dmesg sysinit
-rc_add mdev sysinit
-rc_add hwdrivers sysinit
+# udev, not BusyBox mdev and hwdrivers. hwdrivers loads drivers for the
+# devices present when it runs, once. Devices that appear only after another
+# driver loads were never looked at: an I2C touchpad, the norm on small
+# laptops, exists only once its I2C controller's driver is up, so the installer
+# on an Asus X206H had no pointer. udev loads a driver for every device as it
+# appears, however it got there. It is also what the installed system uses, so
+# the live image now finds hardware the way the installed one will.
+rc_add udev sysinit
+rc_add udev-trigger sysinit
+rc_add udev-settle sysinit
+rc_add udev-postmount default
 # modloop mounts /lib/modules from the image. This overlay replaces the whole
 # runlevel set, so leaving it out means only drivers built into the initramfs
 # ever load — which is how the installer booted with a keyboard and a mouse

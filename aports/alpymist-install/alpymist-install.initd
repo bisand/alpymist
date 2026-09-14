@@ -2,12 +2,13 @@
 
 description="Alpymist graphical installer"
 
-# The installer needs a display and input, so it waits for the kernel to have
-# finished finding them. It does not need the network: an offline install is a
+# The installer needs a display and input, so it waits for udev to have
+# finished loading drivers for them. A device that turns up later still works:
+# the installer notices new input devices as they appear. It does not need the network: an offline install is a
 # supported outcome, not a degraded one.
 depend() {
 	need localmount
-	after modules hwdrivers alpymist-probe
+	after modules udev-settle alpymist-probe
 }
 
 start() {
