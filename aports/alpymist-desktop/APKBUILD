@@ -103,6 +103,8 @@ package() {
 		"$pkgdir"/etc/xdg/gtk-3.0/settings.ini
 	install -Dm644 "$builddir"/desktop/theme/gtk-4.0-settings.ini \
 		"$pkgdir"/etc/xdg/gtk-4.0/settings.ini
+	install -Dm644 "$builddir"/desktop/fontconfig/60-alpymist-symbols.conf \
+		"$pkgdir"/etc/fonts/conf.d/60-alpymist-symbols.conf
 	install -Dm644 "$builddir"/desktop/librewolf/alpymist.js \
 		"$pkgdir"/usr/lib/librewolf/defaults/pref/alpymist.js
 	install -Dm644 "$builddir"/desktop/xdg-desktop-portal/portals.conf \
