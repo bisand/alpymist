@@ -157,6 +157,8 @@ rc_add alpymist-probe boot
 # iwd talks to its clients, the installer's iwctl included, over D-Bus.
 rc_add dbus default
 rc_add iwd default
+# Takes the splash down before the installer starts; see its script.
+rc_add alpymist-splash-done default
 rc_add alpymist-install default
 
 rc_add mount-ro shutdown

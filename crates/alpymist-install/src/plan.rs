@@ -605,22 +605,21 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         .with_input(Input::Text("permit persist :wheel\n".into())),
     );
 
-    // The boot splash, until greetd starts. The live image's runlevels, which
-    // setup-disk copies, already have it; this is for certain.
-    steps.push(
-        Step::new(
-            "Showing the splash at boot",
-            &[
-                "chroot",
-                ROOT,
-                "rc-update",
-                "add",
-                "alpymist-splash",
-                "sysinit",
-            ],
-        )
-        .may_fail(),
-    );
+    // The boot splash, and the step that takes it down before greetd switches
+    // consoles. The live image's runlevels, which setup-disk copies, already
+    // have both; this is for certain.
+    for (service, runlevel) in [
+        ("alpymist-splash", "sysinit"),
+        ("alpymist-splash-done", "default"),
+    ] {
+        steps.push(
+            Step::new(
+                &format!("Showing the splash at boot ({service})"),
+                &["chroot", ROOT, "rc-update", "add", service, runlevel],
+            )
+            .may_fail(),
+        );
+    }
     for service in ["seatd", "greetd"] {
         steps.push(
             Step::new(
@@ -940,7 +939,7 @@ mod tests {
             assert!(
                 title.starts_with("Starting ")
                     || title.starts_with("Adding your account to ")
-                    || *title == "Showing the splash at boot"
+                    || title.starts_with("Showing the splash at boot")
                     || *title == "Installing the desktop"
                     || *title == "Choosing the desktop session",
                 "{title} may fail but is not desktop setup"

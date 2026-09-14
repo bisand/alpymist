@@ -13,7 +13,7 @@ makedepends="cargo"
 depends="font-fira-ttf"
 subpackages="$pkgname-openrc"
 options="!check"  # the test suite runs in CI, not in the package build
-source="alpymist-splash.initd"
+source="alpymist-splash.initd alpymist-splash-done.initd"
 builddir="$srcdir"
 
 prepare() {
@@ -38,6 +38,8 @@ package() {
 		"$pkgdir"/usr/bin/alpymist-splash
 	install -Dm755 "$srcdir"/alpymist-splash.initd \
 		"$pkgdir"/etc/init.d/alpymist-splash
+	install -Dm755 "$srcdir"/alpymist-splash-done.initd \
+		"$pkgdir"/etc/init.d/alpymist-splash-done
 }
 
 # Filled in by `abuild checksum` at build time; see alpymist-install.

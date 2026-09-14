@@ -1,12 +1,14 @@
 //! When the splash should get out of the way.
 //!
-//! The splash starts early in boot and holds the display; whatever comes next
-//! needs it. Nothing tells the splash that moment has come, so it watches for
-//! it: `OpenRC` marks a service as starting in `/run/openrc/starting` before it
-//! runs the service's script, and the installer and greetd are the two things
-//! that take the screen over. When neither ever comes — a system whose desktop
-//! did not install — the gettys that init starts once booting has finished are
-//! the sign, and a time limit is the last resort.
+//! Normally it is told: the `alpymist-splash-done` service stops it before the
+//! installer or greetd starts, and has to, because greetd's switch to its own
+//! console is ignored by the kernel while the splash holds the current one in
+//! graphics mode. Watching for them starting instead lost that race on some
+//! boots and left no login screen.
+//!
+//! What remains here is for when nothing tells it: a successor seen starting
+//! anyway, the gettys init starts once booting has finished with nothing to
+//! hand over to, and a time limit as the last resort.
 //!
 //! Pure over what it is shown, so every case is testable without booting.
 

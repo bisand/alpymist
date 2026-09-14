@@ -1,0 +1,26 @@
+#!/sbin/openrc-run
+
+description="Take the boot splash down before the screen is handed over"
+
+# The splash puts the console in graphics mode to hide boot messages, and the
+# kernel ignores a switch to another console while the current one is in
+# graphics mode. greetd's first act is exactly such a switch, to its own
+# console, which it then waits for forever: a race the splash lost on some
+# boots, leaving no login screen. So the splash is not left to notice greetd or
+# the installer starting; this runs before either, and they start only once
+# the splash has gone and given the console back.
+depend() {
+	after alpymist-splash
+	before greetd alpymist-install display-manager
+	keyword -containers -vserver -lxc -docker -podman
+}
+
+start() {
+	ebegin "Handing the screen over"
+	# --retry waits for it to have exited, not merely to have been signalled.
+	start-stop-daemon --stop --quiet \
+		--exec /usr/bin/alpymist-splash \
+		--pidfile /run/alpymist-splash.pid \
+		--retry TERM/3/KILL/1
+	eend 0
+}
