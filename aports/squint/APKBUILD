@@ -6,8 +6,8 @@
 #   https://github.com/bisand/squint
 pkgname=squint
 pkgver=0.1.0_git20260914
-pkgrel=0
-_commit=d4e7f98ce66f7c7f9c2b7fb533c0ea54ef000ebc
+pkgrel=1
+_commit=d048b482c52cd8afb63d5e01d52fd40d8a8bff3f
 pkgdesc="Text editor that opens files of any size instantly"
 url="https://github.com/bisand/squint"
 arch="aarch64 x86_64"
@@ -37,6 +37,6 @@ package() {
 }
 
 sha512sums="
-503be62202ea2da62a400e533fa4e6595b12eaac893443f21c703355f8952a50e4027ed978b6e15a59634b5b1b3bfa5e21091da129673ecf41577be08a4345cf  squint-d4e7f98ce66f7c7f9c2b7fb533c0ea54ef000ebc.tar.gz
+34a0534fb8f17e537ed6b5beb1f3cf87a47983f2a942d305ea0d5d5c137dd43ea4eb96cdacb2b7e63dfc3c3cad769ff38b11a2db47b907cd637ba4d8338af482  squint-d048b482c52cd8afb63d5e01d52fd40d8a8bff3f.tar.gz
 280fce6ff3b4b7a73443795fead1da57d4650b5659ac6830df5c5c0d055cec09eb0dd90166b8ba64339b1544475e5253e2d97defc886c387d281e95928f98e1a  squint.desktop
 "
