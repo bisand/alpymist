@@ -13,7 +13,9 @@ ALPINE_VERSION="${ALPINE_VERSION:-v3.24}"
 TAG="${TAG:-0.0.1}"
 MIRROR="${MIRROR:-https://dl-cdn.alpinelinux.org/alpine}"
 
-echo ">>> [1/3] building Alpymist packages"
+# With PREBUILT naming a directory of this architecture's packages, as the
+# Release workflow does, they are used as they are and nothing is built again.
+echo ">>> [1/3] Alpymist packages"
 bash /src/ci/build-packages.sh
 
 echo ">>> [2/3] fetching Alpine image scripts ($ALPINE_BRANCH)"
@@ -50,6 +52,14 @@ sh mkimage.sh \
 	--repository "$MIRROR/$ALPINE_VERSION/main" \
 	--repository "$MIRROR/$ALPINE_VERSION/community" \
 	--repository "$HOME/packages/ap"
+
+# A checksum beside each image, named as sha256sum -c expects to find it.
+(
+	cd /out
+	for iso in *.iso; do
+		sha256sum "$iso" > "$iso.sha256"
+	done
+)
 
 echo ">>> images:"
 ls -la /out

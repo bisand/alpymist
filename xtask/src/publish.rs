@@ -1,6 +1,6 @@
 //! Publishing packages to the Alpymist repository.
 //!
-//! CI builds the packages (the Packages workflow); this signs and ships them.
+//! CI builds the packages (the Release workflow); this signs and ships them.
 //! The split is ADR 0002's offline key: the release key never reaches CI, so a
 //! compromised workflow can produce a bad artifact but not a trusted update.
 //!
@@ -24,7 +24,7 @@ use std::process::Command;
 const ALPINE_VERSION: &str = "v3.24";
 /// The repository's name under that release, as in `/etc/apk/repositories`.
 const REPOSITORY: &str = "alpymist";
-/// Every architecture the Packages workflow builds, by artifact suffix.
+/// Every architecture the Release workflow builds, by artifact suffix.
 const ARCHES: [&str; 2] = ["x86_64", "aarch64"];
 /// The release key's file name, which is also the name apk looks it up by.
 const KEY_NAME: &str = "alpymist-2026.rsa";
@@ -34,8 +34,10 @@ const PUBLIC_KEY: &str = "aports/alpymist-keys/alpymist-2026.rsa.pub";
 const SITE_REMOTE: &str = "git@github.com:bisand/alpymist-packages.git";
 /// The address the site is served from.
 const DOMAIN: &str = "pkgs.alpymist.org";
-/// The workflow whose runs are publishable.
-const WORKFLOW: &str = "Packages";
+/// The workflows whose runs are publishable: Release, which builds the packages
+/// with each release, and Packages, which built them on every push before it and
+/// whose runs are still kept.
+const WORKFLOWS: [&str; 2] = ["Release", "Packages"];
 /// Where the work happens; under `out/`, which Docker Desktop shares.
 const STAGING: &str = "out/publish";
 /// The container every Alpine tool runs in.
@@ -62,13 +64,13 @@ apk --arch "$arch" --keys-dir /tmp/keys --repositories-file /dev/null \
 	> "/work/verify-$arch.txt" 2>&1
 "#;
 
-/// Publish the packages from a Packages run.
+/// Publish the packages from a Release run.
 ///
 /// Without `push` it stops after signing and verifying, and says where the
 /// site is, so it can be looked at first.
 ///
 /// # Errors
-/// Fails when the run is not a successful Packages run on main, when a
+/// Fails when the run is not a successful Release run of main, when a
 /// package was rebuilt without a version bump, when the signed index does not
 /// verify, or when any tool it drives fails.
 pub fn publish(run: &str, key: &Path, push: bool) -> Result<()> {
@@ -82,7 +84,7 @@ pub fn publish(run: &str, key: &Path, push: bool) -> Result<()> {
 
     let sha = check_run(run)?;
     let short: String = sha.chars().take(12).collect();
-    println!("publishing Packages run {run} (main at {short})");
+    println!("publishing run {run} (main at {short})");
     ensure_builder()?;
 
     let staging = Path::new(STAGING);
@@ -127,7 +129,7 @@ pub fn publish(run: &str, key: &Path, push: bool) -> Result<()> {
         return Ok(());
     }
 
-    let message = format!("Publish Packages run {run}\n\nFrom bisand/alpymist at {sha}.");
+    let message = format!("Publish run {run}\n\nFrom bisand/alpymist at {sha}.");
     for args in [
         &["init", "--quiet", "-b", "main"][..],
         &["add", "--all"],
@@ -239,8 +241,12 @@ fn sign(
     Ok(())
 }
 
-/// The run must be a successful Packages run on main, so what gets signed is
-/// what was reviewed. Returns the commit it built.
+/// The run must be a successful Release run of a commit on main, so what gets
+/// signed is what was reviewed. Returns the commit it built.
+///
+/// A run from the Run workflow button says main as its branch. A run for a
+/// release says the release's tag instead, which could name any commit, so
+/// that one is asked of GitHub: the tagged commit must be main or behind it.
 fn check_run(run: &str) -> Result<String> {
     let out = Command::new("gh")
         .args([
@@ -268,15 +274,42 @@ fn check_run(run: &str) -> Result<String> {
         bail!("unexpected answer from gh: {text}");
     };
     ensure!(
-        workflow == WORKFLOW,
-        "run {run} is a {workflow} run, not {WORKFLOW}"
+        WORKFLOWS.contains(&workflow),
+        "run {run} is a {workflow} run, not {}",
+        WORKFLOWS.join(" or ")
     );
-    ensure!(branch == "main", "run {run} built {branch}, not main");
+    ensure!(
+        branch == "main" || on_main(sha)?,
+        "run {run} built {branch}, which is not on main"
+    );
     ensure!(
         conclusion == "success",
         "run {run} did not succeed ({conclusion})"
     );
     Ok(sha.to_string())
+}
+
+/// Whether `sha` is main or a commit main has moved past.
+fn on_main(sha: &str) -> Result<bool> {
+    let out = Command::new("gh")
+        .args([
+            "api",
+            &format!("repos/{{owner}}/{{repo}}/compare/main...{sha}"),
+            "--jq",
+            ".status",
+        ])
+        .output()
+        .context("running gh")?;
+    if !out.status.success() {
+        bail!(
+            "comparing {sha} with main: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(matches!(
+        String::from_utf8_lossy(&out.stdout).trim(),
+        "identical" | "behind"
+    ))
 }
 
 /// Build the builder image when Docker no longer has it. Image pruning removes

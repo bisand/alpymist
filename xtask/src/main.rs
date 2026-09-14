@@ -54,12 +54,12 @@ enum Command {
         #[arg(long, default_value = "aports/ghostty/APKBUILD")]
         apkbuild: PathBuf,
     },
-    /// Sign and publish a Packages run to pkgs.alpymist.org.
+    /// Sign and publish a Release run's packages to pkgs.alpymist.org.
     ///
     /// Signs the repository index with the release key, which stays on this
     /// machine, verifies it, and with --push replaces the Pages site.
     Publish {
-        /// The Packages workflow run to publish (`gh run list -w Packages`).
+        /// The Release workflow run to publish (`gh run list -w Release`).
         #[arg(long)]
         run: String,
         /// The release signing key.

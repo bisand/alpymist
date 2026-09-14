@@ -1,0 +1,166 @@
+name: Release
+
+# What a release is made of: every Alpymist package and an ISO, for x86_64 and
+# aarch64, built when a GitHub release is published. The ISOs are attached to
+# the release. The packages are an artifact and nothing more: the repository
+# index is signed with a key CI never sees, by `cargo xtask publish --run <id>`
+# (ADR 0002), so what this workflow produces is a candidate, not an update.
+#
+# Run it by hand to try a change before releasing it: the same builds, kept as
+# artifacts, with no release to attach them to.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  packages:
+    name: Packages (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          # Native, not emulated: ghostty's zig build under QEMU would take
+          # hours.
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the builder container
+        run: docker build -t alpymist-builder builder
+
+      # ghostty and squint are built from pinned upstream commits and take
+      # most of the time. build-packages.sh keeps them here, each under a key
+      # of its aport and the builder, and builds again only what has changed.
+      # The month is in the cache's name so they are rebuilt at least that
+      # often against Alpine's libraries as they are updated.
+      - name: When the kept packages were built
+        id: month
+        run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v5
+        with:
+          path: cache
+          key: packages-${{ matrix.arch }}-${{ steps.month.outputs.month }}-${{ hashFiles('aports/ghostty/**', 'aports/squint/**', 'builder/**') }}
+          restore-keys: packages-${{ matrix.arch }}-${{ steps.month.outputs.month }}-
+
+      - name: Build the packages
+        run: |
+          mkdir -p out cache && chmod 777 out cache
+          docker run --rm -v "$PWD":/src -v "$PWD/out":/out -v "$PWD/cache":/cache \
+            -e PACKAGE_CACHE=/cache \
+            alpymist-builder bash /src/ci/build-packages.sh /out/packages
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ matrix.arch }}
+          path: out/packages/${{ matrix.arch }}/*.apk
+          if-no-files-found: error
+          retention-days: 90
+
+  iso:
+    name: ISO (${{ matrix.arch }})
+    needs: packages
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # x86_64 is the architecture Alpymist actually targets — old laptops
+          # are overwhelmingly x86 — and the one the boot test runs on.
+          - arch: x86_64
+            runner: ubuntu-24.04
+          # What a Mac runs in a virtual machine.
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: packages-${{ matrix.arch }}
+          path: out/prebuilt
+
+      - name: Build the builder container
+        run: docker build -t alpymist-builder builder
+
+      # The packages the job before built, not built again: the image is made
+      # of exactly the packages this release's run produced.
+      - name: Build the ISO
+        env:
+          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || '0.0.1' }}
+        run: |
+          mkdir -p out/iso && chmod 777 out/iso
+          docker run --rm -v "$PWD":/src -v "$PWD/out/iso":/out -v "$PWD/out/prebuilt":/prebuilt:ro \
+            -e PREBUILT=/prebuilt -e TAG="${TAG#v}" \
+            alpymist-builder bash /src/ci/build-iso.sh ${{ matrix.arch }}
+
+      - uses: dtolnay/rust-toolchain@1.96
+        if: matrix.arch == 'x86_64'
+
+      # Hosted runners have /dev/kvm but only root may open it. Without it
+      # QEMU emulates every instruction and the boot takes minutes. A chmod
+      # lasts as long as the runner, which is as long as it needs to; the udev
+      # rule usually suggested failed here because /etc/udev/rules is absent.
+      - name: Enable KVM
+        if: matrix.arch == 'x86_64'
+        run: |
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm
+            ls -l /dev/kvm
+          else
+            echo "no /dev/kvm on this runner; the boot will be emulated"
+          fi
+
+      # Potato, not Lite: virtio-gpu without virgl gives the guest no hardware
+      # GL, so Mesa falls back to llvmpipe and the tier logic correctly refuses
+      # to promote it. If this ever reports Full, the software-renderer check
+      # has regressed.
+      - name: Boot it and assert the reported tier
+        if: matrix.arch == 'x86_64'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86
+          cargo run -p xtask -- smoke \
+            --iso out/iso/alpymist-*-x86_64.iso \
+            --arch x86_64 \
+            --expect-tier Potato \
+            --timeout 300
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: alpymist-${{ matrix.arch }}-iso
+          path: out/iso/*.iso*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach it to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" out/iso/*.iso out/iso/*.iso.sha256 --clobber
+
+  # Ghostty is not in a stable Alpine branch, so we carry a copy of their
+  # testing aport. This says when theirs has moved, or when ghostty has
+  # reached a stable branch and the backport can go. On its own, so a release
+  # is still built when it has something to say.
+  ghostty:
+    name: Ghostty backport
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.96
+      - run: cargo run -p xtask -- ghostty-check

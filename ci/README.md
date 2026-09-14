@@ -1,18 +1,28 @@
 # CI
 
-Two workflows:
+Three workflows:
 
 - **CI** (`.github/workflows/ci.yml`): `cargo fmt --check`, clippy with
   `-D warnings`, and the tests, on every push to `main` and every pull request.
   A couple of minutes.
-- **ISO** (`.github/workflows/iso.yml`): builds the x86_64 image, boots it in
-  QEMU with KVM, and asserts the reported tier. Nightly, skipped when `main`
-  has not moved since the last successful image, and on demand from the
-  Actions tab ("Run workflow"), which always builds.
+- **Release** (`.github/workflows/release.yml`): what a release is made of,
+  built when a GitHub release is published. Every Alpymist package for x86_64
+  and aarch64, on native runners; then an ISO for each architecture from
+  exactly those packages, with the x86_64 one booted in QEMU with KVM to
+  assert the reported tier. The ISOs and their `.sha256` files are attached to
+  the release, which is where to download them. The packages are an artifact,
+  published separately (below). "Run workflow" in the Actions tab runs the
+  same builds without a release, keeping everything as artifacts, to try a
+  change before releasing it.
+- **Site** (`.github/workflows/site.yml`): alpymist.org.
 
-- **Packages** (`.github/workflows/packages.yml`): builds every Alpymist
-  package for x86_64 and aarch64, on native runners, whenever `main` changes
-  something that goes into one. The result is an artifact, not a release.
+ghostty and squint are built from pinned upstream commits, and ghostty's Zig
+build alone was most of a package build. Both are kept in the Actions cache
+under a key of their aport and the builder, and built again only when one of
+those changes, or at least once a month so they follow Alpine's libraries.
+The ISO jobs build no packages at all: they index and sign the ones the
+package jobs made. What is left of an image's time is mostly squashing the
+kernel's firmware.
 
 ## Publishing packages
 
@@ -26,7 +36,7 @@ trusted index and refuses one whose hash is not, whatever key abuild signed
 the package with in CI.
 
 ```sh
-gh run list -w Packages                   # pick a green run on main
+gh run list -w Release                    # pick a green run of main
 cargo xtask publish --run <id>            # download, sign, verify; no push
 cargo xtask publish --run <id> --push     # replace the site
 ```
@@ -46,9 +56,8 @@ back, publish an older run.
 Still planned:
 
 1. `cargo deny check` and `cargo audit`.
-2. Package builds for `aarch64` in CI.
-3. An install test: install onto a scratch disk and boot the result.
-4. Double-build reproducibility diff as a release gate.
+2. An install test: install onto a scratch disk and boot the result.
+3. Double-build reproducibility diff as a release gate.
 
 ## Known limitation: `xtask smoke` on a macOS dev box
 
