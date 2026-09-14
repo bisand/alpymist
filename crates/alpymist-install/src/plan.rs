@@ -238,6 +238,37 @@ pub fn partition(device: &str, n: u32) -> String {
     }
 }
 
+/// The installed system's `/etc/network/interfaces`, for these answers.
+///
+/// `None` for "Set up later", which keeps what setup-disk copied. The wired
+/// port is the one found on this machine, or `eth0` where none was: a cable
+/// plugged in later into a port the kernel calls `eth0` still works. Wi-Fi is
+/// iwd's, and has no stanza here; the cable port gets DHCP beside it.
+#[must_use]
+pub fn interfaces_file(a: &Answers) -> Option<String> {
+    let port = a.wired_interface.as_deref().unwrap_or("eth0");
+    let mut file = String::from("auto lo\niface lo inet loopback\n\n");
+    match a.network.as_ref()? {
+        Network::Dhcp | Network::Wifi { .. } => {
+            let _ = write!(
+                file,
+                "auto {port}\niface {port} inet dhcp\n\thostname {}\n",
+                a.hostname
+            );
+        }
+        Network::Static {
+            address, gateway, ..
+        } => {
+            let _ = write!(
+                file,
+                "auto {port}\niface {port} inet static\n\taddress {address}\n\tgateway {gateway}\n"
+            );
+        }
+        Network::Offline => return None,
+    }
+    Some(file)
+}
+
 /// Build the plan for these answers.
 ///
 /// # Errors
@@ -655,7 +686,31 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         );
     }
 
-    if matches!(a.network, Some(Network::Dhcp | Network::Wifi { .. })) {
+    // setup-disk copied the live image's interfaces file, which names eth0
+    // whatever this machine's cable port is called. The installed system gets
+    // one for its own port, set up the way the Network screen said.
+    if let Some(interfaces) = interfaces_file(a) {
+        steps.push(
+            Step::new(
+                "Configuring the network",
+                &["chroot", ROOT, "tee", "/etc/network/interfaces"],
+            )
+            .with_input(Input::Text(interfaces)),
+        );
+    }
+    if let Some(Network::Static { dns, .. }) = &a.network {
+        steps.push(
+            Step::new(
+                "Setting the name server",
+                &["chroot", ROOT, "tee", "/etc/resolv.conf"],
+            )
+            .with_input(Input::Text(format!("nameserver {dns}\n"))),
+        );
+    }
+    if matches!(
+        a.network,
+        Some(Network::Dhcp | Network::Static { .. } | Network::Wifi { .. })
+    ) {
         steps.push(Step::new(
             "Enabling networking",
             &["chroot", ROOT, "rc-update", "add", "networking", "boot"],
@@ -1284,5 +1339,58 @@ mod tests {
                 .iter()
                 .any(|t| t.contains("Wi-Fi network"))
         );
+    }
+
+    #[test]
+    fn a_static_address_is_written_for_this_machines_own_port() {
+        let mut a = answers();
+        a.wired_interface = Some("enp1s0".into());
+        a.network = Some(Network::Static {
+            address: "192.168.1.10/24".into(),
+            gateway: "192.168.1.1".into(),
+            dns: "1.1.1.1".into(),
+        });
+        let plan = build(&a).unwrap();
+        let Some(Input::Text(interfaces)) = &step(&plan, "Configuring the network").stdin else {
+            panic!("no interfaces file");
+        };
+        assert_eq!(
+            interfaces,
+            "auto lo\niface lo inet loopback\n\n\
+             auto enp1s0\niface enp1s0 inet static\n\
+             \taddress 192.168.1.10/24\n\tgateway 192.168.1.1\n"
+        );
+        let Some(Input::Text(resolv)) = &step(&plan, "name server").stdin else {
+            panic!("no resolv.conf");
+        };
+        assert_eq!(resolv, "nameserver 1.1.1.1\n");
+        let t = titles(&a);
+        let at = |n: &str| t.iter().position(|s| s.contains(n)).unwrap();
+        assert!(
+            at("Configuring the network") > at("base system"),
+            "setup-disk would overwrite it"
+        );
+        assert!(t.contains(&"Enabling networking".to_string()));
+    }
+
+    /// The live image's file names eth0, which this machine may not have.
+    #[test]
+    fn dhcp_uses_this_machines_port_and_later_leaves_the_file_alone() {
+        let mut a = answers();
+        a.wired_interface = Some("enp0s31f6".into());
+        let dhcp = super::interfaces_file(&a).unwrap();
+        assert!(dhcp.contains("iface enp0s31f6 inet dhcp"), "{dhcp}");
+        assert!(dhcp.contains("hostname alpymist"));
+
+        a.wired_interface = None;
+        assert!(
+            super::interfaces_file(&a)
+                .unwrap()
+                .contains("iface eth0 inet dhcp")
+        );
+
+        a.network = Some(Network::Offline);
+        assert!(super::interfaces_file(&a).is_none());
+        assert!(!titles(&a).iter().any(|t| t == "Configuring the network"));
     }
 }

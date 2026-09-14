@@ -94,6 +94,33 @@ fn main() {
         write_png(&name, &pixels, width, height);
         println!("wrote {name}");
     }
+
+    // The Network screen again with a static address part typed, which is the
+    // other form of it worth seeing.
+    let mut answers = answers();
+    answers.network = Some(Network::Static {
+        address: "192.168.1.10/24".into(),
+        gateway: "192.168.1.1".into(),
+        dns: String::new(),
+    });
+    let mut app = App::new(answers, width, height);
+    while app.wizard.step() != Step::Network {
+        app.act(Action::Advance);
+    }
+    let mut pixels = vec![0u32; (width as usize) * (height as usize)];
+    {
+        let mut canvas = Canvas::from_pixels(
+            &mut pixels,
+            Size::new(width, height),
+            width,
+            PixelFormat::Argb8888,
+        )
+        .expect("buffer large enough for the requested size");
+        app.draw(&mut canvas);
+    }
+    let name = format!("{dir}/03-network-static.png");
+    write_png(&name, &pixels, width, height);
+    println!("wrote {name}");
 }
 
 fn write_png(path: &str, pixels: &[u32], width: u32, height: u32) {

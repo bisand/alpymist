@@ -237,6 +237,7 @@ mod drm_run {
         eprintln!("firmware: {:?}", answers.firmware);
         let adapter = alpymist_install::wifi::adapter();
         let answers = Answers {
+            wired_interface: alpymist_install::wifi::wired_interface(),
             wifi: alpymist_install::wifi::Wifi {
                 adapter: adapter.clone(),
                 ..Default::default()

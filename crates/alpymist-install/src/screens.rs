@@ -53,11 +53,20 @@ pub enum TextTarget {
     PassphraseConfirm,
     /// The chosen Wi-Fi network's passphrase.
     WifiPassphrase,
+    /// A static address, with its prefix length.
+    StaticAddress,
+    /// A static configuration's default gateway.
+    StaticGateway,
+    /// A static configuration's name server.
+    StaticDns,
 }
 
 impl TextTarget {
     /// The fields on the Encryption screen, in the order shown.
     pub const ENCRYPTION: [Self; 2] = [Self::Passphrase, Self::PassphraseConfirm];
+
+    /// The fields under "Static address", in the order shown.
+    pub const STATIC: [Self; 3] = [Self::StaticAddress, Self::StaticGateway, Self::StaticDns];
 
     /// Every editable field on the Account screen, in the order shown.
     pub const ACCOUNT: [Self; 5] = [
@@ -79,6 +88,9 @@ impl TextTarget {
             Self::Hostname => "Hostname",
             Self::KeyboardSearch | Self::ZoneSearch => "Search",
             Self::Passphrase | Self::WifiPassphrase => "Passphrase",
+            Self::StaticAddress => "Address",
+            Self::StaticGateway => "Gateway",
+            Self::StaticDns => "Name server",
             Self::PasswordConfirm | Self::PassphraseConfirm => "Confirm",
         }
     }
@@ -109,6 +121,14 @@ impl TextTarget {
             Self::Passphrase => &mut a.passphrase,
             Self::PassphraseConfirm => &mut a.passphrase_confirm,
             Self::WifiPassphrase => &mut a.wifi.passphrase,
+            Self::StaticAddress | Self::StaticGateway | Self::StaticDns => {
+                let (address, gateway, dns) = static_fields(a);
+                match self {
+                    Self::StaticAddress => address,
+                    Self::StaticGateway => gateway,
+                    _ => dns,
+                }
+            }
         }
     }
 
@@ -126,7 +146,42 @@ impl TextTarget {
             Self::Passphrase => &a.passphrase,
             Self::PassphraseConfirm => &a.passphrase_confirm,
             Self::WifiPassphrase => &a.wifi.passphrase,
+            Self::StaticAddress | Self::StaticGateway | Self::StaticDns => match &a.network {
+                Some(Network::Static {
+                    address,
+                    gateway,
+                    dns,
+                }) => match self {
+                    Self::StaticAddress => address,
+                    Self::StaticGateway => gateway,
+                    _ => dns,
+                },
+                _ => "",
+            },
         }
+    }
+}
+
+/// The three strings of a static configuration, making it one if it is not.
+///
+/// The fields are only on screen while "Static address" is chosen, so this
+/// never replaces a different choice in practice; it exists so that editing a
+/// field can always return somewhere to write.
+fn static_fields(a: &mut Answers) -> (&mut String, &mut String, &mut String) {
+    if !matches!(a.network, Some(Network::Static { .. })) {
+        a.network = Some(Network::Static {
+            address: String::new(),
+            gateway: String::new(),
+            dns: String::new(),
+        });
+    }
+    match a.network.as_mut() {
+        Some(Network::Static {
+            address,
+            gateway,
+            dns,
+        }) => (address, gateway, dns),
+        _ => unreachable!("made a static configuration just above"),
     }
 }
 
@@ -358,16 +413,19 @@ fn picker_rows(step: Step, a: &Answers) -> Vec<Row> {
 /// How many Wi-Fi networks the Network screen lists.
 ///
 /// Three wired choices, three networks, the passphrase and a status line are
-/// the eight body rows every supported screen size has.
+/// the eight body rows every supported screen size has. With the three static
+/// fields open instead, one network and the status line make way.
 pub const WIFI_ROWS: usize = 3;
-
-/// The wired choices above the Wi-Fi networks.
-const WIRED_ROWS: usize = 3;
 
 /// The Wi-Fi networks shown: the strongest, with the chosen one always among
 /// them even when others have grown stronger since.
 fn wifi_shown(a: &Answers) -> Vec<&crate::wifi::Network> {
-    let mut shown: Vec<&crate::wifi::Network> = a.wifi.networks.iter().take(WIFI_ROWS).collect();
+    let room = if matches!(a.network, Some(Network::Static { .. })) {
+        WIFI_ROWS - 1
+    } else {
+        WIFI_ROWS
+    };
+    let mut shown: Vec<&crate::wifi::Network> = a.wifi.networks.iter().take(room).collect();
     if let Some(Network::Wifi { ssid }) = &a.network
         && !shown.iter().any(|n| &n.ssid == ssid)
         && let Some(chosen) = a.wifi.network(ssid)
@@ -387,90 +445,111 @@ fn strength(bars: u8) -> &'static str {
     }
 }
 
-/// The Wi-Fi network chosen on the Network screen, if one is.
-fn chosen_wifi(a: &Answers) -> Option<&str> {
-    match &a.network {
-        Some(Network::Wifi { ssid }) => Some(ssid.as_str()),
-        _ => None,
-    }
+/// What a row on the Network screen is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum NetworkRow {
+    Dhcp,
+    Static,
+    Offline,
+    Wifi(String),
+    Field(TextTarget),
+    Status,
 }
 
-/// Whether the chosen network still needs its passphrase typed.
-fn wants_passphrase(a: &Answers, ssid: &str) -> bool {
-    a.wifi.network(ssid).is_some_and(|n| n.secured) && !a.wifi.is_connected_to(ssid)
-}
-
-/// The network on row `index` of the Network screen, if that row is one.
+/// The Network screen, row by row.
 ///
-/// The passphrase field sits directly under the chosen network, so the rows
-/// after it are shifted down by one. Directly under, and not below the whole
-/// list, because the cursor chooses a network by landing on it: a field below
-/// the list could only be reached by choosing every network on the way.
-fn wifi_at(a: &Answers, index: usize) -> Option<String> {
-    let chosen = chosen_wifi(a);
-    let mut row = WIRED_ROWS;
-    for network in wifi_shown(a) {
-        if row == index {
-            return Some(network.ssid.clone());
+/// The one place the order is decided: [`rows`] draws from it and [`choose`]
+/// reads from it, so a row can never be drawn as one thing and chosen as
+/// another.
+///
+/// Fields sit directly under what they belong to — the address under "Static
+/// address", the passphrase under its network — because the cursor chooses a
+/// radio row by landing on it: a field further down could only be reached by
+/// choosing everything on the way.
+///
+/// Automatic first, as the choice nearly everyone wants, then the Wi-Fi
+/// networks, then "Set up later", and "Static address" last with its fields
+/// under it: arrowing down to a network never passes through a choice that
+/// opens fields on the way. Rows appear and disappear as choices change, so
+/// the app keeps its cursor on the row it chose rather than on an index.
+fn network_layout(a: &Answers) -> Vec<NetworkRow> {
+    let static_chosen = matches!(a.network, Some(Network::Static { .. }));
+    let mut layout = vec![NetworkRow::Dhcp];
+    if a.wifi.adapter.is_some() {
+        let chosen = match &a.network {
+            Some(Network::Wifi { ssid }) => Some(ssid.as_str()),
+            _ => None,
+        };
+        for network in wifi_shown(a) {
+            layout.push(NetworkRow::Wifi(network.ssid.clone()));
+            if chosen == Some(network.ssid.as_str())
+                && network.secured
+                && !a.wifi.is_connected_to(&network.ssid)
+            {
+                layout.push(NetworkRow::Field(TextTarget::WifiPassphrase));
+            }
         }
-        row += 1;
-        if chosen == Some(network.ssid.as_str()) && wants_passphrase(a, &network.ssid) {
-            row += 1;
+        if !static_chosen {
+            layout.push(NetworkRow::Status);
         }
     }
-    None
+    layout.push(NetworkRow::Offline);
+    layout.push(NetworkRow::Static);
+    if static_chosen {
+        layout.extend(TextTarget::STATIC.map(NetworkRow::Field));
+    }
+    layout
 }
 
 fn network_rows(a: &Answers) -> Vec<Row> {
     use crate::wifi::Status;
 
-    let mut rows = vec![
-        Row::radio("Automatic (DHCP)", matches!(a.network, Some(Network::Dhcp))),
-        Row::radio(
-            "Static address",
-            matches!(a.network, Some(Network::Static { .. })),
-        ),
-        Row::radio("Set up later", matches!(a.network, Some(Network::Offline))),
-    ];
-    if a.wifi.adapter.is_none() {
-        return rows;
-    }
-    let chosen = chosen_wifi(a);
-    for network in wifi_shown(a) {
-        let is_chosen = chosen == Some(network.ssid.as_str());
-        rows.push(Row::radio(
-            format!(
-                "Wi-Fi  {}  ({}, {})",
-                network.ssid,
-                if network.secured { "secured" } else { "open" },
-                strength(network.bars)
+    let chosen = |network: &Network| a.network.as_ref() == Some(network);
+    network_layout(a)
+        .into_iter()
+        .map(|row| match row {
+            NetworkRow::Dhcp => Row::radio("Automatic (DHCP)", chosen(&Network::Dhcp)),
+            NetworkRow::Static => Row::radio(
+                "Static address",
+                matches!(a.network, Some(Network::Static { .. })),
             ),
-            is_chosen,
-        ));
-        if is_chosen && wants_passphrase(a, &network.ssid) {
-            rows.push(Row {
-                text: TextTarget::WifiPassphrase.label().to_string(),
+            NetworkRow::Offline => Row::radio("Set up later", chosen(&Network::Offline)),
+            NetworkRow::Wifi(ssid) => {
+                let network = a.wifi.network(&ssid);
+                Row::radio(
+                    format!(
+                        "Wi-Fi  {ssid}  ({}, {})",
+                        if network.is_some_and(|n| n.secured) {
+                            "secured"
+                        } else {
+                            "open"
+                        },
+                        strength(network.map_or(0, |n| n.bars))
+                    ),
+                    chosen(&Network::Wifi { ssid: ssid.clone() }),
+                )
+            }
+            NetworkRow::Field(field) => Row {
+                text: field.label().to_string(),
                 kind: RowKind::Text {
-                    field: TextTarget::WifiPassphrase,
-                    secret: true,
+                    field,
+                    secret: field.is_secret(),
                 },
                 chosen: false,
-            });
-        }
-    }
-    rows.push(Row::note(match &a.wifi.status {
-        Status::Unavailable => String::new(),
-        Status::Scanning => "Looking for Wi-Fi networks...".into(),
-        Status::Ready if a.wifi.networks.is_empty() => "No Wi-Fi networks found.".into(),
-        Status::Ready => match chosen {
-            Some(_) => "Enter joins the network.".into(),
-            None => String::new(),
-        },
-        Status::Connecting(ssid) => format!("Joining {ssid}..."),
-        Status::Connected(ssid) => format!("Joined {ssid}."),
-        Status::Failed(ssid, why) => format!("Could not join {ssid}: {why}."),
-    }));
-    rows
+            },
+            NetworkRow::Status => Row::note(match &a.wifi.status {
+                Status::Scanning => "Looking for Wi-Fi networks...".into(),
+                Status::Ready if a.wifi.networks.is_empty() => "No Wi-Fi networks found.".into(),
+                Status::Ready if matches!(a.network, Some(Network::Wifi { .. })) => {
+                    "Enter joins the network.".into()
+                }
+                Status::Unavailable | Status::Ready => String::new(),
+                Status::Connecting(ssid) => format!("Joining {ssid}..."),
+                Status::Connected(ssid) => format!("Joined {ssid}."),
+                Status::Failed(ssid, why) => format!("Could not join {ssid}: {why}."),
+            }),
+        })
+        .collect()
 }
 
 /// The tiers a user may pick, with what each actually runs.
@@ -683,24 +762,25 @@ pub fn choose(step: Step, index: usize, a: &mut Answers) {
             }
         }
         Step::Network => {
-            let wifi = wifi_at(a, index);
-            // The passphrase field and status line follow the networks; they
-            // are not choices.
-            if index >= WIRED_ROWS && wifi.is_none() {
-                return;
-            }
-            let network = match (index, wifi) {
-                (_, Some(ssid)) => Network::Wifi { ssid },
-                (0, None) => Network::Dhcp,
-                (1, None) => Network::Static {
+            let network = match network_layout(a).into_iter().nth(index) {
+                Some(NetworkRow::Dhcp) => Network::Dhcp,
+                Some(NetworkRow::Offline) => Network::Offline,
+                // Landing on it again, coming back up from its fields, must
+                // not throw away what was typed into them.
+                Some(NetworkRow::Static) if matches!(a.network, Some(Network::Static { .. })) => {
+                    return;
+                }
+                Some(NetworkRow::Static) => Network::Static {
                     address: String::new(),
                     gateway: String::new(),
                     dns: String::new(),
                 },
-                _ => Network::Offline,
+                Some(NetworkRow::Wifi(ssid)) => Network::Wifi { ssid },
+                // Fields and the status line are not choices.
+                Some(NetworkRow::Field(_) | NetworkRow::Status) | None => return,
             };
             // Arriving at a new network is not having typed its passphrase.
-            if a.network != Some(network.clone()) && matches!(network, Network::Wifi { .. }) {
+            if a.network.as_ref() != Some(&network) && matches!(network, Network::Wifi { .. }) {
                 a.wifi.passphrase.clear();
             }
             a.network = Some(network);
@@ -756,7 +836,9 @@ pub fn selectable(step: Step, a: &Answers) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{LIST_ROWS, TIERS, choose, follow_search, move_choice, rows, selectable};
+    use super::{
+        LIST_ROWS, Row, TIERS, TextTarget, choose, follow_search, move_choice, rows, selectable,
+    };
     use crate::answers::{Answers, DiskPlan, Network};
     use crate::wizard::Step;
 
@@ -1032,24 +1114,69 @@ mod tests {
         assert_eq!(a, before);
     }
 
+    /// Where the row saying `needle` is on the Network screen.
+    fn row_of(a: &Answers, needle: &str) -> usize {
+        rows(Step::Network, a)
+            .iter()
+            .position(|r| r.text.contains(needle))
+            .unwrap_or_else(|| panic!("no row saying {needle:?}"))
+    }
+
     #[test]
     fn network_rows_map_to_the_right_configuration() {
-        for (index, expect_dhcp, expect_offline) in
-            [(0, true, false), (1, false, false), (2, false, true)]
-        {
+        for (label, expect) in [
+            ("Automatic", Network::Dhcp),
+            ("Set up later", Network::Offline),
+            (
+                "Static address",
+                Network::Static {
+                    address: String::new(),
+                    gateway: String::new(),
+                    dns: String::new(),
+                },
+            ),
+        ] {
             let mut a = answers();
-            choose(Step::Network, index, &mut a);
-            assert_eq!(
-                matches!(a.network, Some(Network::Dhcp)),
-                expect_dhcp,
-                "row {index}"
-            );
-            assert_eq!(
-                matches!(a.network, Some(Network::Offline)),
-                expect_offline,
-                "row {index}"
-            );
+            choose(Step::Network, row_of(&a, label), &mut a);
+            assert_eq!(a.network, Some(expect), "{label}");
         }
+    }
+
+    #[test]
+    fn a_static_address_is_typed_into_fields_under_its_choice() {
+        let mut a = answers();
+        choose(Step::Network, row_of(&a, "Static address"), &mut a);
+        let shown = rows(Step::Network, &a);
+        let at = row_of(&a, "Static address");
+        let fields: Vec<_> = shown[at + 1..]
+            .iter()
+            .filter_map(Row::text_target)
+            .collect();
+        assert_eq!(fields, TextTarget::STATIC, "directly under it, in order");
+
+        TextTarget::StaticAddress
+            .value_mut(&mut a)
+            .push_str("192.168.1.10/24");
+        TextTarget::StaticGateway
+            .value_mut(&mut a)
+            .push_str("192.168.1.1");
+        // Landing on the choice again, coming back up from its fields.
+        choose(Step::Network, at, &mut a);
+        assert_eq!(
+            TextTarget::StaticAddress.value(&a),
+            "192.168.1.10/24",
+            "choosing it again kept what was typed"
+        );
+        assert_eq!(TextTarget::StaticGateway.value(&a), "192.168.1.1");
+
+        choose(Step::Network, row_of(&a, "Automatic"), &mut a);
+        assert!(
+            !rows(Step::Network, &a)
+                .iter()
+                .any(|r| r.text_target().is_some()),
+            "the fields go with the choice"
+        );
+        assert_eq!(TextTarget::StaticAddress.value(&a), "");
     }
 
     /// A fully answered wizard, so every screen shows its longest form.
@@ -1160,23 +1287,27 @@ mod tests {
     #[test]
     fn wifi_networks_are_offered_where_there_is_an_adapter() {
         let mut a = answers();
-        assert_eq!(
-            rows(Step::Network, &a).len(),
-            3,
+        assert!(
+            !rows(Step::Network, &a)
+                .iter()
+                .any(|r| r.text.starts_with("Wi-Fi")),
             "no adapter, no Wi-Fi rows"
         );
 
         a.wifi = crate::wifi::sample();
         let shown = rows(Step::Network, &a);
-        assert!(shown[3].text.contains("Fjellheim"));
-        assert!(shown[4].text.contains("open"));
+        assert!(
+            row_of(&a, "Fjellheim") < row_of(&a, "Kaffebar"),
+            "strongest first"
+        );
+        assert!(shown[row_of(&a, "Kaffebar")].text.contains("open"));
         assert_eq!(
             shown.iter().filter(|r| r.text.starts_with("Wi-Fi")).count(),
             super::WIFI_ROWS,
             "only the strongest networks fit"
         );
 
-        choose(Step::Network, 3, &mut a);
+        choose(Step::Network, row_of(&a, "Fjellheim"), &mut a);
         assert_eq!(
             a.network,
             Some(Network::Wifi {
@@ -1184,15 +1315,13 @@ mod tests {
             })
         );
         let shown = rows(Step::Network, &a);
-        assert!(
-            shown
-                .iter()
-                .any(|r| r.text_target() == Some(super::TextTarget::WifiPassphrase)),
-            "a secured network asks for its passphrase"
+        assert_eq!(
+            shown[row_of(&a, "Fjellheim") + 1].text_target(),
+            Some(TextTarget::WifiPassphrase),
+            "a secured network asks for its passphrase, right under it"
         );
 
-        // Row 4 is now Fjellheim's passphrase; the open network follows it.
-        choose(Step::Network, 5, &mut a);
+        choose(Step::Network, row_of(&a, "Kaffebar"), &mut a);
         assert_eq!(
             a.network,
             Some(Network::Wifi {
@@ -1227,7 +1356,7 @@ mod tests {
     fn choosing_the_passphrase_or_status_row_changes_nothing() {
         let mut a = answers();
         a.wifi = crate::wifi::sample();
-        choose(Step::Network, 3, &mut a);
+        choose(Step::Network, row_of(&a, "Fjellheim"), &mut a);
         let before = a.clone();
         let passphrase = rows(Step::Network, &a)
             .iter()

@@ -147,6 +147,8 @@ pub struct Answers {
     pub network: Option<Network>,
     /// The Wi-Fi networks in reach, and whether one has been joined.
     pub wifi: crate::wifi::Wifi,
+    /// The wired interface a cable would be plugged into, if there is one.
+    pub wired_interface: Option<String>,
     /// What to do with the disk.
     pub disk: Option<DiskPlan>,
     /// Set when the user has acknowledged that the disk will be erased.
@@ -199,6 +201,7 @@ impl std::fmt::Debug for Answers {
             .field("timezone", &self.timezone)
             .field("network", &self.network)
             .field("wifi", &self.wifi)
+            .field("wired_interface", &self.wired_interface)
             .field("disk", &self.disk)
             .field("disk_confirmed", &self.disk_confirmed)
             .field("passphrase", &masked(&self.passphrase))
@@ -365,9 +368,54 @@ pub fn validate_ipv4(text: &str, require_prefix: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Whether `gateway` is on the network `address` (with its prefix) is on.
+///
+/// A default route through a gateway outside the local network cannot be
+/// added, so a system configured that way comes up with no network at all.
+/// Both must already be valid; anything else answers `true`, leaving the
+/// complaint to [`validate_ipv4`].
+#[must_use]
+pub fn gateway_is_local(address: &str, gateway: &str) -> bool {
+    let parse = |text: &str| -> Option<u32> {
+        let parts: Vec<u32> = text
+            .split('.')
+            .map(|p| p.parse().ok())
+            .collect::<Option<_>>()?;
+        let [a, b, c, d] = parts.as_slice() else {
+            return None;
+        };
+        Some((a << 24) | (b << 16) | (c << 8) | d)
+    };
+    let Some((host, prefix)) = address.split_once('/') else {
+        return true;
+    };
+    let (Some(host), Some(gateway), Ok(prefix)) =
+        (parse(host), parse(gateway), prefix.parse::<u32>())
+    else {
+        return true;
+    };
+    let mask = u32::MAX.checked_shl(32 - prefix.min(32)).unwrap_or(0);
+    host & mask == gateway & mask
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Answers, DiskPlan, validate_hostname, validate_ipv4, validate_username};
+    use super::{
+        Answers, DiskPlan, gateway_is_local, validate_hostname, validate_ipv4, validate_username,
+    };
+
+    #[test]
+    fn a_gateway_must_be_on_the_addresss_own_network() {
+        assert!(gateway_is_local("192.168.1.10/24", "192.168.1.1"));
+        assert!(!gateway_is_local("192.168.1.10/24", "192.168.2.1"));
+        assert!(gateway_is_local("10.0.5.9/8", "10.200.0.1"));
+        assert!(!gateway_is_local("10.0.5.9/32", "10.0.5.1"));
+        assert!(gateway_is_local("0.0.0.0/0", "8.8.8.8"));
+        assert!(
+            gateway_is_local("nonsense", "192.168.1.1"),
+            "left to validate_ipv4"
+        );
+    }
     use alpymist_core::Tier;
 
     #[test]

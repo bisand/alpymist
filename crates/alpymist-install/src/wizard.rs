@@ -5,8 +5,8 @@
 //! every reason it refuses to advance — can be tested directly.
 
 use crate::answers::{
-    Answers, DiskPlan, Field, Issue, MIN_PASSWORD, Network, validate_hostname, validate_ipv4,
-    validate_username,
+    Answers, DiskPlan, Field, Issue, MIN_PASSWORD, Network, gateway_is_local, validate_hostname,
+    validate_ipv4, validate_username,
 };
 
 /// The screens, in order.
@@ -271,6 +271,14 @@ impl Wizard {
                         if let Err(why) = validate_ipv4(value, with_prefix) {
                             issues.push(issue(Field::Network, &format!("The {what}: {why}")));
                         }
+                    }
+                    if issues.is_empty() && !gateway_is_local(address, gateway) {
+                        issues.push(issue(
+                            Field::Network,
+                            &format!(
+                                "The gateway {gateway} is not on the network {address} is on."
+                            ),
+                        ));
                     }
                 }
                 Some(Network::Wifi { ssid }) => {
@@ -763,5 +771,19 @@ mod tests {
 
         w.answers.wifi.status = crate::wifi::Status::Connected("Fjellheim".into());
         assert!(w.can_advance());
+    }
+
+    /// A default route through a gateway off the local network cannot be
+    /// added: the installed system would come up with no network at all.
+    #[test]
+    fn a_gateway_off_the_addresss_network_blocks_the_screen() {
+        let mut w = at(Step::Network);
+        w.answers.network = Some(Network::Static {
+            address: "192.168.1.10/24".into(),
+            gateway: "192.168.2.1".into(),
+            dns: "1.1.1.1".into(),
+        });
+        let blockers = w.advance().expect_err("the gateway is unreachable");
+        assert!(blockers[0].message.contains("192.168.2.1"), "{blockers:?}");
     }
 }

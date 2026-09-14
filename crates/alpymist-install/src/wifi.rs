@@ -295,6 +295,25 @@ pub fn adapter() -> Option<String> {
     names.into_iter().next()
 }
 
+/// This machine's first wired network port, if it has one.
+///
+/// A physical interface — one with a device behind it — that is not wireless.
+/// That leaves out `lo`, bridges, tunnels and whatever a container runtime made.
+#[must_use]
+pub fn wired_interface() -> Option<String> {
+    let mut names: Vec<String> = std::fs::read_dir("/sys/class/net")
+        .ok()?
+        .flatten()
+        .filter(|entry| {
+            let path = entry.path();
+            path.join("device").exists() && !path.join("wireless").is_dir()
+        })
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+    names.sort();
+    names.into_iter().next()
+}
+
 /// What the screen asks the worker to do.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Request {

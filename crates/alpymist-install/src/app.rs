@@ -488,12 +488,31 @@ impl App {
         // arrowing past a checkbox must never flip it.
         let rows = screens::rows(self.wizard.step(), &self.wizard.answers);
         if rows.get(self.cursor).is_some_and(Row::selects_on_focus) {
-            screens::choose(self.wizard.step(), self.cursor, &mut self.wizard.answers);
-            self.reported.clear();
+            self.choose_here();
         }
         // Arriving in a field puts the caret after what is already there, which
         // is where you want it when correcting a value rather than replacing it.
         self.place_caret();
+    }
+
+    /// Choose the row under the cursor, and keep the cursor on it.
+    ///
+    /// A choice can add and remove rows: choosing a network brings its
+    /// passphrase field, and takes away another's. The row chosen can move,
+    /// and an index kept from before would leave the cursor on whatever took
+    /// its place — or past the end of a screen that got shorter.
+    fn choose_here(&mut self) {
+        let step = self.wizard.step();
+        let before = screens::rows(step, &self.wizard.answers);
+        let text = before.get(self.cursor).map(|r| r.text.clone());
+        screens::choose(step, self.cursor, &mut self.wizard.answers);
+        self.reported.clear();
+        let after = screens::rows(step, &self.wizard.answers);
+        if let Some(at) = text.and_then(|t| after.iter().position(|r| r.text == t)) {
+            self.cursor = at;
+        } else if self.cursor >= after.len() {
+            self.cursor = after.iter().rposition(Row::selectable).unwrap_or(0);
+        }
     }
 
     /// The text field the cursor is on, if it is on one.
@@ -571,8 +590,7 @@ impl App {
             Action::NextField => self.move_to_field(true),
             Action::PreviousField => self.move_to_field(false),
             Action::Choose => {
-                screens::choose(self.wizard.step(), self.cursor, &mut self.wizard.answers);
-                self.reported.clear();
+                self.choose_here();
                 // Turning encryption on reveals the passphrase fields; go to them.
                 if self.wizard.step() == Step::Encryption && self.focused_field().is_none() {
                     let rows = screens::rows(Step::Encryption, &self.wizard.answers);
@@ -1953,8 +1971,8 @@ mod tests {
     #[test]
     fn enter_on_a_wifi_network_joins_it_and_joining_continues() {
         let (mut a, requests, events) = at_network_with_wifi();
-        a.act(Action::Down);
-        a.act(Action::Down);
+        // From Automatic, the strongest network is the next row down.
+        a.act(Action::Up);
         a.act(Action::Down);
         assert_eq!(
             a.wizard.answers.network,
@@ -2001,7 +2019,11 @@ mod tests {
     #[test]
     fn a_failed_join_stays_on_the_screen_and_says_why() {
         let (mut a, requests, events) = at_network_with_wifi();
-        crate::screens::choose(Step::Network, 3, &mut a.wizard.answers);
+        let fjellheim = crate::screens::rows(Step::Network, &a.wizard.answers)
+            .iter()
+            .position(|r| r.text.contains("Fjellheim"))
+            .unwrap();
+        crate::screens::choose(Step::Network, fjellheim, &mut a.wizard.answers);
         a.wizard.answers.wifi.passphrase = "not the passphrase".into();
         a.act(Action::Advance);
         assert!(requests.try_recv().is_ok());
@@ -2020,5 +2042,39 @@ mod tests {
             Some(crate::screens::TextTarget::WifiPassphrase),
             "back in the field, to fix it"
         );
+    }
+
+    /// Choosing Static adds three fields and choosing anything else takes them
+    /// away, and the Wi-Fi status line comes and goes with them. Either way
+    /// the cursor must stay on what it chose, not on whatever row took that
+    /// index — or past the end of a screen that got shorter.
+    #[test]
+    fn the_cursor_stays_on_its_choice_when_rows_come_and_go() {
+        let (mut a, _requests, _events) = at_network_with_wifi();
+        for _ in 0..12 {
+            a.act(Action::Down);
+        }
+        assert!(matches!(
+            a.wizard.answers.network,
+            Some(Network::Static { .. })
+        ));
+        for ch in "10.0.0.2/24".chars() {
+            a.act(Action::Type(ch));
+        }
+        assert_eq!(
+            crate::screens::TextTarget::StaticDns.value(&a.wizard.answers),
+            "10.0.0.2/24",
+            "the cursor ended in the last field"
+        );
+        for _ in 0..12 {
+            a.act(Action::Up);
+            let rows = crate::screens::rows(Step::Network, &a.wizard.answers);
+            assert!(a.cursor() < rows.len(), "cursor past the end of the screen");
+            assert!(rows[a.cursor()].selectable());
+            if rows[a.cursor()].selects_on_focus() {
+                assert!(rows[a.cursor()].chosen, "on a row that is not its choice");
+            }
+        }
+        assert_eq!(a.wizard.answers.network, Some(Network::Dhcp));
     }
 }
