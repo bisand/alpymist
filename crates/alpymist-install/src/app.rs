@@ -4,12 +4,13 @@
 //! desktop exists, on machines whose touchpad may need a driver that is not
 //! loaded yet, so arrow keys and Enter have to be enough on their own.
 
-use crate::answers::Answers;
+use crate::answers::{Answers, Network};
 use crate::editing;
 use crate::execute::{Mode, Progress};
 use crate::plan;
 use crate::pointer;
 use crate::screens::{self, Row, TextTarget};
+use crate::wifi;
 use crate::wizard::{Step, Wizard};
 use alpymist_ui::backdrop::Backdrop;
 use alpymist_ui::chrome::Chrome;
@@ -207,6 +208,10 @@ pub struct App {
     mode: Mode,
     /// The install, once it has started.
     install: Option<Running>,
+    /// The Wi-Fi worker, on a machine with an adapter.
+    wifi: Option<wifi::Link>,
+    /// Set when Enter asked to join a network, so joining it also continues.
+    advance_when_joined: bool,
 }
 
 impl App {
@@ -240,9 +245,139 @@ impl App {
             theme: denise::theme::DARK,
             mode,
             install: None,
+            wifi: None,
+            advance_when_joined: false,
         };
         app.snap_cursor();
         app
+    }
+
+    /// Drive Wi-Fi through this worker, and start looking for networks.
+    ///
+    /// Only on a machine with an adapter; everywhere else the Network screen
+    /// simply has no Wi-Fi rows.
+    pub fn attach_wifi(&mut self, link: wifi::Link) {
+        self.wifi = Some(link);
+        self.scan_wifi();
+    }
+
+    fn scan_wifi(&mut self) {
+        use wifi::Status;
+        let answers = &mut self.wizard.answers;
+        if matches!(
+            answers.wifi.status,
+            Status::Connecting(_) | Status::Scanning
+        ) {
+            return;
+        }
+        if let Some(link) = self.wifi.as_ref()
+            && link.commands.send(wifi::Request::Scan).is_ok()
+        {
+            // A network already joined stays joined while the list refreshes.
+            if !matches!(answers.wifi.status, Status::Connected(_)) {
+                answers.wifi.status = Status::Scanning;
+            }
+        }
+    }
+
+    /// Put the cursor in the Wi-Fi passphrase field, if the screen has one.
+    fn focus_wifi_passphrase(&mut self) {
+        if self.wizard.step() != Step::Network {
+            return;
+        }
+        let rows = screens::rows(Step::Network, &self.wizard.answers);
+        if let Some(index) = rows
+            .iter()
+            .position(|r| r.text_target() == Some(TextTarget::WifiPassphrase))
+        {
+            self.cursor = index;
+            self.place_caret();
+        }
+    }
+
+    /// Whether Enter would join the chosen Wi-Fi network right now.
+    fn can_join_wifi(&self) -> bool {
+        let answers = &self.wizard.answers;
+        let Some(Network::Wifi { ssid }) = &answers.network else {
+            return false;
+        };
+        let secured = answers.wifi.network(ssid).is_none_or(|n| n.secured);
+        self.wifi.is_some()
+            && !answers.wifi.is_connected_to(ssid)
+            && !matches!(answers.wifi.status, wifi::Status::Connecting(_))
+            && (!secured || wifi::validate_passphrase(&answers.wifi.passphrase).is_ok())
+    }
+
+    /// Join the chosen Wi-Fi network, if that is what Enter should do here.
+    ///
+    /// Returns whether it started joining, in which case the screen stays put
+    /// until the join succeeds.
+    fn join_wifi(&mut self) -> bool {
+        let answers = &self.wizard.answers;
+        let Some(Network::Wifi { ssid }) = &answers.network else {
+            return false;
+        };
+        if self.wizard.step() != Step::Network
+            || answers.wifi.is_connected_to(ssid)
+            || matches!(answers.wifi.status, wifi::Status::Connecting(_))
+        {
+            return false;
+        }
+        let secured = answers.wifi.network(ssid).is_none_or(|n| n.secured);
+        if !self.can_join_wifi() {
+            // Enter on a secured network means "this one": the passphrase is
+            // what comes next, so go there rather than only complaining.
+            if self.focused_field().is_none() {
+                self.focus_wifi_passphrase();
+            }
+            return false;
+        }
+        let request = wifi::Request::Connect {
+            ssid: ssid.clone(),
+            passphrase: secured.then(|| answers.wifi.passphrase.clone()),
+        };
+        let ssid = ssid.clone();
+        let Some(link) = self.wifi.as_ref() else {
+            return false;
+        };
+        if link.commands.send(request).is_err() {
+            return false;
+        }
+        self.wizard.answers.wifi.status = wifi::Status::Connecting(ssid);
+        self.advance_when_joined = true;
+        self.reported.clear();
+        true
+    }
+
+    /// Take whatever the Wi-Fi worker has reported.
+    fn drain_wifi(&mut self) {
+        let mut joined = false;
+        while let Some(event) = self.wifi.as_ref().and_then(|l| l.events.try_recv().ok()) {
+            let state = &mut self.wizard.answers.wifi;
+            match event {
+                wifi::Event::Networks(networks) => {
+                    state.networks = networks;
+                    if matches!(state.status, wifi::Status::Scanning) {
+                        state.status = wifi::Status::Ready;
+                    }
+                }
+                wifi::Event::Connected(ssid) => {
+                    state.status = wifi::Status::Connected(ssid);
+                    joined = true;
+                }
+                wifi::Event::Failed(ssid, why) => {
+                    state.status = wifi::Status::Failed(ssid, why);
+                    self.advance_when_joined = false;
+                    self.focus_wifi_passphrase();
+                }
+            }
+        }
+        if joined && std::mem::take(&mut self.advance_when_joined) {
+            if self.wizard.step() == Step::Network && self.wizard.advance().is_ok() {
+                self.reported.clear();
+            }
+            self.snap_cursor();
+        }
     }
 
     /// The row the cursor is on.
@@ -262,6 +397,9 @@ impl App {
     /// lists keep the cursor in their search field for the same reason.
     fn snap_cursor(&mut self) {
         let step = self.wizard.step();
+        if step == Step::Network && self.wizard.answers.wifi.networks.is_empty() {
+            self.scan_wifi();
+        }
         let answers = &self.wizard.answers;
         let rows = screens::rows(step, answers);
         self.cursor = if screens::is_picker(step) {
@@ -398,6 +536,11 @@ impl App {
         // Typing is how you fix what the last refusal complained about, so the
         // complaint should not outlive the first keystroke.
         self.reported.clear();
+        if field == TextTarget::WifiPassphrase
+            && matches!(self.wizard.answers.wifi.status, wifi::Status::Failed(..))
+        {
+            self.wizard.answers.wifi.status = wifi::Status::Ready;
+        }
     }
 
     /// Apply an action.
@@ -451,6 +594,7 @@ impl App {
                 self.restart_requested = true;
                 self.quitting = true;
             }
+            Action::Advance if self.join_wifi() => {}
             Action::Advance => match self.wizard.advance() {
                 Ok(step) => {
                     self.reported.clear();
@@ -560,6 +704,7 @@ impl App {
     /// that had frozen — and would be untestable without a framebuffer.
     pub fn tick(&mut self) {
         self.drain_install();
+        self.drain_wifi();
     }
 
     /// Take whatever the install thread has reported since the last frame.
@@ -676,6 +821,7 @@ impl App {
                 Some(false) => ("F10  Quit", ButtonStyle::Quiet),
             },
             Step::Done => ("Enter  Restart", ButtonStyle::Primary),
+            Step::Network if self.can_join_wifi() => ("Enter  Join", ButtonStyle::Primary),
             _ if self.wizard.can_advance() => ("Enter  Continue", ButtonStyle::Primary),
             _ => ("Enter  Continue", ButtonStyle::Disabled),
         }
@@ -1762,5 +1908,117 @@ mod tests {
         assert!(!a.quitting);
         a.act(Action::Quit);
         assert!(a.quitting);
+    }
+
+    /// A worker whose other end the test holds.
+    fn wifi_link() -> (
+        crate::wifi::Link,
+        std::sync::mpsc::Receiver<crate::wifi::Request>,
+        std::sync::mpsc::Sender<crate::wifi::Event>,
+    ) {
+        let (request_tx, request_rx) = std::sync::mpsc::channel();
+        let (event_tx, event_rx) = std::sync::mpsc::channel();
+        (
+            crate::wifi::Link {
+                commands: request_tx,
+                events: event_rx,
+            },
+            request_rx,
+            event_tx,
+        )
+    }
+
+    fn at_network_with_wifi() -> (
+        App,
+        std::sync::mpsc::Receiver<crate::wifi::Request>,
+        std::sync::mpsc::Sender<crate::wifi::Event>,
+    ) {
+        let mut a = at_disk();
+        a.act(Action::Back);
+        assert_eq!(a.wizard.step(), Step::Network);
+        a.wizard.answers.wifi.adapter = Some("wlan0".into());
+        let (link, requests, events) = wifi_link();
+        a.attach_wifi(link);
+        assert!(matches!(
+            requests.try_recv(),
+            Ok(crate::wifi::Request::Scan)
+        ));
+        events
+            .send(crate::wifi::Event::Networks(crate::wifi::sample().networks))
+            .unwrap();
+        a.tick();
+        (a, requests, events)
+    }
+
+    #[test]
+    fn enter_on_a_wifi_network_joins_it_and_joining_continues() {
+        let (mut a, requests, events) = at_network_with_wifi();
+        a.act(Action::Down);
+        a.act(Action::Down);
+        a.act(Action::Down);
+        assert_eq!(
+            a.wizard.answers.network,
+            Some(Network::Wifi {
+                ssid: "Fjellheim".into()
+            })
+        );
+        a.act(Action::Down);
+        assert_eq!(
+            a.focused_field(),
+            Some(crate::screens::TextTarget::WifiPassphrase),
+            "the passphrase is right under the network, not past the others"
+        );
+        assert_eq!(
+            a.wizard.answers.network,
+            Some(Network::Wifi {
+                ssid: "Fjellheim".into()
+            }),
+            "reaching the field did not choose another network"
+        );
+        for ch in "correct horse battery".chars() {
+            a.act(Action::Type(ch));
+        }
+        assert_eq!(a.primary_button().0, "Enter  Join");
+        a.act(Action::Advance);
+        assert_eq!(a.wizard.step(), Step::Network, "stays until joined");
+        match requests.try_recv() {
+            Ok(crate::wifi::Request::Connect { ssid, passphrase }) => {
+                assert_eq!(ssid, "Fjellheim");
+                assert_eq!(passphrase.as_deref(), Some("correct horse battery"));
+            }
+            _ => panic!("no connect request"),
+        }
+        a.act(Action::Advance);
+        assert!(requests.try_recv().is_err(), "one join at a time");
+
+        events
+            .send(crate::wifi::Event::Connected("Fjellheim".into()))
+            .unwrap();
+        a.tick();
+        assert_eq!(a.wizard.step(), Step::Disk);
+    }
+
+    #[test]
+    fn a_failed_join_stays_on_the_screen_and_says_why() {
+        let (mut a, requests, events) = at_network_with_wifi();
+        crate::screens::choose(Step::Network, 3, &mut a.wizard.answers);
+        a.wizard.answers.wifi.passphrase = "not the passphrase".into();
+        a.act(Action::Advance);
+        assert!(requests.try_recv().is_ok());
+        events
+            .send(crate::wifi::Event::Failed(
+                "Fjellheim".into(),
+                "check the passphrase".into(),
+            ))
+            .unwrap();
+        a.tick();
+        assert_eq!(a.wizard.step(), Step::Network);
+        let rows = crate::screens::rows(Step::Network, &a.wizard.answers);
+        assert!(rows.iter().any(|r| r.text.contains("check the passphrase")));
+        assert_eq!(
+            a.focused_field(),
+            Some(crate::screens::TextTarget::WifiPassphrase),
+            "back in the field, to fix it"
+        );
     }
 }

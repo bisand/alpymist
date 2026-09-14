@@ -24,6 +24,7 @@ pub mod pointer;
 pub mod safety;
 pub mod screens;
 pub mod typing;
+pub mod wifi;
 pub mod wizard;
 
 pub use answers::{Answers, DiskPlan, Field, Firmware, Issue, Network};

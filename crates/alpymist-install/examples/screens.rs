@@ -14,6 +14,7 @@
 use alpymist_core::Tier;
 use alpymist_install::answers::{Answers, DiskPlan, Network};
 use alpymist_install::app::{Action, App};
+use alpymist_install::wifi::Status;
 use alpymist_install::wizard::Step;
 use denise::PixelFormat;
 use denise::geom::Size;
@@ -25,7 +26,9 @@ fn answers() -> Answers {
         keyboard: Some("no".into()),
         keyboard_variant: Some("no".into()),
         timezone: Some("Europe/Oslo".into()),
-        network: Some(Network::Dhcp),
+        network: Some(Network::Wifi {
+            ssid: "Fjellheim".into(),
+        }),
         disk: Some(DiskPlan::WholeDisk {
             device: "/dev/sda".into(),
             encrypt: true,
@@ -40,6 +43,11 @@ fn answers() -> Answers {
         passphrase: "a long disk passphrase".into(),
         passphrase_confirm: "a long disk passphrase".into(),
         detected_tier: Some(Tier::Lite),
+        // A laptop with Wi-Fi, part way through joining a secured network.
+        wifi: alpymist_install::wifi::Wifi {
+            passphrase: "correct horse".into(),
+            ..alpymist_install::wifi::sample()
+        },
         ..Answers::default()
     }
 }
@@ -52,9 +60,19 @@ fn main() {
     std::fs::create_dir_all(&dir).expect("create output directory");
 
     for (index, step) in Step::ALL.into_iter().enumerate() {
-        let mut app = App::new(answers(), width, height);
+        let mut answers = answers();
+        // Past the Network screen the network has been joined; on it, the
+        // join is still to do, which is the state worth seeing.
+        if step > Step::Network {
+            answers.wifi.status = Status::Connected("Fjellheim".into());
+        }
+        let mut app = App::new(answers, width, height);
+        // The dry-run install reports on a thread and the Install screen will
+        // not continue until it has finished, so its progress is collected
+        // here as the real loop does; without that this never reached Done.
         while app.wizard.step() != step && app.wizard.step() != Step::Done {
             app.act(Action::Advance);
+            app.tick();
         }
         if index == 0 {
             eprintln!("{}", app.face.status.describe());

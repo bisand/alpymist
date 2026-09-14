@@ -51,6 +51,8 @@ pub enum TextTarget {
     Passphrase,
     /// Passphrase confirmation.
     PassphraseConfirm,
+    /// The chosen Wi-Fi network's passphrase.
+    WifiPassphrase,
 }
 
 impl TextTarget {
@@ -76,7 +78,7 @@ impl TextTarget {
 
             Self::Hostname => "Hostname",
             Self::KeyboardSearch | Self::ZoneSearch => "Search",
-            Self::Passphrase => "Passphrase",
+            Self::Passphrase | Self::WifiPassphrase => "Passphrase",
             Self::PasswordConfirm | Self::PassphraseConfirm => "Confirm",
         }
     }
@@ -86,7 +88,11 @@ impl TextTarget {
     pub fn is_secret(self) -> bool {
         matches!(
             self,
-            Self::Password | Self::PasswordConfirm | Self::Passphrase | Self::PassphraseConfirm
+            Self::Password
+                | Self::PasswordConfirm
+                | Self::Passphrase
+                | Self::PassphraseConfirm
+                | Self::WifiPassphrase
         )
     }
 
@@ -102,6 +108,7 @@ impl TextTarget {
             Self::ZoneSearch => &mut a.timezone_filter,
             Self::Passphrase => &mut a.passphrase,
             Self::PassphraseConfirm => &mut a.passphrase_confirm,
+            Self::WifiPassphrase => &mut a.wifi.passphrase,
         }
     }
 
@@ -118,6 +125,7 @@ impl TextTarget {
             Self::ZoneSearch => &a.timezone_filter,
             Self::Passphrase => &a.passphrase,
             Self::PassphraseConfirm => &a.passphrase_confirm,
+            Self::WifiPassphrase => &a.wifi.passphrase,
         }
     }
 }
@@ -347,6 +355,124 @@ fn picker_rows(step: Step, a: &Answers) -> Vec<Row> {
     rows
 }
 
+/// How many Wi-Fi networks the Network screen lists.
+///
+/// Three wired choices, three networks, the passphrase and a status line are
+/// the eight body rows every supported screen size has.
+pub const WIFI_ROWS: usize = 3;
+
+/// The wired choices above the Wi-Fi networks.
+const WIRED_ROWS: usize = 3;
+
+/// The Wi-Fi networks shown: the strongest, with the chosen one always among
+/// them even when others have grown stronger since.
+fn wifi_shown(a: &Answers) -> Vec<&crate::wifi::Network> {
+    let mut shown: Vec<&crate::wifi::Network> = a.wifi.networks.iter().take(WIFI_ROWS).collect();
+    if let Some(Network::Wifi { ssid }) = &a.network
+        && !shown.iter().any(|n| &n.ssid == ssid)
+        && let Some(chosen) = a.wifi.network(ssid)
+    {
+        shown.pop();
+        shown.push(chosen);
+    }
+    shown
+}
+
+fn strength(bars: u8) -> &'static str {
+    match bars {
+        4 => "strong",
+        3 => "good",
+        2 => "fair",
+        _ => "weak",
+    }
+}
+
+/// The Wi-Fi network chosen on the Network screen, if one is.
+fn chosen_wifi(a: &Answers) -> Option<&str> {
+    match &a.network {
+        Some(Network::Wifi { ssid }) => Some(ssid.as_str()),
+        _ => None,
+    }
+}
+
+/// Whether the chosen network still needs its passphrase typed.
+fn wants_passphrase(a: &Answers, ssid: &str) -> bool {
+    a.wifi.network(ssid).is_some_and(|n| n.secured) && !a.wifi.is_connected_to(ssid)
+}
+
+/// The network on row `index` of the Network screen, if that row is one.
+///
+/// The passphrase field sits directly under the chosen network, so the rows
+/// after it are shifted down by one. Directly under, and not below the whole
+/// list, because the cursor chooses a network by landing on it: a field below
+/// the list could only be reached by choosing every network on the way.
+fn wifi_at(a: &Answers, index: usize) -> Option<String> {
+    let chosen = chosen_wifi(a);
+    let mut row = WIRED_ROWS;
+    for network in wifi_shown(a) {
+        if row == index {
+            return Some(network.ssid.clone());
+        }
+        row += 1;
+        if chosen == Some(network.ssid.as_str()) && wants_passphrase(a, &network.ssid) {
+            row += 1;
+        }
+    }
+    None
+}
+
+fn network_rows(a: &Answers) -> Vec<Row> {
+    use crate::wifi::Status;
+
+    let mut rows = vec![
+        Row::radio("Automatic (DHCP)", matches!(a.network, Some(Network::Dhcp))),
+        Row::radio(
+            "Static address",
+            matches!(a.network, Some(Network::Static { .. })),
+        ),
+        Row::radio("Set up later", matches!(a.network, Some(Network::Offline))),
+    ];
+    if a.wifi.adapter.is_none() {
+        return rows;
+    }
+    let chosen = chosen_wifi(a);
+    for network in wifi_shown(a) {
+        let is_chosen = chosen == Some(network.ssid.as_str());
+        rows.push(Row::radio(
+            format!(
+                "Wi-Fi  {}  ({}, {})",
+                network.ssid,
+                if network.secured { "secured" } else { "open" },
+                strength(network.bars)
+            ),
+            is_chosen,
+        ));
+        if is_chosen && wants_passphrase(a, &network.ssid) {
+            rows.push(Row {
+                text: TextTarget::WifiPassphrase.label().to_string(),
+                kind: RowKind::Text {
+                    field: TextTarget::WifiPassphrase,
+                    secret: true,
+                },
+                chosen: false,
+            });
+        }
+    }
+    rows.push(Row::note(match &a.wifi.status {
+        Status::Unavailable => String::new(),
+        Status::Scanning => "Looking for Wi-Fi networks...".into(),
+        Status::Ready if a.wifi.networks.is_empty() => "No Wi-Fi networks found.".into(),
+        Status::Ready => match chosen {
+            Some(_) => "Enter joins the network.".into(),
+            None => String::new(),
+        },
+        Status::Connecting(ssid) => format!("Joining {ssid}..."),
+        Status::Connected(ssid) => format!("Joined {ssid}."),
+        Status::Failed(ssid, why) => format!("Could not join {ssid}: {why}."),
+    }));
+    rows
+}
+
 /// The tiers a user may pick, with what each actually runs.
 pub const TIERS: [(Tier, &str); 4] = [
     (Tier::Full, "Full — Hyprland, animated and composited"),
@@ -372,14 +498,7 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             Row::note("Nothing is written to any disk until you confirm."),
         ],
         Step::Keyboard | Step::Region => picker_rows(step, a),
-        Step::Network => vec![
-            Row::radio("Automatic (DHCP)", matches!(a.network, Some(Network::Dhcp))),
-            Row::radio(
-                "Static address",
-                matches!(a.network, Some(Network::Static { .. })),
-            ),
-            Row::radio("Set up later", matches!(a.network, Some(Network::Offline))),
-        ],
+        Step::Network => network_rows(a),
         Step::Disk => {
             if a.disks.is_empty() {
                 return vec![
@@ -524,6 +643,7 @@ fn describe_network(a: &Answers) -> String {
     match &a.network {
         Some(Network::Dhcp) => "Automatic (DHCP)".into(),
         Some(Network::Static { address, .. }) => format!("Static {address}"),
+        Some(Network::Wifi { ssid }) => format!("Wi-Fi {ssid}"),
         Some(Network::Offline) => "Set up later".into(),
         None => "-".into(),
     }
@@ -563,15 +683,27 @@ pub fn choose(step: Step, index: usize, a: &mut Answers) {
             }
         }
         Step::Network => {
-            a.network = Some(match index {
-                0 => Network::Dhcp,
-                1 => Network::Static {
+            let wifi = wifi_at(a, index);
+            // The passphrase field and status line follow the networks; they
+            // are not choices.
+            if index >= WIRED_ROWS && wifi.is_none() {
+                return;
+            }
+            let network = match (index, wifi) {
+                (_, Some(ssid)) => Network::Wifi { ssid },
+                (0, None) => Network::Dhcp,
+                (1, None) => Network::Static {
                     address: String::new(),
                     gateway: String::new(),
                     dns: String::new(),
                 },
                 _ => Network::Offline,
-            });
+            };
+            // Arriving at a new network is not having typed its passphrase.
+            if a.network != Some(network.clone()) && matches!(network, Network::Wifi { .. }) {
+                a.wifi.passphrase.clear();
+            }
+            a.network = Some(network);
         }
         Step::Disk if a.disks.is_empty() => {}
         Step::Disk => match index {
@@ -939,6 +1071,15 @@ mod tests {
             passphrase_confirm: "secret".into(),
             hostname: "alpymist".into(),
             detected_tier: Some(Tier::Lite),
+            // Wi-Fi chosen and failed: the Network screen at its longest, with
+            // the passphrase field and a status line under the networks.
+            wifi: crate::wifi::Wifi {
+                status: crate::wifi::Status::Failed(
+                    "Naboen sitt nett".into(),
+                    "check the passphrase".into(),
+                ),
+                ..crate::wifi::sample()
+            },
             ..answers().with_defaults()
         }
     }
@@ -1014,5 +1155,85 @@ mod tests {
                 row.text
             );
         }
+    }
+
+    #[test]
+    fn wifi_networks_are_offered_where_there_is_an_adapter() {
+        let mut a = answers();
+        assert_eq!(
+            rows(Step::Network, &a).len(),
+            3,
+            "no adapter, no Wi-Fi rows"
+        );
+
+        a.wifi = crate::wifi::sample();
+        let shown = rows(Step::Network, &a);
+        assert!(shown[3].text.contains("Fjellheim"));
+        assert!(shown[4].text.contains("open"));
+        assert_eq!(
+            shown.iter().filter(|r| r.text.starts_with("Wi-Fi")).count(),
+            super::WIFI_ROWS,
+            "only the strongest networks fit"
+        );
+
+        choose(Step::Network, 3, &mut a);
+        assert_eq!(
+            a.network,
+            Some(Network::Wifi {
+                ssid: "Fjellheim".into()
+            })
+        );
+        let shown = rows(Step::Network, &a);
+        assert!(
+            shown
+                .iter()
+                .any(|r| r.text_target() == Some(super::TextTarget::WifiPassphrase)),
+            "a secured network asks for its passphrase"
+        );
+
+        // Row 4 is now Fjellheim's passphrase; the open network follows it.
+        choose(Step::Network, 5, &mut a);
+        assert_eq!(
+            a.network,
+            Some(Network::Wifi {
+                ssid: "Kaffebar Gjest".into()
+            })
+        );
+        assert!(
+            !rows(Step::Network, &a)
+                .iter()
+                .any(|r| r.text_target().is_some()),
+            "an open network does not"
+        );
+    }
+
+    /// The list is re-sorted by every scan; the network being joined must not
+    /// scroll off the screen because a neighbour's signal improved.
+    #[test]
+    fn the_chosen_network_stays_listed_when_stronger_ones_appear() {
+        let mut a = answers();
+        a.wifi = crate::wifi::sample();
+        a.network = Some(Network::Wifi {
+            ssid: "DIRECT-printer".into(),
+        });
+        assert!(
+            rows(Step::Network, &a)
+                .iter()
+                .any(|r| r.chosen && r.text.contains("DIRECT-printer"))
+        );
+    }
+
+    #[test]
+    fn choosing_the_passphrase_or_status_row_changes_nothing() {
+        let mut a = answers();
+        a.wifi = crate::wifi::sample();
+        choose(Step::Network, 3, &mut a);
+        let before = a.clone();
+        let passphrase = rows(Step::Network, &a)
+            .iter()
+            .position(|r| r.text_target().is_some())
+            .unwrap();
+        choose(Step::Network, passphrase, &mut a);
+        assert_eq!(a, before);
     }
 }

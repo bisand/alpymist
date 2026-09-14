@@ -87,6 +87,11 @@ pub enum Network {
         /// Name server.
         dns: String,
     },
+    /// A Wi-Fi network, joined on the Network screen before anything is written.
+    Wifi {
+        /// The network's name.
+        ssid: String,
+    },
     /// Set the network up later; the installer does not need it.
     Offline,
 }
@@ -140,6 +145,8 @@ pub struct Answers {
     pub timezone_filter: String,
     /// Network configuration.
     pub network: Option<Network>,
+    /// The Wi-Fi networks in reach, and whether one has been joined.
+    pub wifi: crate::wifi::Wifi,
     /// What to do with the disk.
     pub disk: Option<DiskPlan>,
     /// Set when the user has acknowledged that the disk will be erased.
@@ -191,6 +198,7 @@ impl std::fmt::Debug for Answers {
             .field("keyboard_variant", &self.keyboard_variant)
             .field("timezone", &self.timezone)
             .field("network", &self.network)
+            .field("wifi", &self.wifi)
             .field("disk", &self.disk)
             .field("disk_confirmed", &self.disk_confirmed)
             .field("passphrase", &masked(&self.passphrase))

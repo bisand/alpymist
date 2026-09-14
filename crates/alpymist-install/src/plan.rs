@@ -634,7 +634,28 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         ],
     ));
 
-    if matches!(a.network, Some(Network::Dhcp)) {
+    // The network joined on the Network screen, as iwd saved it there: its
+    // passphrase already turned into a key, and readable by root alone.
+    if let Some(Network::Wifi { ssid }) = &a.network {
+        let secured = a.wifi.network(ssid).is_none_or(|n| n.secured);
+        let name = crate::wifi::profile_name(ssid, secured);
+        steps.push(
+            Step::new(
+                "Remembering the Wi-Fi network",
+                &[
+                    "install",
+                    "-D",
+                    "-m",
+                    "600",
+                    &format!("{}/{name}", crate::wifi::IWD_STATE),
+                    &format!("{ROOT}{}/{name}", crate::wifi::IWD_STATE),
+                ],
+            )
+            .may_fail(),
+        );
+    }
+
+    if matches!(a.network, Some(Network::Dhcp | Network::Wifi { .. })) {
         steps.push(Step::new(
             "Enabling networking",
             &["chroot", ROOT, "rc-update", "add", "networking", "boot"],
@@ -1234,5 +1255,34 @@ mod tests {
             root: "/dev/sdb3".into(),
         });
         assert!(matches!(build(&a).unwrap_err(), PlanError::Unsupported(_)));
+    }
+
+    #[test]
+    fn a_joined_wifi_network_is_given_to_the_installed_system() {
+        let mut a = answers();
+        a.wifi = crate::wifi::sample();
+        a.network = Some(Network::Wifi {
+            ssid: "Fjellheim".into(),
+        });
+        let plan = build(&a).unwrap();
+        let copy = step(&plan, "Remembering the Wi-Fi network");
+        assert_eq!(
+            copy.argv,
+            [
+                "install",
+                "-D",
+                "-m",
+                "600",
+                "/var/lib/iwd/Fjellheim.psk",
+                "/mnt/var/lib/iwd/Fjellheim.psk"
+            ]
+        );
+        assert!(copy.stdin.is_none(), "the passphrase is never in the plan");
+        assert!(titles(&a).contains(&"Enabling networking".to_string()));
+        assert!(
+            !titles(&answers())
+                .iter()
+                .any(|t| t.contains("Wi-Fi network"))
+        );
     }
 }

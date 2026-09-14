@@ -235,8 +235,22 @@ mod drm_run {
         }
         .with_defaults();
         eprintln!("firmware: {:?}", answers.firmware);
+        let adapter = alpymist_install::wifi::adapter();
+        let answers = Answers {
+            wifi: alpymist_install::wifi::Wifi {
+                adapter: adapter.clone(),
+                ..Default::default()
+            },
+            ..answers
+        };
         let mut app = App::with_mode(answers, size.width, size.height, crate::install_mode());
         eprintln!("{}", app.face.status.describe());
+        // Joining a network on the live system writes nothing to a disk, so it
+        // happens in a dry run too: it is how a dry run can check Wi-Fi works.
+        if let Some(adapter) = adapter {
+            eprintln!("wifi: adapter {adapter}");
+            app.attach_wifi(alpymist_install::wifi::spawn(adapter));
+        }
 
         let mut events: Vec<InputEvent> = Vec::new();
         let mut next_retry = Instant::now() + RETRY_EVERY;

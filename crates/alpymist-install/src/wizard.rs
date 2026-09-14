@@ -156,6 +156,29 @@ fn typed_as(a: &Answers) -> &'static str {
     }
 }
 
+/// Why the chosen Wi-Fi network cannot be left yet, if it cannot.
+///
+/// Joined is the only way on: a network that was only chosen is not known to
+/// work, and finding out after the disk is erased would be finding out late.
+fn wifi_blocker(a: &Answers, ssid: &str) -> Option<String> {
+    use crate::wifi::Status;
+    if a.wifi.is_connected_to(ssid) {
+        return None;
+    }
+    if matches!(&a.wifi.status, Status::Connecting(s) if s == ssid) {
+        return Some(format!("Joining {ssid}..."));
+    }
+    if a.wifi.network(ssid).is_none_or(|n| n.secured) {
+        if a.wifi.passphrase.is_empty() {
+            return Some(format!("Type the passphrase for {ssid}."));
+        }
+        if let Err(why) = crate::wifi::validate_passphrase(&a.wifi.passphrase) {
+            return Some(why);
+        }
+    }
+    Some(format!("Not joined to {ssid} yet. Enter joins it."))
+}
+
 impl Answers {
     /// Whether the chosen disk will be encrypted.
     #[must_use]
@@ -248,6 +271,11 @@ impl Wizard {
                         if let Err(why) = validate_ipv4(value, with_prefix) {
                             issues.push(issue(Field::Network, &format!("The {what}: {why}")));
                         }
+                    }
+                }
+                Some(Network::Wifi { ssid }) => {
+                    if let Some(why) = wifi_blocker(a, ssid) {
+                        issues.push(issue(Field::Network, &why));
                     }
                 }
                 Some(Network::Dhcp | Network::Offline) => {}
@@ -713,5 +741,27 @@ mod tests {
             "reached {:?} with nothing filled in",
             w.step()
         );
+    }
+
+    /// A network that was only chosen is not known to work; finding out after
+    /// the disk is erased would be finding out too late.
+    #[test]
+    fn a_wifi_network_must_be_joined_before_moving_on() {
+        let mut w = at(Step::Network);
+        w.answers.wifi = crate::wifi::sample();
+        w.answers.network = Some(Network::Wifi {
+            ssid: "Fjellheim".into(),
+        });
+        assert!(!w.can_advance());
+        assert!(w.blockers()[0].message.contains("passphrase"));
+
+        w.answers.wifi.passphrase = "short".into();
+        assert!(w.blockers()[0].message.contains("8 to 63"));
+
+        w.answers.wifi.passphrase = "correct horse battery".into();
+        assert!(w.blockers()[0].message.contains("Enter joins"));
+
+        w.answers.wifi.status = crate::wifi::Status::Connected("Fjellheim".into());
+        assert!(w.can_advance());
     }
 }
