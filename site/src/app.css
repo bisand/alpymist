@@ -1,0 +1,233 @@
+/* Alpymist: the installer's palette, the desktop's typefaces. Fira Sans for
+   reading, Fira Code wherever the text is something you type or a machine
+   prints. Both are served from this site rather than a font CDN. */
+
+@import '@fontsource/fira-sans/400.css';
+@import '@fontsource/fira-sans/400-italic.css';
+@import '@fontsource/fira-sans/500.css';
+@import '@fontsource/fira-sans/600.css';
+@import '@fontsource/fira-sans/700.css';
+@import '@fontsource/fira-code/400.css';
+@import '@fontsource/fira-code/500.css';
+
+:root {
+	/* crates/alpymist-ui/src/palette.rs */
+	--sky-high: #0b121e;
+	--sky-low: #3a4c63;
+	--ridge: #070c14;
+	--mist: #afc2d6;
+	--ink: #eaf0f6;
+	--ink-dim: #9aabbd;
+	--accent: #7fb8d9;
+	/* The terminal palette the desktop's configs share */
+	--accent-deep: #3b6e8d;
+	--green: #9fcf9f;
+	--amber: #d9a07f;
+	--red: #d98f7f;
+	--violet: #b79fd9;
+
+	--surface: #0f1827;
+	--line: #1d2a3b;
+	--line-strong: #2b3a4e;
+
+	--sans: 'Fira Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--mono: 'Fira Code', 'Fira Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+	--measure: 44rem;
+	--wide: 72rem;
+	--gutter: clamp(1rem, 4vw, 2rem);
+	--radius: 8px;
+
+	color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	background: var(--sky-high);
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--sky-high);
+	color: var(--ink);
+	font-family: var(--sans);
+	font-size: 1.0625rem;
+	line-height: 1.65;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4 {
+	line-height: 1.2;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	text-wrap: balance;
+}
+
+p {
+	text-wrap: pretty;
+}
+
+a {
+	color: var(--accent);
+	text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+	text-underline-offset: 0.2em;
+}
+
+a:hover {
+	text-decoration-color: currentColor;
+}
+
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 3px;
+	border-radius: 2px;
+}
+
+::selection {
+	background: var(--sky-low);
+	color: var(--ink);
+}
+
+code,
+kbd,
+pre,
+samp {
+	font-family: var(--mono);
+	font-size: 0.9em;
+	font-variant-ligatures: contextual;
+}
+
+:not(pre) > code {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 4px;
+	padding: 0.05em 0.35em;
+	color: var(--mist);
+}
+
+pre {
+	background: var(--ridge);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 1rem 1.15rem;
+	overflow-x: auto;
+	line-height: 1.55;
+}
+
+table {
+	border-collapse: collapse;
+	width: 100%;
+	font-size: 0.95rem;
+}
+
+th,
+td {
+	text-align: left;
+	padding: 0.55rem 0.75rem;
+	border-bottom: 1px solid var(--line);
+	vertical-align: top;
+}
+
+th {
+	font-weight: 600;
+	color: var(--ink-dim);
+	font-size: 0.8rem;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+
+hr {
+	border: 0;
+	border-top: 1px solid var(--line);
+	margin: 3rem 0;
+}
+
+.wrap {
+	width: 100%;
+	max-width: var(--wide);
+	margin-inline: auto;
+	padding-inline: var(--gutter);
+}
+
+.eyebrow {
+	font-family: var(--mono);
+	font-size: 0.8rem;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--accent);
+}
+
+.table-scroll {
+	overflow-x: auto;
+}
+
+/* Rendered markdown */
+.prose {
+	max-width: var(--measure);
+}
+
+.prose h2 {
+	font-size: 1.5rem;
+	margin: 2.75rem 0 0.75rem;
+}
+
+.prose h3 {
+	font-size: 1.15rem;
+	margin: 2rem 0 0.5rem;
+}
+
+.prose ul,
+.prose ol {
+	padding-left: 1.3rem;
+}
+
+.prose li + li {
+	margin-top: 0.35rem;
+}
+
+.prose li::marker {
+	color: var(--ink-dim);
+}
+
+.prose blockquote {
+	margin: 1.5rem 0;
+	padding: 0.25rem 0 0.25rem 1rem;
+	border-left: 3px solid var(--accent-deep);
+	color: var(--ink-dim);
+}
+
+.prose table {
+	display: block;
+	overflow-x: auto;
+	margin: 1.5rem 0;
+}
+
+/* Scroll a wide table sideways on a phone rather than crushing a column. */
+.prose th,
+.prose td {
+	min-width: 7.5rem;
+}
+
+.prose strong {
+	font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation: none !important;
+		transition: none !important;
+	}
+}

@@ -55,6 +55,7 @@ cargo run -p alpymistctl -- probe
 | `builder/`       | The Alpine container everything is built in            |
 | `xtask/`         | Build and test orchestration (Rust)                    |
 | `docs/adr/`      | Architecture decision records                          |
+| `site/`          | [alpymist.org](https://alpymist.org), in SvelteKit     |
 
 ## Development
 
