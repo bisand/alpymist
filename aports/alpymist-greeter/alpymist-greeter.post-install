@@ -1,0 +1,10 @@
+#!/bin/sh
+# The greeter draws to /dev/dri and reads /dev/input itself, with no seat
+# manager in between, so greetd's user needs the groups that own them. The
+# greetd package created the user; this only widens what it may open.
+for group in video input; do
+	addgroup -S "$group" 2>/dev/null
+	addgroup greetd "$group" 2>/dev/null
+done
+chown greetd:greetd /var/cache/alpymist-greeter 2>/dev/null
+exit 0

@@ -1,0 +1,45 @@
+[package]
+name = "alpymist-greeter"
+description = "The Alpymist login screen: a greetd greeter drawn straight to DRM/KMS."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "alpymist_greeter"
+path = "src/lib.rs"
+
+[[bin]]
+name = "alpymist-greeter"
+path = "src/main.rs"
+
+[dependencies]
+alpymist-ui = { workspace = true, features = ["render"] }
+denise = { workspace = true }
+denise-render = { workspace = true }
+denise-ui = { workspace = true }
+denise-winit = { workspace = true, optional = true }
+denise-drm = { workspace = true, optional = true }
+denise-evdev = { workspace = true, optional = true }
+# Reads /etc/localtime itself, so the clock is in the machine's time zone.
+jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+signal-hook = { version = "0.3", optional = true }
+
+[features]
+default = ["winit"]
+winit = ["dep:denise-winit"]
+# The real target: KMS plus evdev, run by greetd on its VT.
+drm = ["dep:denise-drm", "dep:denise-evdev", "dep:signal-hook"]
+
+[dev-dependencies]
+# The snapshot example: the login screen rendered to a PNG for review.
+png = "0.17"
+# The clock test names a zone rather than trusting the build machine's.
+jiff = { version = "0.2", default-features = false, features = ["std", "tzdb-bundle-always"] }
+
+[lints]
+workspace = true

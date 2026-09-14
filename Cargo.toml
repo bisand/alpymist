@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/alpymist-core",
+    "crates/alpymist-greeter",
     "crates/alpymist-glesprobe",
     "crates/alpymist-install",
     "crates/alpymist-menu",

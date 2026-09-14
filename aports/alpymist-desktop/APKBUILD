@@ -11,13 +11,13 @@
 # than system files an upgrade would overwrite.
 pkgname=alpymist-desktop
 pkgver=0.0.1
-pkgrel=5
+pkgrel=6
 pkgdesc="Alpymist desktop: what every tier shares"
 url="https://github.com/bisand/alpymist"
 arch="noarch"
 license="MIT OR Apache-2.0"
-# greetd on VT 7, with tuigreet as the greeter; seatd hands the compositor its
-# devices without running it as root; pam-rundir gives each login the
+# greetd on VT 7, with alpymist-greeter as the login screen; seatd hands the
+# compositor its devices without running it as root; pam-rundir gives each login the
 # XDG_RUNTIME_DIR a Wayland compositor refuses to start without, which on
 # Alpine elogind would otherwise provide; pipewire for sound; flatpak is how
 # applications are installed (ADR 0001), and the GTK portal is what lets those
@@ -29,6 +29,7 @@ license="MIT OR Apache-2.0"
 # font gets wrong.
 depends="
 	adwaita-icon-theme
+	alpymist-greeter
 	alpymist-keys
 	alpymist-shell=$pkgver-r$pkgrel
 	brightnessctl
@@ -41,7 +42,6 @@ depends="
 	font-nerd-fonts-symbols
 	gsettings-desktop-schemas
 	greetd
-	greetd-tuigreet
 	librewolf
 	mesa-dri-gallium
 	pam-rundir
@@ -98,6 +98,10 @@ package() {
 	install -Dm644 "$builddir"/desktop/alpymist-greetd.pam \
 		"$pkgdir"/etc/pam.d/alpymist-greetd
 	install -Dm644 "$builddir"/desktop/mimeapps.list "$pkgdir"/etc/xdg/mimeapps.list
+	# A desktop started from a text console, where there is no PAM to make
+	# XDG_RUNTIME_DIR; see the script.
+	install -Dm644 "$builddir"/desktop/profile/alpymist-runtime-dir.sh \
+		"$pkgdir"/etc/profile.d/alpymist-runtime-dir.sh
 	# Dark by default, for GTK 3, GTK 4, libadwaita and whatever asks the
 	# portal. Defaults a user's own settings override; glib's trigger compiles
 	# the schema override when this is installed.

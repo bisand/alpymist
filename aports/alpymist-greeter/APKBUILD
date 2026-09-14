@@ -1,0 +1,48 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-greeter
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="Alpymist login screen: a greetd greeter drawn straight to DRM/KMS"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+# greetd does the logging in; doas carries out Restart and Power off, for
+# exactly those two commands. The font is a runtime suggestion: without it the
+# screen falls back to Denise's built-in bitmap and still reads correctly.
+makedepends="cargo"
+depends="greetd doas font-fira-ttf"
+install="$pkgname.post-install"
+options="!check"  # the test suite runs in CI, not in the package build
+source="alpymist-greeter.doas.conf"
+builddir="$srcdir"
+
+prepare() {
+	# Same as alpymistctl: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	# No default features: the desktop window backend must not be linked into
+	# something that runs before any desktop exists.
+	cargo build --release --locked \
+		-p alpymist-greeter --no-default-features --features drm
+}
+
+package() {
+	install -Dm755 "$builddir"/target/release/alpymist-greeter \
+		"$pkgdir"/usr/bin/alpymist-greeter
+	install -Dm600 "$srcdir"/alpymist-greeter.doas.conf \
+		"$pkgdir"/etc/doas.d/alpymist-greeter.conf
+	# Where the last person to log in is remembered; greetd's to write, which
+	# the post-install sets, since the user does not exist when this runs.
+	install -d "$pkgdir"/var/cache/alpymist-greeter
+}
+
+# Filled in by `abuild checksum` at build time; see alpymist-install.
+sha512sums=""
