@@ -11,7 +11,7 @@
 # than system files an upgrade would overwrite.
 pkgname=alpymist-desktop
 pkgver=0.0.1
-pkgrel=4
+pkgrel=5
 pkgdesc="Alpymist desktop: what every tier shares"
 url="https://github.com/bisand/alpymist"
 arch="noarch"
@@ -163,14 +163,19 @@ _full() {
 	pkgdesc="Alpymist desktop, Full tier: Hyprland"
 	# Ghostty on this tier only: it draws through GTK4 and wants the GPU the
 	# Full tier assumes. The other tiers keep foot, which is fastest on a CPU.
-	# alpymist-menu is the launcher and system menu hyprland.conf binds.
-	depends="$pkgname-wayland=$pkgver-r$pkgrel alpymist-menu ghostty hyprland"
+	# alpymist-menu is the launcher and system menu hyprland.conf binds; squint
+	# is the editor, as $VISUAL and for text files.
+	depends="$pkgname-wayland=$pkgver-r$pkgrel alpymist-menu ghostty hyprland squint"
 	install -Dm644 "$builddir"/desktop/greetd/alpymist-full.toml \
 		"$subpkgdir"/etc/greetd/alpymist-full.toml
 	# US until the installer writes the chosen layout over it; apk then leaves
 	# the changed file alone on upgrade. hyprland.conf sources it.
 	install -Dm644 "$builddir"/desktop/hypr/hyprland-keyboard.conf \
 		"$subpkgdir"/etc/alpymist/hyprland-keyboard.conf
+	# Text files open in squint under Hyprland only: XDG reads
+	# hyprland-mimeapps.list when XDG_CURRENT_DESKTOP is Hyprland.
+	install -Dm644 "$builddir"/desktop/hypr/hyprland-mimeapps.list \
+		"$subpkgdir"/etc/xdg/hyprland-mimeapps.list
 	_skel full "$subpkgdir"
 }
 

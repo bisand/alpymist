@@ -1,0 +1,42 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+#
+# squint, the text editor for files too big for text editors, as the Full
+# tier's default editor: a proof of concept, pinned to a commit of
+#   https://github.com/bisand/squint
+pkgname=squint
+pkgver=0.1.0_git20260914
+pkgrel=0
+_commit=d4e7f98ce66f7c7f9c2b7fb533c0ea54ef000ebc
+pkgdesc="Text editor that opens files of any size instantly"
+url="https://github.com/bisand/squint"
+arch="aarch64 x86_64"
+license="MIT"
+# One window drawn by DeniseUI through winit, on the GPU where it can and in
+# software where it cannot. rfd's open and save dialogs are GTK 3's.
+makedepends="cargo gtk+3.0-dev libxkbcommon-dev"
+depends="font-fira-code-nerd"
+# !check: the test suite runs in squint's own CI
+# net: cargo fetches the crates
+options="!check net"
+source="
+	https://github.com/bisand/squint/archive/$_commit/squint-$_commit.tar.gz
+	squint.desktop
+	"
+builddir="$srcdir/squint-$_commit"
+
+build() {
+	cargo build --release --locked -p squint
+}
+
+package() {
+	install -Dm755 target/release/squint "$pkgdir"/usr/bin/squint
+	install -Dm644 "$srcdir"/squint.desktop \
+		"$pkgdir"/usr/share/applications/squint.desktop
+	install -Dm644 LICENSE -t "$pkgdir"/usr/share/licenses/$pkgname/
+}
+
+sha512sums="
+503be62202ea2da62a400e533fa4e6595b12eaac893443f21c703355f8952a50e4027ed978b6e15a59634b5b1b3bfa5e21091da129673ecf41577be08a4345cf  squint-d4e7f98ce66f7c7f9c2b7fb533c0ea54ef000ebc.tar.gz
+280fce6ff3b4b7a73443795fead1da57d4650b5659ac6830df5c5c0d055cec09eb0dd90166b8ba64339b1544475e5253e2d97defc886c387d281e95928f98e1a  squint.desktop
+"

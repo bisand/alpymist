@@ -1,0 +1,16 @@
+# Alpymist, Full tier: squint opens text. Read before /etc/xdg/mimeapps.list
+# when XDG_CURRENT_DESKTOP is Hyprland; a user's ~/.config/mimeapps.list wins.
+[Default Applications]
+text/plain=squint.desktop
+text/x-log=squint.desktop
+text/markdown=squint.desktop
+text/csv=squint.desktop
+text/xml=squint.desktop
+text/x-rust=squint.desktop
+text/x-python=squint.desktop
+text/x-shellscript=squint.desktop
+application/json=squint.desktop
+application/xml=squint.desktop
+application/x-yaml=squint.desktop
+application/toml=squint.desktop
+application/x-shellscript=squint.desktop

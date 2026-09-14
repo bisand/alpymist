@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=squint
+GenericName=Text Editor
+Comment=Open files of any size instantly, look, tweak and save
+Exec=squint %f
+Icon=accessories-text-editor
+Terminal=false
+Categories=Utility;TextEditor;
+Keywords=text;editor;log;json;xml;
+MimeType=text/plain;text/x-log;text/markdown;text/csv;text/xml;text/x-csrc;text/x-chdr;text/x-c++src;text/x-rust;text/x-python;text/x-shellscript;text/x-script.python;application/json;application/xml;application/x-yaml;application/toml;application/x-shellscript;

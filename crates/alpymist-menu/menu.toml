@@ -78,14 +78,17 @@ items = [
 
 [menu.config]
 title = "Config"
+# $VISUAL is the desktop's editor, a window of its own (squint, set in
+# hyprland.conf); without one, $EDITOR in a terminal.
 items = [
-  { name = "Hyprland", icon = "", exec = "${EDITOR:-nano} ~/.config/hypr/hyprland.conf", terminal = true, keywords = ["keybindings", "windows"] },
-  { name = "Top bar", icon = "󰍜", exec = "${EDITOR:-nano} ~/.config/waybar/hyprland.jsonc ~/.config/waybar/style.css", terminal = true, keywords = ["waybar"] },
-  { name = "Menu", icon = "󰍉", exec = "f=${XDG_CONFIG_HOME:-$HOME/.config}/alpymist/menu.toml; [ -e \"$f\" ] || { mkdir -p \"${f%/*}\" && alpymist-menu --print-config > \"$f\"; }; ${EDITOR:-nano} \"$f\"", terminal = true },
-  { name = "Terminal", icon = "", exec = "${EDITOR:-nano} ~/.config/ghostty/config", terminal = true, keywords = ["ghostty"] },
-  { name = "Shell", icon = "", exec = "${EDITOR:-nano} ~/.zshrc", terminal = true, keywords = ["zsh"] },
-  { name = "Prompt", icon = "\U000F14DE", exec = "${EDITOR:-nano} ~/.config/starship.toml", terminal = true, keywords = ["starship"] },
-  { name = "Notifications", icon = "󰂚", exec = "${EDITOR:-nano} ~/.config/mako/config", terminal = true, keywords = ["mako"] },
+  { name = "Hyprland", icon = "", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.config/hypr/hyprland.conf", keywords = ["keybindings", "windows"] },
+  { name = "Top bar", icon = "󰍜", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.config/waybar/hyprland.jsonc", keywords = ["waybar"] },
+  { name = "Top bar style", icon = "󰍜", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.config/waybar/style.css", keywords = ["waybar", "css"] },
+  { name = "Menu", icon = "󰍉", exec = "f=${XDG_CONFIG_HOME:-$HOME/.config}/alpymist/menu.toml; [ -e \"$f\" ] || { mkdir -p \"${f%/*}\" && alpymist-menu --print-config > \"$f\"; }; ${VISUAL:-ghostty -e ${EDITOR:-nano}} \"$f\"" },
+  { name = "Terminal", icon = "", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.config/ghostty/config", keywords = ["ghostty"] },
+  { name = "Shell", icon = "", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.zshrc", keywords = ["zsh"] },
+  { name = "Prompt", icon = "\U000F14DE", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.config/starship.toml", keywords = ["starship"] },
+  { name = "Notifications", icon = "󰂚", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.config/mako/config", keywords = ["mako"] },
 ]
 
 [menu.install]
