@@ -204,6 +204,10 @@ const ALPYMIST_REPOSITORY: &str = "https://pkgs.alpymist.org/v3.24/alpymist";
 const LOGIN_SHELL: &str = "/bin/zsh";
 /// The session environment the login's PAM service loads.
 const SESSION_ENV: &str = "/etc/alpymist/session.env";
+/// Hyprland's keyboard settings, which its configuration sources. Hyprland
+/// ignores `XKB_DEFAULT_*`, and a layout applied with `hyprctl` at login was
+/// lost on every configuration reload.
+const HYPRLAND_KEYBOARD: &str = "/etc/alpymist/hyprland-keyboard.conf";
 
 /// The xkb variant for a console keymap from `kbd-bkeymaps`.
 ///
@@ -567,6 +571,17 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
             xkb_variant(keyboard, variant)
         ))),
     );
+    steps.push(
+        Step::new(
+            "Recording the keyboard layout for Hyprland",
+            &["chroot", ROOT, "tee", HYPRLAND_KEYBOARD],
+        )
+        .with_input(Input::Text(format!(
+            "# Written by the Alpymist installer: the keyboard layout chosen at install.\n\
+             input {{\n    kb_layout = {keyboard}\n    kb_variant = {}\n}}\n",
+            xkb_variant(keyboard, variant)
+        ))),
+    );
 
     // setup-disk copied the live /etc, runlevels included, and the live
     // system starts the installer at boot. The installed one must not.
@@ -850,6 +865,32 @@ mod tests {
         assert_eq!(
             env,
             "XKB_DEFAULT_LAYOUT=no\nXKB_DEFAULT_VARIANT=nodeadkeys\n"
+        );
+    }
+
+    /// In a file Hyprland's configuration sources, so a reload keeps it.
+    #[test]
+    fn hyprland_is_told_the_keyboard_layout_in_its_own_configuration() {
+        let plan = build(&answers()).unwrap(); // no, no-nodeadkeys
+        let keyboard = step(&plan, "keyboard layout for Hyprland");
+        assert_eq!(
+            keyboard.argv,
+            [
+                "chroot",
+                "/mnt",
+                "tee",
+                "/etc/alpymist/hyprland-keyboard.conf"
+            ]
+        );
+        let Some(Input::Text(conf)) = &keyboard.stdin else {
+            panic!("no Hyprland keyboard configuration");
+        };
+        assert!(conf.contains("kb_layout = no\n"), "{conf}");
+        assert!(conf.contains("kb_variant = nodeadkeys\n"), "{conf}");
+        let hyprland = include_str!("../../../desktop/skel/full/.config/hypr/hyprland.conf");
+        assert!(
+            hyprland.contains("source = /etc/alpymist/hyprland-keyboard.conf"),
+            "hyprland.conf does not source the installer's keyboard file"
         );
     }
 

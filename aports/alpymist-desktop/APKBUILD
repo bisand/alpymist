@@ -166,6 +166,10 @@ _full() {
 	depends="$pkgname-wayland=$pkgver-r$pkgrel ghostty hyprland"
 	install -Dm644 "$builddir"/desktop/greetd/alpymist-full.toml \
 		"$subpkgdir"/etc/greetd/alpymist-full.toml
+	# US until the installer writes the chosen layout over it; apk then leaves
+	# the changed file alone on upgrade. hyprland.conf sources it.
+	install -Dm644 "$builddir"/desktop/hypr/hyprland-keyboard.conf \
+		"$subpkgdir"/etc/alpymist/hyprland-keyboard.conf
 	_skel full "$subpkgdir"
 }
 
