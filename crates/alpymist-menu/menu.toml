@@ -66,6 +66,8 @@ title = "Toggle"
 items = [
   { name = "Top bar", icon = "󰍜", exec = "pkill -x waybar || waybar -c ~/.config/waybar/hyprland.jsonc -s ~/.config/waybar/style.css", keywords = ["waybar", "panel"] },
   { name = "Do not disturb", icon = "󰂛", exec = "makoctl mode -t do-not-disturb", keywords = ["notifications", "silence"] },
+  # Off when it is running, on when it is not: installed if missing, started now and at every boot, and the address to reach it printed.
+  { name = "SSH server", icon = "󰣀", exec = "if pgrep -x sshd >/dev/null; then doas /sbin/rc-service sshd stop && doas /sbin/rc-update del sshd default && echo 'SSH server off'; else { [ -x /usr/sbin/sshd ] || doas apk add openssh-server; } && doas /sbin/rc-update add sshd default && doas /sbin/rc-service sshd start && printf '\\nSSH server on: ssh %s@%s\\n' \"$USER\" \"$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == \"src\") { print $(i + 1); exit }}')\"; fi", terminal = true, hold = true, keywords = ["sshd", "openssh", "remote"] },
 ]
 
 [menu.setup]
