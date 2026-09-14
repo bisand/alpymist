@@ -1,5 +1,5 @@
 # Alpymist: the starship prompt. The Gruvbox Rainbow layout in Alpymist's
-# colours. Glyphs come from font-nerd-fonts-symbols; the Linux console cannot
+# colours. Glyphs come from FiraCode Nerd Font; the Linux console cannot
 # draw them, so .zshrc keeps starship to terminals that can.
 
 # On a slow machine a module that stalls stalls every prompt; give up instead.
@@ -199,9 +199,9 @@ disabled = false
 
 [character]
 disabled = false
-success_symbol = '[❯](bold fg:color_ok)'
-error_symbol = '[❯](bold fg:color_bad)'
-vimcmd_symbol = '[❮](bold fg:color_ok)'
-vimcmd_replace_one_symbol = '[❮](bold fg:color_mist)'
-vimcmd_replace_symbol = '[❮](bold fg:color_mist)'
-vimcmd_visual_symbol = '[❮](bold fg:color_warn)'
+success_symbol = '[](bold fg:color_ok)'
+error_symbol = '[](bold fg:color_bad)'
+vimcmd_symbol = '[](bold fg:color_ok)'
+vimcmd_replace_one_symbol = '[](bold fg:color_mist)'
+vimcmd_replace_symbol = '[](bold fg:color_mist)'
+vimcmd_visual_symbol = '[](bold fg:color_warn)'

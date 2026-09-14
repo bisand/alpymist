@@ -1,5 +1,5 @@
 ! Alpymist: xterm, the terminal on the X11 desktop.
-XTerm*faceName: Fira Mono
+XTerm*faceName: FiraCode Nerd Font Mono
 XTerm*faceSize: 11
 XTerm*background: #0b121e
 XTerm*foreground: #eaf0f6

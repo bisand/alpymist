@@ -24,6 +24,9 @@ license="MIT OR Apache-2.0"
 # sandboxed apps open and save files; alpymist-keys lets apk trust the Alpymist
 # repository the installer adds. LibreWolf is the browser: Firefox with the
 # tracking and telemetry taken out, built for musl and kept patched by Alpine.
+# Terminals use FiraCode Nerd Font: Fira Code's ligatures, with the prompt's
+# icons at the size and place they were made for, which a separate symbols
+# font gets wrong.
 depends="
 	adwaita-icon-theme
 	alpymist-keys
@@ -33,6 +36,7 @@ depends="
 	flatpak
 	breeze-cursors
 	font-dejavu
+	font-fira-code-nerd
 	font-fira-ttf
 	font-nerd-fonts-symbols
 	gsettings-desktop-schemas
@@ -103,8 +107,6 @@ package() {
 		"$pkgdir"/etc/xdg/gtk-3.0/settings.ini
 	install -Dm644 "$builddir"/desktop/theme/gtk-4.0-settings.ini \
 		"$pkgdir"/etc/xdg/gtk-4.0/settings.ini
-	install -Dm644 "$builddir"/desktop/fontconfig/60-alpymist-symbols.conf \
-		"$pkgdir"/etc/fonts/conf.d/60-alpymist-symbols.conf
 	install -Dm644 "$builddir"/desktop/librewolf/alpymist.js \
 		"$pkgdir"/usr/lib/librewolf/defaults/pref/alpymist.js
 	install -Dm644 "$builddir"/desktop/xdg-desktop-portal/portals.conf \

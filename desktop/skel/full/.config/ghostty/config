@@ -3,7 +3,9 @@
 # Yours to change: the installer copied this into your home. The other tiers
 # use foot, which is faster where there is no GPU to draw with.
 
-font-family = Fira Mono
+# Fira Code for its ligatures (-> and != drawn as one symbol), as a Nerd Font
+# so the prompt's icons sit where they were designed to.
+font-family = FiraCode Nerd Font
 font-size = 11
 
 window-padding-x = 10
