@@ -52,8 +52,8 @@ jobs:
       - uses: actions/cache@v5
         with:
           path: cache
-          key: packages-${{ matrix.arch }}-${{ steps.month.outputs.month }}-${{ hashFiles('aports/ghostty/**', 'aports/squint/**', 'builder/**') }}
-          restore-keys: packages-${{ matrix.arch }}-${{ steps.month.outputs.month }}-
+          key: packages-v2-${{ matrix.arch }}-${{ steps.month.outputs.month }}-${{ hashFiles('aports/ghostty/**', 'aports/squint/**', 'builder/**') }}
+          restore-keys: packages-v2-${{ matrix.arch }}-${{ steps.month.outputs.month }}-
 
       - name: Build the packages
         run: |
@@ -66,6 +66,17 @@ jobs:
         with:
           name: packages-${{ matrix.arch }}
           path: out/packages/${{ matrix.arch }}/*.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      # The public halves of the throwaway keys the packages are signed with,
+      # for the ISO job to trust. Apart from the packages, which
+      # `cargo xtask publish` takes as they are: installed systems trust the
+      # release key's index, not these.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package-keys-${{ matrix.arch }}
+          path: out/packages/${{ matrix.arch }}/keys/*.rsa.pub
           if-no-files-found: error
           retention-days: 90
 
@@ -93,6 +104,11 @@ jobs:
         with:
           name: packages-${{ matrix.arch }}
           path: out/prebuilt
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: package-keys-${{ matrix.arch }}
+          path: out/prebuilt/keys
 
       - name: Build the builder container
         run: docker build -t alpymist-builder builder

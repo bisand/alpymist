@@ -15,13 +15,20 @@
 #                  there and not built again until one of those changes.
 #                  ghostty's Zig build alone is most of the time this takes.
 #   PREBUILT       a directory of this architecture's packages, already built
-#                  by an earlier job. Nothing is built: they are indexed and
-#                  signed, which is all mkimage needs of a repository.
+#                  by an earlier job, with the public keys they were signed
+#                  with in keys/. Nothing is built: the keys are trusted and
+#                  the packages indexed, which is all mkimage needs.
+#
+# apk checks each package's own signature, not only the index's, and every
+# build signs with a key of its own. So the public half of each key the
+# repository's packages are signed with is kept in ~/packages/keys, installed
+# where apk looks, and handed on beside the packages in $1/$ARCH/keys.
 set -euo pipefail
 
 OUT="${1:-}"
 ARCH="$(apk --print-arch)"
 REPO=~/packages/ap/"$ARCH"
+KEYS=~/packages/keys
 CACHE="${PACKAGE_CACHE:-}"
 CACHED=" ghostty squint "
 
@@ -30,6 +37,15 @@ export CARGO_HOME=/tmp/cargo
 if [ ! -e ~/.abuild/abuild.conf ]; then
 	abuild-keygen -a -i -n >/dev/null 2>&1
 fi
+mkdir -p "$KEYS"
+cp ~/.abuild/*.rsa.pub "$KEYS"/
+
+# Trust the public keys in a directory: for apk here, and for the image, which
+# mkimage gives this container's keys.
+trust() {
+	cp "$1"/*.rsa.pub "$KEYS"/
+	doas cp "$1"/*.rsa.pub /etc/apk/keys/
+}
 
 # The index over everything in the repository, signed with this build's key.
 # abuild -r writes one as it goes; packages that did not pass through it need
@@ -46,6 +62,7 @@ reindex() {
 
 if [ -n "${PREBUILT:-}" ]; then
 	echo "    using the packages in $PREBUILT"
+	trust "$PREBUILT"/keys
 	mkdir -p "$REPO"
 	cp "$PREBUILT"/*.apk "$REPO"/
 	reindex
@@ -60,8 +77,9 @@ else
 		key=""
 		if [ -n "$CACHE" ] && [[ "$CACHED" == *" $pkg "* ]]; then
 			key=$(cd /src && sha256sum aports/"$pkg"/* builder/Dockerfile | sha256sum | cut -c1-16)
-			if [ -f "$CACHE/$pkg/$key" ]; then
+			if [ -f "$CACHE/$pkg/$key" ] && compgen -G "$CACHE/$pkg/*.rsa.pub" >/dev/null; then
 				echo "    $pkg (kept from an earlier build)"
+				trust "$CACHE/$pkg"
 				mkdir -p "$REPO"
 				cp "$CACHE/$pkg"/*.apk "$REPO"/
 				copied=true
@@ -77,6 +95,7 @@ else
 			( cd ~/ap/"$pkg" && abuild listpkg ) | while read -r apk; do
 				cp "$REPO/$apk" "$CACHE/$pkg"/
 			done
+			cp ~/.abuild/*.rsa.pub "$CACHE/$pkg"/
 			touch "$CACHE/$pkg/$key"
 		fi
 	done
@@ -86,7 +105,8 @@ else
 fi
 
 if [ -n "$OUT" ]; then
-	mkdir -p "$OUT/$ARCH"
+	mkdir -p "$OUT/$ARCH/keys"
 	cp "$REPO"/*.apk "$OUT/$ARCH/"
+	cp "$KEYS"/*.rsa.pub "$OUT/$ARCH/keys/"
 	ls -la "$OUT/$ARCH"
 fi
