@@ -34,8 +34,8 @@ jobs:
       run:
         working-directory: site
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -43,7 +43,7 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site/build
 
@@ -53,10 +53,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: https://alpymist.org
     steps:
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v5
