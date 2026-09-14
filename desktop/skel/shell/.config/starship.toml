@@ -1,19 +1,207 @@
-# Alpymist: the starship prompt.
+# Alpymist: the starship prompt. The Gruvbox Rainbow layout in Alpymist's
+# colours. Glyphs come from font-nerd-fonts-symbols; the Linux console cannot
+# draw them, so .zshrc keeps starship to terminals that can.
 
 # On a slow machine a module that stalls stalls every prompt; give up instead.
 command_timeout = 300
 scan_timeout = 20
 
-[character]
-success_symbol = "[❯](bold #7fb8d9)"
-error_symbol = "[❯](bold #d98f7f)"
+"$schema" = 'https://starship.rs/config-schema.json'
 
-[directory]
-style = "bold #eaf0f6"
+format = """
+[](color_peak)\
+$os\
+$username\
+$hostname\
+[](bg:color_slope fg:color_peak)\
+$directory\
+[](fg:color_slope bg:color_ridge)\
+$git_branch\
+$git_status\
+[](fg:color_ridge bg:color_valley)\
+$c\
+$cpp\
+$rust\
+$golang\
+$dotnet\
+$nodejs\
+$php\
+$java\
+$kotlin\
+$haskell\
+$python\
+[](fg:color_valley bg:color_dusk)\
+$docker_context\
+$conda\
+$pixi\
+[](fg:color_dusk bg:color_night)\
+$time\
+[ ](fg:color_night)\
+$line_break$character"""
 
-[hostname]
-ssh_only = true
-style = "#9aabbd"
+palette = 'alpymist'
+
+# From the wallpaper: lit peaks down to the night sky, text in the snow's ink.
+[palettes.alpymist]
+color_ink = '#eaf0f6'
+color_peak = '#3b6e8d'
+color_slope = '#325d7a'
+color_ridge = '#2a4c67'
+color_valley = '#223c54'
+color_dusk = '#1b2d41'
+color_night = '#142030'
+color_ok = '#7fb8d9'
+color_bad = '#d98f7f'
+color_warn = '#d9a07f'
+color_mist = '#afc2d6'
+
+[os]
+disabled = false
+style = "bg:color_peak fg:color_ink"
+
+[os.symbols]
+Windows = "󰍲"
+Ubuntu = "󰕈"
+SUSE = ""
+Raspbian = "󰐿"
+Mint = "󰣭"
+Macos = "󰀵"
+Manjaro = ""
+Linux = "󰌽"
+Gentoo = "󰣨"
+Fedora = "󰣛"
+Alpine = ""
+Amazon = ""
+Android = ""
+AOSC = ""
+Arch = "󰣇"
+Artix = "󰣇"
+EndeavourOS = ""
+CentOS = ""
+Debian = "󰣚"
+Redhat = "󱄛"
+RedHatEnterprise = "󱄛"
+Pop = ""
 
 [username]
-style_user = "#9aabbd"
+show_always = true
+style_user = "bg:color_peak fg:color_ink"
+style_root = "bg:color_peak fg:color_ink"
+format = '[ $user]($style)'
+
+[hostname]
+ssh_only = false
+trim_at = "."
+style = "bg:color_peak fg:color_ink"
+format = '[@$hostname ]($style)'
+
+[directory]
+style = "fg:color_ink bg:color_slope"
+format = "[ $path ]($style)"
+truncation_length = 3
+truncation_symbol = "…/"
+
+[directory.substitutions]
+"Documents" = "󰈙 "
+"Downloads" = " "
+"Music" = "󰝚 "
+"Pictures" = " "
+"Developer" = "󰲋 "
+
+[git_branch]
+symbol = ""
+style = "bg:color_ridge"
+format = '[[ $symbol $branch ](fg:color_ink bg:color_ridge)]($style)'
+
+[git_status]
+style = "bg:color_ridge"
+format = '[[($all_status$ahead_behind )](fg:color_ink bg:color_ridge)]($style)'
+
+[dotnet]
+disabled = false
+symbol = '.NET '
+style = "bg:color_valley"
+format = '[[$symbol($version )(🎯 $tfm )](fg:color_ink bg:color_valley)]($style)'
+version_format = '${major}.${minor}'
+heuristic = false
+
+[nodejs]
+symbol = ""
+style = "bg:color_valley"
+format = '[[ $symbol( $version) ](fg:color_ink bg:color_valley)]($style)'
+
+[c]
+symbol = " "
+style = "bg:color_valley"
+format = '[[ $symbol( $version) ](fg:color_ink bg:color_valley)]($style)'
+
+[cpp]
+symbol = " "
+style = "bg:color_valley"
+format = '[[ $symbol( $version) ](fg:color_ink bg:color_valley)]($style)'
+
+[rust]
+symbol = ""
+style = "bg:color_valley"
+format = '[[ $symbol( $version) ](fg:color_ink bg:color_valley)]($style)'
+
+[golang]
+symbol = ""
+style = "bg:color_valley"
+format = '[[ $symbol( $version) ](fg:color_ink bg:color_valley)]($style)'
+
+[php]
+symbol = ""
+style = "bg:color_valley"
+format = '[[ $symbol( $version) ](fg:color_ink bg:color_valley)]($style)'
+
+[java]
+symbol = ""
+style = "bg:color_valley"
+format = '[[ $symbol( $version) ](fg:color_ink bg:color_valley)]($style)'
+
+[kotlin]
+symbol = ""
+style = "bg:color_valley"
+format = '[[ $symbol( $version) ](fg:color_ink bg:color_valley)]($style)'
+
+[haskell]
+symbol = ""
+style = "bg:color_valley"
+format = '[[ $symbol( $version) ](fg:color_ink bg:color_valley)]($style)'
+
+[python]
+symbol = ""
+style = "bg:color_valley"
+format = '[[ $symbol( $version) ](fg:color_ink bg:color_valley)]($style)'
+
+[docker_context]
+symbol = ""
+style = "bg:color_dusk"
+format = '[[ $symbol( $context) ](fg:color_ok bg:color_dusk)]($style)'
+
+[conda]
+style = "bg:color_dusk"
+format = '[[ $symbol( $environment) ](fg:color_ok bg:color_dusk)]($style)'
+
+[pixi]
+style = "bg:color_dusk"
+format = '[[ $symbol( $version)( $environment) ](fg:color_ink bg:color_dusk)]($style)'
+
+[time]
+disabled = false
+time_format = "%R"
+style = "bg:color_night"
+format = '[[  $time ](fg:color_ink bg:color_night)]($style)'
+
+[line_break]
+disabled = false
+
+[character]
+disabled = false
+success_symbol = '[](bold fg:color_ok)'
+error_symbol = '[](bold fg:color_bad)'
+vimcmd_symbol = '[](bold fg:color_ok)'
+vimcmd_replace_one_symbol = '[](bold fg:color_mist)'
+vimcmd_replace_symbol = '[](bold fg:color_mist)'
+vimcmd_visual_symbol = '[](bold fg:color_warn)'

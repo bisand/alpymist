@@ -16,4 +16,10 @@ source "$ZSH/oh-my-zsh.sh"
 source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
 source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
-eval "$(starship init zsh)"
+# The prompt is drawn with Nerd Font glyphs, which the Linux console has no
+# font for; there, a plain prompt instead of a row of boxes.
+if [[ $TERM == linux ]]; then
+	PROMPT='%n@%m %~ %# '
+else
+	eval "$(starship init zsh)"
+fi
