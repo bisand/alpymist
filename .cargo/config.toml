@@ -10,3 +10,7 @@ rustflags = ["-C", "target-feature=-crt-static"]
 
 [target.aarch64-unknown-linux-musl]
 rustflags = ["-C", "target-feature=-crt-static"]
+
+# `cargo xtask <command>`, the usual spelling for a workspace's task runner.
+[alias]
+xtask = "run -q -p xtask --"
