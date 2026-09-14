@@ -2,7 +2,7 @@
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-install
 pkgver=0.0.1
-pkgrel=0
+pkgrel=1
 pkgdesc="Alpymist graphical installer, drawn straight to DRM/KMS"
 url="https://github.com/bisand/alpymist"
 arch="all"
