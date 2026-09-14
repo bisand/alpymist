@@ -83,6 +83,7 @@ pub fn publish(run: &str, key: &Path, push: bool) -> Result<()> {
     let sha = check_run(run)?;
     let short: String = sha.chars().take(12).collect();
     println!("publishing Packages run {run} (main at {short})");
+    ensure_builder()?;
 
     let staging = Path::new(STAGING);
     if staging.exists() {
@@ -112,7 +113,7 @@ pub fn publish(run: &str, key: &Path, push: bool) -> Result<()> {
             .arg(&old),
     )?;
 
-    stage(run, &downloads, &site)?;
+    stage(run, &downloads, &old, &site)?;
     for arch in ARCHES {
         sign(arch, &short, &site, &old, &staging, &key)?;
     }
@@ -140,23 +141,45 @@ pub fn publish(run: &str, key: &Path, push: bool) -> Result<()> {
 }
 
 /// Lay out the site: each architecture's packages, the key, and the page.
-fn stage(run: &str, downloads: &Path, site: &Path) -> Result<()> {
+///
+/// A package whose version is already published keeps the published file.
+/// CI rebuilds everything, and the builds are not yet reproducible, so the
+/// same version comes out with a different hash each time; replacing it would
+/// break the cached index of every system that already has it, for no change.
+/// The flip side: a change ships only with a new pkgver or pkgrel.
+fn stage(run: &str, downloads: &Path, old: &Path, site: &Path) -> Result<()> {
     for arch in ARCHES {
         let dir = site.join(ALPINE_VERSION).join(REPOSITORY).join(arch);
+        let published = old.join(ALPINE_VERSION).join(REPOSITORY).join(arch);
         std::fs::create_dir_all(&dir)?;
         let from = downloads.join(format!("packages-{arch}"));
-        let mut count = 0;
+        let (mut new, mut kept) = (Vec::new(), 0);
         for entry in
             std::fs::read_dir(&from).with_context(|| format!("reading {}", from.display()))?
         {
             let path = entry?.path();
-            if path.extension().is_some_and(|e| e == "apk") {
-                std::fs::copy(&path, dir.join(path.file_name().unwrap_or_default()))?;
-                count += 1;
+            if path.extension().is_none_or(|e| e != "apk") {
+                continue;
+            }
+            let name = path.file_name().unwrap_or_default();
+            let previous = published.join(name);
+            if previous.is_file() {
+                std::fs::copy(&previous, dir.join(name))?;
+                kept += 1;
+            } else {
+                std::fs::copy(&path, dir.join(name))?;
+                new.push(name.to_string_lossy().into_owned());
             }
         }
-        ensure!(count > 0, "run {run} has no packages for {arch}");
-        println!("  {arch}: {count} packages");
+        ensure!(kept + new.len() > 0, "run {run} has no packages for {arch}");
+        new.sort();
+        println!(
+            "  {arch}: {} new, {kept} already published and kept as they are",
+            new.len()
+        );
+        for name in &new {
+            println!("    + {name}");
+        }
     }
     std::fs::copy(PUBLIC_KEY, site.join(format!("{KEY_NAME}.pub")))
         .context("copying the public key")?;
@@ -254,6 +277,23 @@ fn check_run(run: &str) -> Result<String> {
         "run {run} did not succeed ({conclusion})"
     );
     Ok(sha.to_string())
+}
+
+/// Build the builder image when Docker no longer has it. Image pruning removes
+/// it without warning, and publishing then failed halfway through.
+fn ensure_builder() -> Result<()> {
+    let present = Command::new("docker")
+        .args(["image", "inspect", BUILDER])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .context("running docker")?
+        .success();
+    if !present {
+        println!("building the {BUILDER} image, which Docker no longer has");
+        run_tool(Command::new("docker").args(["build", "-q", "-t", BUILDER, "builder"]))?;
+    }
+    Ok(())
 }
 
 /// Run a tool, failing with its name when it fails.

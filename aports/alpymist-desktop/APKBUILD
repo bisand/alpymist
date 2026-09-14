@@ -11,7 +11,7 @@
 # than system files an upgrade would overwrite.
 pkgname=alpymist-desktop
 pkgver=0.0.1
-pkgrel=1
+pkgrel=2
 pkgdesc="Alpymist desktop: what every tier shares"
 url="https://github.com/bisand/alpymist"
 arch="noarch"
@@ -35,6 +35,7 @@ depends="
 	font-dejavu
 	font-fira-ttf
 	font-nerd-fonts-symbols
+	gsettings-desktop-schemas
 	greetd
 	greetd-tuigreet
 	librewolf
@@ -93,6 +94,17 @@ package() {
 	install -Dm644 "$builddir"/desktop/alpymist-greetd.pam \
 		"$pkgdir"/etc/pam.d/alpymist-greetd
 	install -Dm644 "$builddir"/desktop/mimeapps.list "$pkgdir"/etc/xdg/mimeapps.list
+	# Dark by default, for GTK 3, GTK 4, libadwaita and whatever asks the
+	# portal. Defaults a user's own settings override; glib's trigger compiles
+	# the schema override when this is installed.
+	install -Dm644 "$builddir"/desktop/theme/90_alpymist.gschema.override \
+		"$pkgdir"/usr/share/glib-2.0/schemas/90_alpymist.gschema.override
+	install -Dm644 "$builddir"/desktop/theme/gtk-3.0-settings.ini \
+		"$pkgdir"/etc/xdg/gtk-3.0/settings.ini
+	install -Dm644 "$builddir"/desktop/theme/gtk-4.0-settings.ini \
+		"$pkgdir"/etc/xdg/gtk-4.0/settings.ini
+	install -Dm644 "$builddir"/desktop/librewolf/alpymist.js \
+		"$pkgdir"/usr/lib/librewolf/defaults/pref/alpymist.js
 	install -Dm644 "$builddir"/desktop/xdg-desktop-portal/portals.conf \
 		"$pkgdir"/etc/xdg/xdg-desktop-portal/portals.conf
 	install -d "$pkgdir"/etc/alpymist

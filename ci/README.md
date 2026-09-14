@@ -36,8 +36,10 @@ override). Keep a copy offline; losing it means rotating the key through an
 `alpymist-keys` update signed by the old one.
 
 Installed systems only upgrade to a higher version, so a changed package
-needs a `pkgrel` or `pkgver` bump. `publish` refuses to replace a published
-package with different contents under the same version. Each publish is a
+needs a `pkgrel` or `pkgver` bump. CI rebuilds everything, and the builds are
+not reproducible yet, so `publish` keeps the published file for any version
+already out and lists the packages that are new. A change without a bump is
+not shipped. Each publish is a
 single force-pushed commit, keeping the site under Pages' size limit; to roll
 back, publish an older run.
 

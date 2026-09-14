@@ -1,0 +1,12 @@
+# Alpymist: dark by default. These are defaults, not settings: anything a user
+# changes is kept in their own dconf database and wins. The GTK portal reads
+# color-scheme from here, which is how Flatpak and libadwaita apps, Ghostty
+# and LibreWolf included, learn that the desktop is dark.
+#
+# gtk-theme stays at its default, Adwaita: GTK 3 has no theme called
+# Adwaita-dark, falls back to light Adwaita, and ignores the dark preference
+# in settings.ini when it does. Dark GTK 3 comes from that preference.
+[org.gnome.desktop.interface]
+color-scheme='prefer-dark'
+cursor-theme='Breeze_Light'
+cursor-size=24
