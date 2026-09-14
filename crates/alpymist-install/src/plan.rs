@@ -197,6 +197,9 @@ const MIRROR: &str = "https://dl-cdn.alpinelinux.org/alpine";
 const ALPINE_VERSION: &str = "v3.24";
 /// Which of that release's repositories to use.
 const REPOSITORIES: [&str; 2] = ["main", "community"];
+/// Alpymist's own packages, for the same release. Trusted through the key in
+/// `alpymist-keys`, which the desktop depends on; `cargo xtask publish` fills it.
+const ALPYMIST_REPOSITORY: &str = "https://pkgs.alpymist.org/v3.24/alpymist";
 /// The login shell for the account the installer creates.
 const LOGIN_SHELL: &str = "/bin/zsh";
 /// The session environment the login's PAM service loads.
@@ -381,19 +384,19 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
 
     // setup-disk leaves the new system with only the install medium's
     // repository, commented out: a system that could never be updated. It gets
-    // Alpine's own, over HTTPS, for the release the image was built from.
+    // Alpine's own, over HTTPS, for the release the image was built from, and
+    // Alpymist's, which is how Alpymist's own packages receive updates.
+    let mut repositories = REPOSITORIES.iter().fold(String::new(), |mut out, r| {
+        let _ = writeln!(out, "{MIRROR}/{ALPINE_VERSION}/{r}");
+        out
+    });
+    let _ = writeln!(repositories, "{ALPYMIST_REPOSITORY}");
     steps.push(
         Step::new(
-            "Adding Alpine's package repositories",
+            "Adding the package repositories",
             &["chroot", ROOT, "tee", "/etc/apk/repositories"],
         )
-        .with_input(Input::Text(REPOSITORIES.iter().fold(
-            String::new(),
-            |mut out, r| {
-                let _ = writeln!(out, "{MIRROR}/{ALPINE_VERSION}/{r}");
-                out
-            },
-        ))),
+        .with_input(Input::Text(repositories)),
     );
 
     // udev rather than BusyBox mdev: libinput finds keyboards and mice through
@@ -805,7 +808,7 @@ mod tests {
 
     /// Otherwise the installed system could never be updated.
     #[test]
-    fn the_new_system_gets_alpines_repositories_over_https() {
+    fn the_new_system_gets_alpines_and_alpymists_repositories_over_https() {
         let plan = build(&answers()).unwrap();
         let repos = step(&plan, "package repositories");
         assert_eq!(
@@ -818,7 +821,8 @@ mod tests {
         assert_eq!(
             text,
             "https://dl-cdn.alpinelinux.org/alpine/v3.24/main\n\
-             https://dl-cdn.alpinelinux.org/alpine/v3.24/community\n"
+             https://dl-cdn.alpinelinux.org/alpine/v3.24/community\n\
+             https://pkgs.alpymist.org/v3.24/alpymist\n"
         );
         assert!(!repos.may_fail);
     }
@@ -830,6 +834,10 @@ mod tests {
         assert!(
             script.contains(&format!("ALPINE_VERSION:-{}", super::ALPINE_VERSION)),
             "ci/build-iso.sh builds a different release than plan.rs points at"
+        );
+        assert!(
+            super::ALPYMIST_REPOSITORY.contains(&format!("/{}/", super::ALPINE_VERSION)),
+            "the Alpymist repository is for a different release"
         );
     }
 

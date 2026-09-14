@@ -45,3 +45,13 @@ None of that is inherent to a curated desktop. It is a choice about packaging.
 - musl also means no glibc binaries. Steam, Chrome, and proprietary NVIDIA
   drivers do not run natively. Flatpak covers most of this; the rest is a
   deliberate audience choice, not an oversight.
+
+## Addendum, 2026-09-14: how the offline key meets CI
+
+CI builds packages; it cannot sign what systems trust. The Alpymist
+repository's index is signed on a maintainer's machine by `cargo xtask
+publish`, and apk verifies each package against the hash in that index, so a
+compromised workflow can produce a bad artifact but not an update anyone
+installs. Tested both ways before relying on it: a package signed by an
+unknown build key installs from a trusted index, and a swapped or modified
+package does not. See `ci/README.md`.

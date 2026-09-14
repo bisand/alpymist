@@ -10,6 +10,37 @@ Two workflows:
   has not moved since the last successful image, and on demand from the
   Actions tab ("Run workflow"), which always builds.
 
+- **Packages** (`.github/workflows/packages.yml`): builds every Alpymist
+  package for x86_64 and aarch64, on native runners, whenever `main` changes
+  something that goes into one. The result is an artifact, not a release.
+
+## Publishing packages
+
+The repository at `https://pkgs.alpymist.org/v3.24/alpymist` is a GitHub
+Pages site (`bisand/alpymist-packages`). Installed systems have it in
+`/etc/apk/repositories` and trust it through `alpymist-keys`.
+
+Only the index is signed, with the release key, on a maintainer's machine
+(ADR 0002). CI never sees that key. apk takes a package whose hash is in a
+trusted index and refuses one whose hash is not, whatever key abuild signed
+the package with in CI.
+
+```sh
+gh run list -w Packages                   # pick a green run on main
+cargo xtask publish --run <id>            # download, sign, verify; no push
+cargo xtask publish --run <id> --push     # replace the site
+```
+
+The key is read from `~/.config/alpymist/keys/alpymist-2026.rsa` (`--key` to
+override). Keep a copy offline; losing it means rotating the key through an
+`alpymist-keys` update signed by the old one.
+
+Installed systems only upgrade to a higher version, so a changed package
+needs a `pkgrel` or `pkgver` bump. `publish` refuses to replace a published
+package with different contents under the same version. Each publish is a
+single force-pushed commit, keeping the site under Pages' size limit; to roll
+back, publish an older run.
+
 Still planned:
 
 1. `cargo deny check` and `cargo audit`.

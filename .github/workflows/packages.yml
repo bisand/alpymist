@@ -1,0 +1,59 @@
+name: Packages
+
+# Builds every Alpymist package for both architectures and keeps them as an
+# artifact. Nothing here publishes: the repository index is signed with a key
+# CI never sees, by `cargo xtask publish --run <id>` (ADR 0002). An installed
+# system trusts that index, and the index pins each package's hash, so what
+# this workflow can produce is a candidate, not an update.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "aports/**"
+      - "crates/**"
+      - "desktop/**"
+      - "Cargo.*"
+      - "ci/build-packages.sh"
+      - "builder/**"
+      - ".github/workflows/packages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Packages (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          # Native, not emulated: ghostty's zig build under QEMU would take
+          # hours.
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the builder container
+        run: docker build -t alpymist-builder builder
+
+      - name: Build the packages
+        run: |
+          mkdir -p out && chmod 777 out
+          docker run --rm -v "$PWD":/src -v "$PWD/out":/out \
+            alpymist-builder bash /src/ci/build-packages.sh /out/packages
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: out/packages/${{ matrix.arch }}/*.apk
+          if-no-files-found: error
+          retention-days: 90

@@ -20,9 +20,11 @@ license="MIT OR Apache-2.0"
 # devices without running it as root; pam-rundir gives each login the
 # XDG_RUNTIME_DIR a Wayland compositor refuses to start without, which on
 # Alpine elogind would otherwise provide; pipewire for sound; flatpak is how
-# applications are installed (ADR 0001).
+# applications are installed (ADR 0001); alpymist-keys lets apk trust the
+# Alpymist repository the installer adds.
 depends="
 	adwaita-icon-theme
+	alpymist-keys
 	alpymist-shell=$pkgver-r$pkgrel
 	brightnessctl
 	dbus

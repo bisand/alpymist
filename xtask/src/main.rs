@@ -8,6 +8,7 @@
 
 mod ghostty;
 mod installer_data;
+mod publish;
 mod qemu;
 mod serial;
 
@@ -53,6 +54,21 @@ enum Command {
         #[arg(long, default_value = "aports/ghostty/APKBUILD")]
         apkbuild: PathBuf,
     },
+    /// Sign and publish a Packages run to pkgs.alpymist.org.
+    ///
+    /// Signs the repository index with the release key, which stays on this
+    /// machine, verifies it, and with --push replaces the Pages site.
+    Publish {
+        /// The Packages workflow run to publish (`gh run list -w Packages`).
+        #[arg(long)]
+        run: String,
+        /// The release signing key.
+        #[arg(long, default_value_os_t = publish::default_key())]
+        key: PathBuf,
+        /// Push the signed site. Without it, stop after verifying.
+        #[arg(long)]
+        push: bool,
+    },
     /// Regenerate the installer's keyboard layout and time zone lists.
     ///
     /// Run inside the Alpine builder with kbd-bkeymaps and tzdata installed.
@@ -96,6 +112,7 @@ fn main() -> Result<()> {
             verbose,
         ),
         Command::GhosttyCheck { apkbuild } => ghostty::check(&apkbuild),
+        Command::Publish { run, key, push } => publish::publish(&run, &key, push),
         Command::InstallerData {
             bkeymaps,
             zoneinfo,

@@ -13,25 +13,10 @@ ALPINE_VERSION="${ALPINE_VERSION:-v3.24}"
 TAG="${TAG:-0.0.1}"
 MIRROR="${MIRROR:-https://dl-cdn.alpinelinux.org/alpine}"
 
-export CARGO_HOME=/tmp/cargo
+echo ">>> [1/3] building Alpymist packages"
+bash /src/ci/build-packages.sh
 
-echo ">>> [1/4] generating a local package signing key"
-# Ephemeral, for local builds only. Release signing uses an offline key that
-# never touches a build container — see ADR 0002.
-abuild-keygen -a -i -n >/dev/null 2>&1
-
-echo ">>> [2/4] building Alpymist packages"
-# ghostty is a backport from Alpine edge/testing, where it is packaged but not
-# yet in a stable branch; `cargo xtask ghostty-check` reports when that changes.
-for pkg in alpymistctl alpymist-install alpymist-desktop ghostty; do
-	mkdir -p ~/ap/"$pkg"
-	cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
-	echo "    $pkg"
-	# Local sources, so the checksum is computed here rather than committed.
-	( cd ~/ap/"$pkg" && abuild checksum >/dev/null && abuild -r >/dev/null )
-done
-
-echo ">>> [3/4] fetching Alpine image scripts ($ALPINE_BRANCH)"
+echo ">>> [2/3] fetching Alpine image scripts ($ALPINE_BRANCH)"
 # GitHub's mirror first: Alpine's GitLab challenges clients it takes for bots,
 # which includes CI runners, and every CI build failed here until this changed.
 # Errors are left visible — this step failed silently for weeks.
@@ -53,7 +38,7 @@ fi
 cp /src/profiles/mkimg.alpymist.sh /src/profiles/genapkovl-alpymist.sh /tmp/aports/scripts/
 chmod +x /tmp/aports/scripts/genapkovl-alpymist.sh
 
-echo ">>> [4/4] building the image for $ARCH"
+echo ">>> [3/3] building the image for $ARCH"
 cd /tmp/aports/scripts
 sh mkimage.sh \
 	--tag "$TAG" \

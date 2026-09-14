@@ -1,0 +1,24 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+#
+# The public key apk checks the Alpymist repository against. Only the index is
+# signed with it, by hand, off CI (ADR 0002); the index pins every package's
+# hash, so a package built in CI cannot be swapped without breaking that.
+#
+# Rotating the key means shipping the new one here, in a release still signed
+# by the old one, before the first index signed by the new one.
+pkgname=alpymist-keys
+pkgver=2026
+pkgrel=0
+pkgdesc="Public key for the Alpymist package repository"
+url="https://github.com/bisand/alpymist"
+arch="noarch"
+license="MIT OR Apache-2.0"
+options="!check"  # nothing to test
+source="alpymist-2026.rsa.pub"
+builddir="$srcdir"
+
+package() {
+	install -Dm644 "$srcdir"/alpymist-2026.rsa.pub \
+		"$pkgdir"/etc/apk/keys/alpymist-2026.rsa.pub
+}
