@@ -1,5 +1,8 @@
 # Alpymist: started with labwc. The keyboard layout needs nothing here: labwc
 # reads XKB_DEFAULT_LAYOUT, which the login sets from what the installer chose.
+# Services D-Bus starts on demand, the portals among them, need to know the
+# session they serve; labwc passes this on itself, but saying so costs nothing.
+dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP >/dev/null 2>&1
 # Sound first: the bar's volume module retries a missing audio server until
 # it runs out of file descriptors and takes the whole bar down with it.
 /usr/libexec/pipewire-launcher >/dev/null 2>&1 &

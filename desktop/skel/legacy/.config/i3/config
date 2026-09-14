@@ -20,6 +20,8 @@ client.unfocused        #3a4c63 #070c14 #9aabbd #3a4c63 #3a4c63
 # The keyboard layout the installer chose, handed to X from the session.
 exec --no-startup-id sh -c '[ -n "$XKB_DEFAULT_LAYOUT" ] && setxkbmap -layout "$XKB_DEFAULT_LAYOUT" -variant "$XKB_DEFAULT_VARIANT"'
 exec --no-startup-id xrdb -merge ~/.Xresources
+# Services D-Bus starts on demand, the portals among them, need the display.
+exec --no-startup-id dbus-update-activation-environment DISPLAY XAUTHORITY
 exec --no-startup-id xsetroot -cursor_name left_ptr
 exec --no-startup-id feh --no-fehbg --bg-fill /usr/share/backgrounds/alpymist/alpymist.png
 # xrender, not glx: machines on this tier are the ones without usable GL.
@@ -33,6 +35,7 @@ floating_modifier $mod
 bindsym $mod+Return exec xterm
 bindsym $mod+q exec xterm
 bindsym $mod+space exec rofi -show drun
+bindsym $mod+b exec librewolf
 bindsym $mod+w kill
 bindsym $mod+f fullscreen toggle
 bindsym $mod+v floating toggle

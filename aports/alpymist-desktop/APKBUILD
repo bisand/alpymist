@@ -11,7 +11,7 @@
 # than system files an upgrade would overwrite.
 pkgname=alpymist-desktop
 pkgver=0.0.1
-pkgrel=0
+pkgrel=1
 pkgdesc="Alpymist desktop: what every tier shares"
 url="https://github.com/bisand/alpymist"
 arch="noarch"
@@ -20,8 +20,10 @@ license="MIT OR Apache-2.0"
 # devices without running it as root; pam-rundir gives each login the
 # XDG_RUNTIME_DIR a Wayland compositor refuses to start without, which on
 # Alpine elogind would otherwise provide; pipewire for sound; flatpak is how
-# applications are installed (ADR 0001); alpymist-keys lets apk trust the
-# Alpymist repository the installer adds.
+# applications are installed (ADR 0001), and the GTK portal is what lets those
+# sandboxed apps open and save files; alpymist-keys lets apk trust the Alpymist
+# repository the installer adds. LibreWolf is the browser: Firefox with the
+# tracking and telemetry taken out, built for musl and kept patched by Alpine.
 depends="
 	adwaita-icon-theme
 	alpymist-keys
@@ -35,6 +37,7 @@ depends="
 	font-nerd-fonts-symbols
 	greetd
 	greetd-tuigreet
+	librewolf
 	mesa-dri-gallium
 	pam-rundir
 	pipewire
@@ -42,6 +45,8 @@ depends="
 	polkit
 	seatd
 	wireplumber
+	xdg-desktop-portal
+	xdg-desktop-portal-gtk
 	xdg-user-dirs
 	"
 makedepends="cargo"
@@ -87,6 +92,9 @@ package() {
 	# to the greetd package; each tier's configuration names it.
 	install -Dm644 "$builddir"/desktop/alpymist-greetd.pam \
 		"$pkgdir"/etc/pam.d/alpymist-greetd
+	install -Dm644 "$builddir"/desktop/mimeapps.list "$pkgdir"/etc/xdg/mimeapps.list
+	install -Dm644 "$builddir"/desktop/xdg-desktop-portal/portals.conf \
+		"$pkgdir"/etc/xdg/xdg-desktop-portal/portals.conf
 	install -d "$pkgdir"/etc/alpymist
 	_skel common "$pkgdir"
 }
@@ -127,6 +135,11 @@ _wayland() {
 		wl-clipboard
 		xdg-desktop-portal-wlr
 		"
+	local conf
+	for conf in hyprland labwc; do
+		install -Dm644 "$builddir"/desktop/xdg-desktop-portal/$conf-portals.conf \
+			"$subpkgdir"/etc/xdg/xdg-desktop-portal/$conf-portals.conf
+	done
 	_skel wayland "$subpkgdir"
 }
 

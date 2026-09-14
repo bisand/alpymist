@@ -1,0 +1,7 @@
+# Alpymist: LibreWolf opens links and web pages. System-wide, so a user's own
+# ~/.config/mimeapps.list overrides it.
+[Default Applications]
+text/html=librewolf.desktop
+application/xhtml+xml=librewolf.desktop
+x-scheme-handler/http=librewolf.desktop
+x-scheme-handler/https=librewolf.desktop

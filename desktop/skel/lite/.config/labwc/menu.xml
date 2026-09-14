@@ -3,6 +3,7 @@
 <openbox_menu>
   <menu id="root-menu" label="">
     <item label="Terminal"><action name="Execute" command="foot" /></item>
+    <item label="Browser"><action name="Execute" command="librewolf" /></item>
     <item label="Applications"><action name="Execute" command="fuzzel" /></item>
     <separator />
     <item label="Lock"><action name="Execute" command="swaylock -f -c 0b121e" /></item>
