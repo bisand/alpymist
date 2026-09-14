@@ -27,6 +27,7 @@ profile_alpymist() {
 	# Without it they fall back to Denise's built-in bitmap and still read
 	# correctly, including Norwegian — just more crudely.
 	apks="$apks alpymistctl alpymist-install alpymist-install-openrc"
+	apks="$apks alpymist-splash alpymist-splash-openrc"
 	apks="$apks mesa-egl mesa-gles mesa-dri-gallium font-fira-ttf"
 	# What the installer runs, on the image rather than fetched, so installing
 	# works with no network: partitioning, LUKS, filesystems and the bootloader

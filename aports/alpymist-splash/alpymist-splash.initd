@@ -1,0 +1,35 @@
+#!/sbin/openrc-run
+
+description="Alpymist boot splash"
+
+# As early as there is a /dev: before udev, so the splash is up while drivers
+# load rather than after. It draws on the firmware's framebuffer until the
+# real display driver replaces it, and then on that.
+depend() {
+	after devfs dmesg
+	before udev modloop hwdrivers mdev
+	keyword -containers -vserver -lxc -docker -podman
+}
+
+start() {
+	ebegin "Showing the boot splash"
+	# The log is in /run: in sysinit the root filesystem of an installed
+	# system is still read-only.
+	start-stop-daemon --start \
+		--exec /usr/bin/alpymist-splash \
+		--pidfile /run/alpymist-splash.pid --make-pidfile \
+		--background \
+		--stdout /run/alpymist-splash.log \
+		--stderr /run/alpymist-splash.log
+	eend $?
+}
+
+# The splash leaves by itself when the installer or greetd starts, so by
+# shutdown there is normally nothing to stop, and that is not a failure.
+stop() {
+	ebegin "Stopping the boot splash"
+	start-stop-daemon --stop --quiet \
+		--exec /usr/bin/alpymist-splash \
+		--pidfile /run/alpymist-splash.pid
+	eend 0
+}

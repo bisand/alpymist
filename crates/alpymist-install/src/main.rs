@@ -125,7 +125,7 @@ mod drm_run {
     use alpymist_install::typing;
     use denise::geom::Rect;
     use denise::{InputEvent, InputSource, Surface};
-    use denise_drm::{DrmSurface, SurfaceConfig};
+    use denise_drm::SurfaceConfig;
     use denise_evdev::{Console, InputBackend};
     use denise_render::Canvas;
     use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
@@ -192,7 +192,11 @@ mod drm_run {
         for signal in [SIGTERM, SIGINT, SIGHUP] {
             signal_hook::flag::register(signal, Arc::clone(&stop))?;
         }
-        let mut surface = DrmSurface::open(SurfaceConfig::default())?;
+        // The boot splash lets go of the display as this starts; wait for it.
+        let mut surface = alpymist_ui::display::open_patiently(
+            SurfaceConfig::default(),
+            alpymist_ui::display::PATIENCE,
+        )?;
         let size = surface.size();
 
         eprintln!("display: {}x{} via DRM/KMS", size.width, size.height);

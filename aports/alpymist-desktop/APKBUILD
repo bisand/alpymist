@@ -34,6 +34,7 @@ depends="
 	alpymist-greeter
 	alpymist-keys
 	alpymist-shell=$pkgver-r$pkgrel
+	alpymist-splash-openrc
 	brightnessctl
 	dbus
 	flatpak

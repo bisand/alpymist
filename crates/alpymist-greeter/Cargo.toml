@@ -33,7 +33,7 @@ signal-hook = { version = "0.3", optional = true }
 default = ["winit"]
 winit = ["dep:denise-winit"]
 # The real target: KMS plus evdev, run by greetd on its VT.
-drm = ["dep:denise-drm", "dep:denise-evdev", "dep:signal-hook"]
+drm = ["alpymist-ui/drm", "dep:denise-drm", "dep:denise-evdev", "dep:signal-hook"]
 
 [dev-dependencies]
 # The snapshot example: the login screen rendered to a PNG for review.

@@ -15,6 +15,8 @@
 pub mod backdrop;
 pub mod chrome;
 pub mod convert;
+#[cfg(feature = "drm")]
+pub mod display;
 pub mod logo;
 pub mod palette;
 #[cfg(feature = "render")]

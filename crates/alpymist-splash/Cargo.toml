@@ -12,12 +12,17 @@ alpymist-ui = { workspace = true, features = ["render"] }
 denise = { workspace = true }
 denise-render = { workspace = true }
 denise-winit = { workspace = true, optional = true }
+denise-drm = { workspace = true, optional = true }
+denise-evdev = { workspace = true, optional = true }
+signal-hook = { version = "0.3", optional = true }
 
 [features]
 # Desktop preview is the default because that is where it is developed; the
 # boot image builds with --no-default-features --features drm.
 default = ["winit"]
 winit = ["dep:denise-winit"]
+# The real target: KMS early in boot, started by OpenRC.
+drm = ["dep:denise-drm", "dep:denise-evdev", "dep:signal-hook"]
 
 [dev-dependencies]
 # Only for the snapshot example: renders a frame offscreen to a PNG so the

@@ -58,6 +58,8 @@ udev-init-scripts-openrc
 alpymistctl
 alpymist-install
 alpymist-install-openrc
+alpymist-splash
+alpymist-splash-openrc
 mesa-egl
 mesa-gles
 mesa-dri-gallium
@@ -124,6 +126,10 @@ EOF
 
 rc_add devfs sysinit
 rc_add dmesg sysinit
+# The boot splash, from here until the installer starts; it hides the boot
+# messages on the screen, not on the serial console. setup-disk copies this
+# runlevel, so installed systems show it too, until the login screen.
+rc_add alpymist-splash sysinit
 # udev, not BusyBox mdev and hwdrivers. hwdrivers loads drivers for the
 # devices present when it runs, once. Devices that appear only after another
 # driver loads were never looked at: an I2C touchpad, the norm on small

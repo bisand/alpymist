@@ -1,0 +1,44 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-splash
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="Alpymist boot splash, drawn straight to DRM/KMS"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+makedepends="cargo"
+# The font is a runtime suggestion: without it the splash falls back to
+# Denise's built-in bitmap and still reads correctly.
+depends="font-fira-ttf"
+subpackages="$pkgname-openrc"
+options="!check"  # the test suite runs in CI, not in the package build
+source="alpymist-splash.initd"
+builddir="$srcdir"
+
+prepare() {
+	# Same as alpymistctl: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	# No default features: the desktop window backend must not be linked into
+	# something that runs this early in boot.
+	cargo build --release --locked \
+		-p alpymist-splash --no-default-features --features drm
+}
+
+package() {
+	install -Dm755 "$builddir"/target/release/alpymist-splash \
+		"$pkgdir"/usr/bin/alpymist-splash
+	install -Dm755 "$srcdir"/alpymist-splash.initd \
+		"$pkgdir"/etc/init.d/alpymist-splash
+}
+
+# Filled in by `abuild checksum` at build time; see alpymist-install.
+sha512sums=""

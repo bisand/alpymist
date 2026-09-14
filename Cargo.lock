@@ -127,9 +127,12 @@ version = "0.0.1"
 dependencies = [
  "alpymist-ui",
  "denise",
+ "denise-drm",
+ "denise-evdev",
  "denise-render",
  "denise-winit",
  "png",
+ "signal-hook",
 ]
 
 [[package]]
