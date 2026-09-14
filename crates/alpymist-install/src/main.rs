@@ -328,6 +328,9 @@ mod drm_run {
 
 #[cfg(all(feature = "winit", not(feature = "drm")))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(outcome) = firmware_main() {
+        return outcome;
+    }
     if let Some(outcome) = unattended_main() {
         return outcome;
     }
@@ -336,10 +339,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(feature = "drm")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(outcome) = firmware_main() {
+        return outcome;
+    }
     if let Some(outcome) = unattended_main() {
         return outcome;
     }
     drm_run::main()
+}
+
+/// Handle `firmware <root>`, a step of the install plan, if it was asked for.
+///
+/// A subcommand of the installer rather than a script, so the logic stays in
+/// Rust and is tested there; see `alpymist_install::firmware`.
+#[cfg(any(feature = "winit", feature = "drm"))]
+fn firmware_main() -> Option<Result<(), Box<dyn std::error::Error>>> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) != Some("firmware") {
+        return None;
+    }
+    let Some(root) = args
+        .get(2)
+        .filter(|r| alpymist_install::firmware::is_root(r))
+    else {
+        return Some(Err("usage: alpymist-install firmware <mounted root>".into()));
+    };
+    Some(match alpymist_install::firmware::install(root) {
+        Ok(lines) => {
+            for line in lines {
+                println!("{line}");
+            }
+            Ok(())
+        }
+        Err(why) => Err(why.into()),
+    })
 }
 
 /// Handle `--unattended` if it was asked for.

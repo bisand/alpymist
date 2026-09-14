@@ -18,6 +18,7 @@ pub mod catalog;
 pub mod disks;
 pub mod editing;
 pub mod execute;
+pub mod firmware;
 pub mod plan;
 pub mod pointer;
 pub mod safety;

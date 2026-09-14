@@ -74,6 +74,7 @@ items = [
 title = "Setup"
 items = [
   { name = "Audio", icon = "󰕾", exec = "pavucontrol", keywords = ["sound", "volume", "speakers", "microphone"] },
+  { name = "Wi-Fi", icon = "󰖩", exec = "impala", terminal = true, keywords = ["wireless", "network", "wlan", "iwd"] },
   { name = "Config", icon = "", menu = "config", keywords = ["edit", "dotfiles"] },
   { name = "Reload desktop", icon = "󰑓", exec = "hyprctl reload", keywords = ["hyprland"] },
 ]

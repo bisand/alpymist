@@ -62,6 +62,26 @@ mesa-egl
 mesa-gles
 mesa-dri-gallium
 font-fira-ttf
+dbus
+dbus-openrc
+iwd
+iwd-openrc
+iw
+openresolv
+wireless-regdb
+EOF
+
+# iwd configures the address itself once it has joined a network, and hands
+# name servers to openresolv. Without this it associates and then sits there
+# with no address, because nothing else runs DHCP on a wireless interface.
+# The installer writes the same file into the installed system.
+mkdir -p "$tmp"/etc/iwd
+makefile root:root 0644 "$tmp"/etc/iwd/main.conf <<EOF
+[General]
+EnableNetworkConfiguration=true
+
+[Network]
+NameResolvingService=resolvconf
 EOF
 
 # evdev exposes keyboards, mice and touchpads as /dev/input/event*, which is
@@ -116,6 +136,9 @@ rc_add bootmisc boot
 rc_add syslog boot
 rc_add networking boot
 rc_add alpymist-probe boot
+# iwd talks to its clients, the installer's iwctl included, over D-Bus.
+rc_add dbus default
+rc_add iwd default
 rc_add alpymist-install default
 
 rc_add mount-ro shutdown

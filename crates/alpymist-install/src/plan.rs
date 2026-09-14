@@ -204,6 +204,10 @@ const ALPYMIST_REPOSITORY: &str = "https://pkgs.alpymist.org/v3.24/alpymist";
 const LOGIN_SHELL: &str = "/bin/zsh";
 /// The session environment the login's PAM service loads.
 const SESSION_ENV: &str = "/etc/alpymist/session.env";
+/// iwd's settings: it configures the address itself once joined, and hands
+/// name servers to openresolv. The live image has the same file.
+const IWD_MAIN_CONF: &str =
+    "[General]\nEnableNetworkConfiguration=true\n\n[Network]\nNameResolvingService=resolvconf\n";
 /// Hyprland's keyboard settings, which its configuration sources. Hyprland
 /// ignores `XKB_DEFAULT_*`, and a layout applied with `hyprctl` at login was
 /// lost on every configuration reload.
@@ -403,6 +407,42 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         .with_input(Input::Text(repositories)),
     );
 
+    // setup-disk takes firmware from the install medium only, and silently
+    // leaves out what is not there: the Wi-Fi card that needed it then does
+    // nothing. With the online repositories in place, this installs what the
+    // loaded drivers name from both. Allowed to fail: offline, the medium's
+    // firmware is all there is, and the system still boots.
+    steps.push(
+        Step::new(
+            "Installing firmware for this hardware",
+            &["alpymist-install", "firmware", ROOT],
+        )
+        .may_fail(),
+    );
+
+    // Wi-Fi through iwd, on every install: a machine installed over a cable
+    // may be carried somewhere without one. iwd needs D-Bus.
+    steps.push(Step::new(
+        "Preparing Wi-Fi",
+        &["chroot", ROOT, "mkdir", "-p", "/etc/iwd"],
+    ));
+    steps.push(
+        Step::new(
+            "Configuring Wi-Fi",
+            &["chroot", ROOT, "tee", "/etc/iwd/main.conf"],
+        )
+        .with_input(Input::Text(IWD_MAIN_CONF.into())),
+    );
+    for service in ["dbus", "iwd"] {
+        steps.push(
+            Step::new(
+                &format!("Starting {service} at boot"),
+                &["chroot", ROOT, "rc-update", "add", service, "default"],
+            )
+            .may_fail(),
+        );
+    }
+
     // udev rather than BusyBox mdev: libinput finds keyboards and mice through
     // udev, and a Wayland compositor with no input devices refuses to start.
     // setup-devd does the same, but also starts the services, which in a
@@ -521,7 +561,7 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         .with_input(Input::Text("permit persist :wheel\n".into())),
     );
 
-    for service in ["dbus", "seatd", "greetd"] {
+    for service in ["seatd", "greetd"] {
         steps.push(
             Step::new(
                 &format!("Starting {service} at boot"),
@@ -531,8 +571,8 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         );
     }
     // seat for seatd, video and input for the devices a compositor opens,
-    // audio for pipewire.
-    for group in ["seat", "video", "input", "audio"] {
+    // audio for pipewire, netdev for choosing Wi-Fi networks through iwd.
+    for group in ["seat", "video", "input", "audio", "netdev"] {
         steps.push(
             Step::new(
                 &format!("Adding your account to {group}"),
@@ -779,9 +819,10 @@ mod tests {
     }
 
     /// Nothing that can leave a disk half-written or a system unusable may be
-    /// skipped past: only the desktop and the steps that configure it.
+    /// skipped past: only firmware, services, and the desktop and the steps
+    /// that configure it.
     #[test]
-    fn only_the_desktop_and_its_setup_may_fail() {
+    fn only_firmware_services_and_the_desktop_may_fail() {
         let plan = build(&encrypted()).unwrap();
         let optional: Vec<&str> = plan
             .steps
@@ -789,11 +830,12 @@ mod tests {
             .filter(|s| s.may_fail)
             .map(|s| s.title.as_str())
             .collect();
-        assert_eq!(optional[0], "Installing the desktop");
+        assert_eq!(optional[0], "Installing firmware for this hardware");
         for title in &optional[1..] {
             assert!(
                 title.starts_with("Starting ")
                     || title.starts_with("Adding your account to ")
+                    || *title == "Installing the desktop"
                     || *title == "Choosing the desktop session",
                 "{title} may fail but is not desktop setup"
             );
@@ -985,6 +1027,35 @@ mod tests {
             "mdev must go only after udev is in place"
         );
         assert!(!step(&plan, "Retiring mdev").may_fail);
+    }
+
+    /// setup-disk takes firmware only from the medium; this is what fetches
+    /// the rest, and it needs the online repositories to already be there.
+    #[test]
+    fn firmware_is_installed_once_the_new_system_has_repositories() {
+        let plan = build(&answers()).unwrap();
+        let firmware = step(&plan, "firmware for this hardware");
+        assert_eq!(firmware.argv, ["alpymist-install", "firmware", "/mnt"]);
+        assert!(
+            firmware.may_fail,
+            "offline, the system still boots without it"
+        );
+        let t = titles(&answers());
+        let at = |n: &str| t.iter().position(|s| s.contains(n)).unwrap();
+        assert!(at("firmware for this hardware") > at("package repositories"));
+    }
+
+    #[test]
+    fn every_install_can_use_wifi_through_iwd() {
+        let plan = build(&answers()).unwrap();
+        let Some(Input::Text(conf)) = &step(&plan, "Configuring Wi-Fi").stdin else {
+            panic!("no iwd configuration");
+        };
+        assert!(conf.contains("EnableNetworkConfiguration=true"), "{conf}");
+        let t = titles(&answers());
+        let at = |n: &str| t.iter().position(|s| s.contains(n)).unwrap();
+        assert!(at("Starting dbus") < at("Starting iwd"), "iwd needs D-Bus");
+        assert!(t.contains(&"Adding your account to netdev".to_string()));
     }
 
     #[test]

@@ -11,7 +11,7 @@
 # than system files an upgrade would overwrite.
 pkgname=alpymist-desktop
 pkgver=0.0.1
-pkgrel=6
+pkgrel=7
 pkgdesc="Alpymist desktop: what every tier shares"
 url="https://github.com/bisand/alpymist"
 arch="noarch"
@@ -24,6 +24,8 @@ license="MIT OR Apache-2.0"
 # sandboxed apps open and save files; alpymist-keys lets apk trust the Alpymist
 # repository the installer adds. LibreWolf is the browser: Firefox with the
 # tracking and telemetry taken out, built for musl and kept patched by Alpine.
+# Wi-Fi is iwd, managed from impala, which the bar and the menu open; the
+# installer adds the account to netdev, which iwd lets manage networks.
 # Terminals use FiraCode Nerd Font: Fira Code's ligatures, with the prompt's
 # icons at the size and place they were made for, which a separate symbols
 # font gets wrong.
@@ -42,6 +44,8 @@ depends="
 	font-nerd-fonts-symbols
 	gsettings-desktop-schemas
 	greetd
+	impala
+	iwd
 	librewolf
 	mesa-dri-gallium
 	pam-rundir

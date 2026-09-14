@@ -36,6 +36,17 @@ profile_alpymist() {
 	# unless named here, and setup-disk installs it from that repository.
 	# linux-firmware-none is what setup-disk picks for hardware needing none.
 	apks="$apks linux-lts linux-firmware-none"
+	# Wi-Fi: iwd, which the installer and the desktop both drive, and the
+	# regulatory database every wireless driver asks for. The live system's
+	# firmware is the kernel's modloop, which has all of it; these packages are
+	# for the installed system, whose firmware is picked from this repository by
+	# the drivers loaded. All of linux-firmware would add about 760 MiB, so the
+	# image carries the common laptop Wi-Fi and Intel graphics firmware, about
+	# 40 MiB, and the installer fetches the rest when it has a network.
+	apks="$apks iwd iwd-openrc impala iw openresolv wireless-regdb"
+	apks="$apks linux-firmware-rtlwifi linux-firmware-rtw88 linux-firmware-rtw89"
+	apks="$apks linux-firmware-brcm linux-firmware-cypress"
+	apks="$apks linux-firmware-ath9k_htc linux-firmware-ath10k linux-firmware-i915"
 	# Every desktop tier, so the installer can put any of them on a machine
 	# with no network. About 170 MiB more on the image.
 	apks="$apks alpymist-desktop-full alpymist-desktop-lite alpymist-desktop-legacy"

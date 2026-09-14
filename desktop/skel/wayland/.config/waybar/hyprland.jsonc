@@ -57,7 +57,8 @@
     "format-disconnected": "󰖪",
     "tooltip-format-wifi": "{essid}  {signalStrength}%\n{ipaddr}",
     "tooltip-format-ethernet": "{ifname}\n{ipaddr}",
-    "tooltip-format-disconnected": "No network"
+    "tooltip-format-disconnected": "No network",
+    "on-click": "ghostty -e impala"
   },
 
   "pulseaudio": {
