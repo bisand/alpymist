@@ -620,7 +620,9 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
             .may_fail(),
         );
     }
-    for service in ["seatd", "greetd"] {
+    // alpymist-power puts back the power mode and charge limit last chosen;
+    // the Legacy tier does not install it, and the step fails harmlessly.
+    for service in ["seatd", "greetd", "alpymist-power"] {
         steps.push(
             Step::new(
                 &format!("Starting {service} at boot"),
@@ -1064,7 +1066,7 @@ mod tests {
                 .windows(2)
                 .any(|w| w == ["--repositories-file", "/etc/apk/repositories"])
         );
-        for service in ["dbus", "seatd", "greetd"] {
+        for service in ["dbus", "seatd", "greetd", "alpymist-power"] {
             assert!(titles(&a).contains(&format!("Starting {service} at boot")));
         }
         let Some(Input::Text(conf)) = &step(&plan, "desktop session").stdin else {

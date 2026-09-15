@@ -1,0 +1,18 @@
+#!/sbin/openrc-run
+
+description="Put back the power mode and charge limit last chosen"
+
+# The kernel starts every boot in its own default mode, and many firmwares
+# forget a charge limit when the machine is off. alpymist-power-helper keeps
+# the last of each in /var/lib/alpymist and writes them again here.
+depend() {
+	need localmount
+	after sysfs
+	keyword -containers -vserver -lxc -docker -podman
+}
+
+start() {
+	ebegin "Restoring the power mode"
+	/usr/libexec/alpymist-power-helper restore
+	eend $?
+}

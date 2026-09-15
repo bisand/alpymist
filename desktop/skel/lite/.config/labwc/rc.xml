@@ -21,6 +21,9 @@
     <keybind key="W-w"><action name="Close" /></keybind>
     <keybind key="W-f"><action name="ToggleMaximize" /></keybind>
     <keybind key="W-l"><action name="Execute" command="swaylock -f -c 0b121e" /></keybind>
+    <!-- The power button does what alpymist-power's popup was set to. -->
+    <keybind key="XF86PowerOff"><action name="Execute" command="alpymist-power button" /></keybind>
+    <keybind key="XF86Sleep"><action name="Execute" command="alpymist-power suspend" /></keybind>
     <keybind key="W-S-e"><action name="Exit" /></keybind>
     <keybind key="W-Left"><action name="SnapToEdge" direction="left" /></keybind>
     <keybind key="W-Right"><action name="SnapToEdge" direction="right" /></keybind>

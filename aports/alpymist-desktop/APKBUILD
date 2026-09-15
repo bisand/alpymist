@@ -11,7 +11,7 @@
 # than system files an upgrade would overwrite.
 pkgname=alpymist-desktop
 pkgver=0.0.1
-pkgrel=9
+pkgrel=10
 pkgdesc="Alpymist desktop: what every tier shares"
 url="https://github.com/bisand/alpymist"
 arch="noarch"
@@ -147,9 +147,12 @@ _shell() {
 # under any wlroots-style compositor, Hyprland included.
 _wayland() {
 	pkgdesc="Alpymist desktop: tools shared by the Wayland tiers"
-	# alpymist-wifi is the bar's Wi-Fi icon and popup under both compositors.
+	# alpymist-wifi and alpymist-power are the bar's Wi-Fi and battery icons
+	# and popups under both compositors, and alpymist-power what the lid and
+	# the power button do.
 	depends="
 		$pkgname=$pkgver-r$pkgrel
+		alpymist-power
 		alpymist-wifi
 		foot
 		fuzzel

@@ -1,0 +1,49 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-power
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="Alpymist power: the bar's battery, power modes, the lid and the power button, and a popup under the bar"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+# Batteries, power modes and sleep are read and written in sysfs, which needs
+# nothing linked. There is no elogind, so nothing else acts on the lid or the
+# power button: the compositor passes both to alpymist-power, and what needs
+# root goes through doas to alpymist-power-helper, which writes a closed set of
+# files under /sys. The popup is drawn as alpymist-wifi's is, so it needs
+# libxkbcommon and the same fonts; swaylock is what the lid locks with.
+makedepends="cargo libxkbcommon-dev"
+depends="doas font-fira-ttf font-nerd-fonts-symbols swaylock"
+subpackages="$pkgname-openrc"
+options="!check"  # the test suite runs in CI, not in the package build
+source="alpymist-power.doas.conf alpymist-power.initd"
+builddir="$srcdir"
+
+prepare() {
+	# Same as alpymistctl: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	cargo build --release --locked -p alpymist-power --bins
+}
+
+package() {
+	install -Dm755 "$builddir"/target/release/alpymist-power \
+		"$pkgdir"/usr/bin/alpymist-power
+	install -Dm755 "$builddir"/target/release/alpymist-power-helper \
+		"$pkgdir"/usr/libexec/alpymist-power-helper
+	install -Dm600 "$srcdir"/alpymist-power.doas.conf \
+		"$pkgdir"/etc/doas.d/alpymist-power.conf
+	install -Dm755 "$srcdir"/alpymist-power.initd \
+		"$pkgdir"/etc/init.d/alpymist-power
+}
+
+# Filled in by `abuild checksum` at build time; see alpymist-install.
+sha512sums=""

@@ -48,7 +48,7 @@ window#waybar {
 #pulseaudio,
 #cpu,
 #memory,
-#battery,
+#custom-battery,
 #custom-session,
 #custom-tray-arrow {
   color: #9aabbd;
@@ -62,13 +62,14 @@ window#waybar {
 #pulseaudio:hover,
 #cpu:hover,
 #memory:hover,
-#battery:hover,
+#custom-battery:hover,
 #custom-session:hover,
 #custom-tray-arrow:hover { color: #eaf0f6; }
 
 #custom-session { color: #7fb8d9; }
-#battery.warning { color: #d9a07f; }
-#battery.critical { color: #d98f7f; }
+#custom-battery.charging { color: #7fb8d9; }
+#custom-battery.warning { color: #d9a07f; }
+#custom-battery.critical { color: #d98f7f; }
 #custom-wifi.off,
 #custom-wifi.unavailable { color: #5d6b7a; }
 #custom-wifi.connecting { color: #7fb8d9; }

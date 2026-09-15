@@ -11,7 +11,7 @@
 
   "modules-left": ["custom/alpymist", "hyprland/workspaces"],
   "modules-center": ["clock"],
-  "modules-right": ["group/tray-drawer", "bluetooth", "custom/wifi", "network", "pulseaudio", "cpu", "memory", "battery", "custom/session"],
+  "modules-right": ["group/tray-drawer", "bluetooth", "custom/wifi", "network", "pulseaudio", "cpu", "memory", "custom/battery", "custom/session"],
 
   "custom/alpymist": {
     // The mark is an image, drawn by our own code; see the stylesheet.
@@ -84,12 +84,16 @@
   "cpu": { "interval": 5, "format": "󰍛", "tooltip-format": "Processor  {usage}%" },
   "memory": { "interval": 10, "format": "󰘚", "tooltip-format": "Memory  {percentage}%  ({used:0.1f}G of {total:0.1f}G)" },
 
-  "battery": {
-    "format": "{icon}",
-    "format-charging": "󰂄",
-    "format-icons": ["", "", "", "", ""],
-    "tooltip-format": "Battery {capacity}%  {timeTo}",
-    "states": { "warning": 20, "critical": 10 }
+  // The battery is alpymist-power: an icon for every ten percent, with a bolt
+  // while charging, and beside it whatever its popup's "Show in the bar" boxes
+  // say. It prints again when the charger or the level changes, and a click
+  // opens the popup; a second click closes it. Without a battery it prints
+  // nothing and Waybar hides it.
+  "custom/battery": {
+    "exec": "alpymist-power --waybar",
+    "return-type": "json",
+    "restart-interval": 5,
+    "on-click": "alpymist-power"
   },
 
   "custom/session": {
