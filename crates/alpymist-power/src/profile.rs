@@ -13,7 +13,7 @@
 //! `OpenRC` service, and its permission check needs elogind's sessions, which
 //! the desktop does not run. Writing these files needs root, so the plan is
 //! worked out here, as data anyone can test, and carried out by
-//! `alpymist-power-helper` through doas.
+//! `alpymist-power-helper` through pkexec.
 
 use std::path::{Path, PathBuf};
 

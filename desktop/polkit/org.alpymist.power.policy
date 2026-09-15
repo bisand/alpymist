@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+  Alpymist power: what alpymist-power-helper may do, and who may ask.
+
+  pkexec picks the action by the helper's path and first argument. By default
+  each needs an administrator's password; 50-alpymist-power.rules lets anyone
+  in the seat group — an account the desktop's seat is for — suspend,
+  hibernate, restart, shut down and switch power modes without one, as a login
+  session would on a desktop with elogind. A closing lid must never wait for
+  a password. The charge limit outlives the session and always asks.
+-->
+<policyconfig>
+  <vendor>Alpymist</vendor>
+  <vendor_url>https://github.com/bisand/alpymist</vendor_url>
+
+  <action id="org.alpymist.power.suspend">
+    <description>Suspend</description>
+    <message>Authentication is needed to suspend this computer</message>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-power-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">suspend</annotate>
+  </action>
+
+  <action id="org.alpymist.power.hibernate">
+    <description>Hibernate</description>
+    <message>Authentication is needed to hibernate this computer</message>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-power-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">hibernate</annotate>
+  </action>
+
+  <action id="org.alpymist.power.power-off">
+    <description>Shut down</description>
+    <message>Authentication is needed to shut down this computer</message>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-power-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">power-off</annotate>
+  </action>
+
+  <action id="org.alpymist.power.reboot">
+    <description>Restart</description>
+    <message>Authentication is needed to restart this computer</message>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-power-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">reboot</annotate>
+  </action>
+
+  <action id="org.alpymist.power.profile">
+    <description>Change the power mode</description>
+    <message>Authentication is needed to change the power mode</message>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-power-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">profile</annotate>
+  </action>
+
+  <action id="org.alpymist.power.charge-limit">
+    <description>Change the battery's charge limit</description>
+    <message>Authentication is needed to change how far the battery charges</message>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-power-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">charge-limit</annotate>
+  </action>
+</policyconfig>

@@ -7,6 +7,7 @@
 //! alpymist-power lid           the lid was closed: do what is set
 //! alpymist-power button        the power button was pressed: do what is set
 //! alpymist-power suspend|hibernate
+//! alpymist-power restart|power-off
 //! alpymist-power --waybar      a line of JSON for Waybar at every change
 //! ```
 
@@ -27,7 +28,8 @@ use std::process::ExitCode;
 use std::time::Duration;
 
 const USAGE: &str = "\
-usage: alpymist-power [status | profile [MODE] | lid | button | suspend | hibernate | --waybar]
+usage: alpymist-power [status | profile [MODE] | lid | button | suspend | hibernate |
+                      restart | power-off | --waybar]
 
 With no command, opens the power popup under the bar; run it again to close it.
   status         say where power is
@@ -37,6 +39,8 @@ With no command, opens the power popup under the bar; run it again to close it.
   button         the power button was pressed: do what the popup set for it
   suspend        lock the screen and suspend
   hibernate      lock the screen and hibernate
+  restart        restart the machine
+  power-off      shut the machine down
   --waybar       print a line of JSON for a Waybar custom module at every change";
 
 /// The popup's name: its socket, and its layer surface's namespace.
@@ -76,6 +80,8 @@ fn main() -> ExitCode {
         }
         ["suspend"] => actions::run(Action::Suspend, &Config::load()),
         ["hibernate"] => actions::run(Action::Hibernate, &Config::load()),
+        ["restart"] => actions::helper(&["reboot"]),
+        ["power-off"] => actions::run(Action::PowerOff, &Config::load()),
         ["--waybar"] => {
             waybar();
             Ok(())

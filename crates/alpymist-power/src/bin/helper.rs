@@ -1,11 +1,11 @@
 //! `alpymist-power-helper` — the part of power management that needs root.
 //!
-//! Run through doas by `alpymist-power`, and at boot by its `OpenRC` service:
+//! Run through pkexec by `alpymist-power`, and at boot by its `OpenRC` service:
 //!
 //! ```text
 //! alpymist-power-helper profile power-saver|balanced|performance
 //! alpymist-power-helper charge-limit 100|90|80|60
-//! alpymist-power-helper suspend|hibernate|power-off
+//! alpymist-power-helper suspend|hibernate|power-off|reboot
 //! alpymist-power-helper restore
 //! ```
 //!

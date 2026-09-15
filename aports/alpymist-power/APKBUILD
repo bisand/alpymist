@@ -2,7 +2,7 @@
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-power
 pkgver=0.0.1
-pkgrel=0
+pkgrel=1
 pkgdesc="Alpymist power: the bar's battery, power modes, the lid and the power button, and a popup under the bar"
 url="https://github.com/bisand/alpymist"
 arch="all"
@@ -10,14 +10,16 @@ license="MIT OR Apache-2.0"
 # Batteries, power modes and sleep are read and written in sysfs, which needs
 # nothing linked. There is no elogind, so nothing else acts on the lid or the
 # power button: the compositor passes both to alpymist-power, and what needs
-# root goes through doas to alpymist-power-helper, which writes a closed set of
-# files under /sys. The popup is drawn as alpymist-wifi's is, so it needs
-# libxkbcommon and the same fonts; swaylock is what the lid locks with.
+# root goes through pkexec to alpymist-power-helper, which writes a closed set
+# of files under /sys and runs poweroff and reboot. polkit lets the seat group
+# do all but the charge limit without a password, which alpymist-auth asks
+# for. The popup is drawn as alpymist-wifi's is, so it needs libxkbcommon and
+# the same fonts; swaylock is what the lid locks with.
 makedepends="cargo libxkbcommon-dev"
-depends="doas font-fira-ttf font-nerd-fonts-symbols swaylock"
+depends="alpymist-auth font-fira-ttf font-nerd-fonts-symbols polkit swaylock"
 subpackages="$pkgname-openrc"
 options="!check"  # the test suite runs in CI, not in the package build
-source="alpymist-power.doas.conf alpymist-power.initd"
+source="alpymist-power.initd"
 builddir="$srcdir"
 
 prepare() {
@@ -39,8 +41,10 @@ package() {
 		"$pkgdir"/usr/bin/alpymist-power
 	install -Dm755 "$builddir"/target/release/alpymist-power-helper \
 		"$pkgdir"/usr/libexec/alpymist-power-helper
-	install -Dm600 "$srcdir"/alpymist-power.doas.conf \
-		"$pkgdir"/etc/doas.d/alpymist-power.conf
+	install -Dm644 "$builddir"/desktop/polkit/org.alpymist.power.policy \
+		"$pkgdir"/usr/share/polkit-1/actions/org.alpymist.power.policy
+	install -Dm644 "$builddir"/desktop/polkit/50-alpymist-power.rules \
+		"$pkgdir"/usr/share/polkit-1/rules.d/50-alpymist-power.rules
 	install -Dm755 "$srcdir"/alpymist-power.initd \
 		"$pkgdir"/etc/init.d/alpymist-power
 }

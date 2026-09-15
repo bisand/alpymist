@@ -6,8 +6,11 @@
 //! to do it: the desktop runs seatd, so nothing else is listening.
 //!
 //! Locking runs as the user. Suspending, hibernating and shutting down need
-//! root, and go through `alpymist-power-helper` with doas, which the package
-//! lets administrators run without a password.
+//! root, and go through `alpymist-power-helper` with pkexec. polkit lets
+//! anyone at the machine — in the seat group, which the desktop's seat needs
+//! anyway — do those without a password, so a closing lid never waits for
+//! one; a charge limit, which outlives the session, asks an administrator in
+//! alpymist-auth's dialog.
 
 use crate::battery::Power;
 use crate::config::{Action, Config};
@@ -72,31 +75,64 @@ fn shell(command: &str) -> Result<(), String> {
     }
 }
 
-/// Run the helper as root, without a password.
+/// Where the password dialog is.
+pub const AUTH: &str = "/usr/bin/alpymist-auth";
+
+/// Whether polkit asks a password for the helper's `verb`. Those that do go
+/// through `alpymist-auth run`, which brings its own agent to ask with; the
+/// rest need none, and are run by pkexec directly, so the lid never depends
+/// on the dialog.
+#[must_use]
+pub fn asks_password(verb: &str) -> bool {
+    verb == "charge-limit"
+}
+
+/// Run the helper as root through pkexec.
 ///
 /// # Errors
-/// doas refused, or the helper failed; its own message is passed on.
+/// polkit refused, or the helper failed; its own message is passed on.
 pub fn helper(args: &[&str]) -> Result<(), String> {
-    let output = Command::new("doas")
-        .arg("-n")
-        .arg(HELPER)
-        .args(args)
-        .output()
-        .map_err(|e| format!("could not run doas: {e}"))?;
+    // `alpymist-auth run` runs pkexec itself, with its own agent to ask.
+    let mut command = if args.first().is_some_and(|v| asks_password(v)) {
+        let mut c = Command::new(AUTH);
+        c.args(["run", "--"]);
+        c
+    } else {
+        Command::new("pkexec")
+    };
+    let output = command.arg(HELPER).args(args).output().map_err(|e| {
+        format!(
+            "could not run {}: {e}",
+            command.get_program().to_string_lossy()
+        )
+    })?;
     if output.status.success() {
         return Ok(());
     }
     let said = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-    Err(
-        if said.contains("not permitted") || said.contains("Operation not permitted") {
-            "Not allowed: this account is not an administrator.".into()
-        } else if said.is_empty() {
-            format!("{HELPER} failed ({})", output.status)
-        } else {
-            said.trim_start_matches("alpymist-power-helper: ")
-                .to_owned()
-        },
-    )
+    Err(explain(&said, output.status.code()))
+}
+
+/// pkexec's refusals, and the helper's own messages, as the popup says them.
+fn explain(said: &str, code: Option<i32>) -> String {
+    if said.contains("dismissed") {
+        "Cancelled.".into()
+    } else if said.contains("Not authorized") {
+        "Not allowed: this needs an administrator's password.".into()
+    } else if said.contains("authentication agent") {
+        "Not allowed: nothing could ask for a password.".into()
+    } else if said.is_empty() {
+        format!(
+            "{HELPER} failed ({})",
+            code.map_or_else(|| "killed".into(), |c| c.to_string())
+        )
+    } else {
+        said.lines()
+            .last()
+            .unwrap_or(said)
+            .trim_start_matches("alpymist-power-helper: ")
+            .to_owned()
+    }
 }
 
 /// Carry out `action`.
@@ -128,9 +164,41 @@ pub fn run(action: Action, config: &Config) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{docked, for_lid};
+    use super::{asks_password, docked, explain, for_lid};
     use crate::battery::sample;
     use crate::config::{Action, Config};
+
+    #[test]
+    fn only_the_charge_limit_asks_and_refusals_read_plainly() {
+        assert!(asks_password("charge-limit"));
+        for verb in ["suspend", "hibernate", "power-off", "reboot", "profile"] {
+            assert!(
+                !asks_password(verb),
+                "{verb} must never wait for a password"
+            );
+        }
+        assert_eq!(
+            explain(
+                "Error executing command as another user: Request dismissed",
+                Some(126)
+            ),
+            "Cancelled."
+        );
+        assert_eq!(
+            explain(
+                "Error creating textual authentication agent: no tty",
+                Some(127)
+            ),
+            "Not allowed: nothing could ask for a password."
+        );
+        assert_eq!(
+            explain(
+                "alpymist-power-helper: this machine cannot hibernate",
+                Some(1)
+            ),
+            "this machine cannot hibernate"
+        );
+    }
 
     #[test]
     fn the_lid_follows_the_charger_and_the_dock() {

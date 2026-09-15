@@ -1,0 +1,20 @@
+// Alpymist power: anyone at the machine may suspend, hibernate, restart, shut
+// down and change the power mode without a password.
+//
+// Without elogind polkit knows no sessions, so "at the machine" is the seat
+// group: seatd hands its members the display and input devices, and the
+// installer puts the desktop's account in it. An account only reached over
+// SSH is not in it, and is asked for an administrator's password instead.
+polkit.addRule(function(action, subject) {
+    var free = [
+        "org.alpymist.power.suspend",
+        "org.alpymist.power.hibernate",
+        "org.alpymist.power.power-off",
+        "org.alpymist.power.reboot",
+        "org.alpymist.power.profile"
+    ];
+    if (free.indexOf(action.id) >= 0 && subject.isInGroup("seat")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

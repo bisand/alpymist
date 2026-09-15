@@ -8,7 +8,7 @@
 //! The split is the Wi-Fi manager's. [`battery`], [`profile`] and [`config`]
 //! are what is known, read from sysfs and a file; [`popup`] is what every key
 //! and click does, with no pixels; [`view`] paints it with Denise. [`system`]
-//! is the little that needs root, run by `alpymist-power-helper` through doas.
+//! is the little that needs root, run by `alpymist-power-helper` through pkexec.
 
 #![forbid(unsafe_code)]
 

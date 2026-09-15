@@ -1,6 +1,6 @@
 //! What only root may do: the helper's side.
 //!
-//! `alpymist-power-helper` is run through doas and does one of a closed set of
+//! `alpymist-power-helper` is run through pkexec and does one of a closed set of
 //! things, with arguments checked here, against fixed paths under `/sys`:
 //! set a power mode, set a charge limit, suspend, hibernate, shut down, and
 //! put back at boot the mode last chosen.
@@ -33,6 +33,8 @@ pub enum Verb {
     Hibernate,
     /// Shut down.
     PowerOff,
+    /// Restart.
+    Reboot,
 }
 
 impl Verb {
@@ -56,9 +58,10 @@ impl Verb {
             ["suspend"] => Ok(Self::Suspend),
             ["hibernate"] => Ok(Self::Hibernate),
             ["power-off"] => Ok(Self::PowerOff),
+            ["reboot"] => Ok(Self::Reboot),
             _ => Err(
                 "usage: alpymist-power-helper profile MODE | restore | charge-limit N | \
-                 suspend | hibernate | power-off"
+                 suspend | hibernate | power-off | reboot"
                     .into(),
             ),
         }
@@ -158,6 +161,21 @@ pub fn sleep(sysfs: &Path, state: &str) -> Result<(), String> {
     write(&sysfs.join("power/state"), state)
 }
 
+/// Run `/sbin/poweroff` or `/sbin/reboot`, with nothing of the caller's
+/// environment.
+fn halt(program: &str) -> Result<(), String> {
+    let status = std::process::Command::new(program)
+        .env_clear()
+        .env("PATH", "/usr/sbin:/usr/bin:/sbin:/bin")
+        .status()
+        .map_err(|e| format!("could not run {program}: {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("{program} failed ({status})"))
+    }
+}
+
 /// Whether the kernel offers `state` (`mem` or `disk`), and for `disk`
 /// whether there is somewhere to resume from. Anyone may ask: the files are
 /// readable without root, so a lock screen need not go up for nothing.
@@ -233,16 +251,8 @@ pub fn carry_out(verb: Verb) -> Result<(), String> {
         }
         Verb::Suspend => sleep(sysfs, "mem"),
         Verb::Hibernate => sleep(sysfs, "disk"),
-        Verb::PowerOff => {
-            let status = std::process::Command::new("/sbin/poweroff")
-                .status()
-                .map_err(|e| format!("could not run poweroff: {e}"))?;
-            if status.success() {
-                Ok(())
-            } else {
-                Err(format!("poweroff failed ({status})"))
-            }
-        }
+        Verb::PowerOff => halt("/sbin/poweroff"),
+        Verb::Reboot => halt("/sbin/reboot"),
     }
 }
 

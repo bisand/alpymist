@@ -168,7 +168,7 @@ fn explain(error: &str) -> String {
         "Cancelled".into()
     } else if error.contains("Not authorized") {
         "Not allowed: the password was not given, or this account is not an administrator".into()
-    } else if error.contains("No authentication agent") {
+    } else if error.contains("authentication agent") {
         "Nothing could ask for the password: polkit did not reach the store".into()
     } else if error.contains("could not run pkexec") {
         "polkit is not installed, so system packages cannot be changed from here".into()

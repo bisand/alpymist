@@ -136,6 +136,6 @@ items = [
   { name = "Lock", icon = "", exec = "swaylock -f -c 0b121e", keywords = ["screen"] },
   { name = "Suspend", icon = "\U000F04B2", exec = "alpymist-power suspend", keywords = ["sleep"] },
   { name = "Log out", icon = "󰍃", exec = "case \"$XDG_CURRENT_DESKTOP\" in Hyprland) hyprctl dispatch exit ;; *) labwc --exit ;; esac", keywords = ["exit", "session", "sign out"] },
-  { name = "Restart", icon = "󰜉", exec = "doas reboot", keywords = ["reboot"] },
-  { name = "Shut down", icon = "󰐥", exec = "doas poweroff", keywords = ["poweroff", "halt", "turn off"] },
+  { name = "Restart", icon = "󰜉", exec = "alpymist-power restart", keywords = ["reboot"] },
+  { name = "Shut down", icon = "󰐥", exec = "alpymist-power power-off", keywords = ["poweroff", "halt", "turn off"] },
 ]
