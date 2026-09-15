@@ -116,15 +116,3 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${{ github.event.release.tag_name }}" out/iso/*.iso out/iso/*.iso.sha256 --clobber
-
-  # Ghostty is not in a stable Alpine branch, so we carry a copy of their
-  # testing aport. This says when theirs has moved, or when ghostty has
-  # reached a stable branch and the backport can go. On its own, so a release
-  # is still built when it has something to say.
-  ghostty:
-    name: Ghostty backport
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.96
-      - run: cargo run -p xtask -- ghostty-check

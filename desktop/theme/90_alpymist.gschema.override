@@ -1,6 +1,6 @@
 # Alpymist: dark by default. These are defaults, not settings: anything a user
 # changes is kept in their own dconf database and wins. The GTK portal reads
-# color-scheme from here, which is how Flatpak and libadwaita apps, Ghostty
+# color-scheme from here, which is how Flatpak and libadwaita apps, squint
 # and LibreWolf included, learn that the desktop is dark.
 #
 # gtk-theme stays at its default, Adwaita: GTK 3 has no theme called

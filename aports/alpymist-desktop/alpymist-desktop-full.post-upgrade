@@ -7,4 +7,15 @@ if [ ! -e "$conf" ]; then
 	mkdir -p /etc/alpymist
 	cp /usr/share/alpymist/hyprland-keyboard.conf "$conf"
 fi
+
+# Ghostty is no longer part of the Full tier, and this upgrade removes it. Each
+# account's hyprland.conf is its own and is not changed here, so say which ones
+# still start it on Super+Return and Super+Q.
+for home in /root /home/*; do
+	hypr="$home/.config/hypr/hyprland.conf"
+	if [ -f "$hypr" ] && grep -Eq '^\$terminal *= *ghostty' "$hypr"; then
+		echo "  * $hypr starts ghostty, which is no longer installed."
+		echo "    Change its \$terminal line to: \$terminal = foot"
+	fi
+done
 exit 0

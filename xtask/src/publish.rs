@@ -520,7 +520,7 @@ pub fn default_key(channel: Channel) -> PathBuf {
 
 /// Whether an apk file name carries the version `build-packages.sh` gives dev
 /// packages: `_git` and a fourteen-digit time. Upstream snapshots such as
-/// ghostty's `_git20260908` have a date only.
+/// squint's `_git20260914` have a date only.
 fn dev_stamped(file: &str) -> bool {
     file.match_indices("_git").any(|(i, m)| {
         let rest = &file[i + m.len()..];
@@ -548,11 +548,11 @@ mod tests {
     #[test]
     fn dev_versions_are_told_from_upstream_snapshots() {
         assert!(dev_stamped("alpymist-menu-0.0.1_git20260915120301-r6.apk"));
-        assert!(!dev_stamped("ghostty-1.3.1_git20260908-r0.apk"));
+        assert!(!dev_stamped("squint-0.1.0_git20260914-r2.apk"));
         assert!(!dev_stamped("alpymist-menu-0.0.1-r6.apk"));
     }
 
-    const PUBLISHED: &str = "C:Q1aaa=\nP:ghostty\nV:1.3.1-r0\nA:x86_64\n\n\
+    const PUBLISHED: &str = "C:Q1aaa=\nP:squint\nV:0.1.0-r0\nA:x86_64\n\n\
                              C:Q1bbb=\nP:alpymist-desktop\nV:0.0.1-r0\n\n";
 
     #[test]

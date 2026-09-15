@@ -24,8 +24,8 @@ jobs:
         include:
           - arch: x86_64
             runner: ubuntu-24.04
-          # Native, not emulated: ghostty's zig build under QEMU would take
-          # hours.
+          # Native, not emulated: a Rust build under QEMU takes many times
+          # as long.
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
@@ -39,12 +39,11 @@ jobs:
       - name: Build the builder container
         run: docker build -t alpymist-builder builder
 
-      # ghostty and squint are built from pinned upstream commits and take
-      # most of the time. build-packages.sh keeps them here, each under a key
-      # of its aport and the builder, and builds again only what has changed.
-      # The month is in the cache's name so they are rebuilt at least that
-      # often against Alpine's libraries as they are updated. Neither is
-      # versioned by channel, so both channels share them.
+      # squint is built from a pinned upstream commit. build-packages.sh keeps
+      # it here, under a key of its aport and the builder, and builds it again
+      # only when that changes. The month is in the cache's name so it is
+      # rebuilt at least that often against Alpine's libraries as they are
+      # updated. It is not versioned by channel, so both channels share it.
       - name: When the kept packages were built
         id: month
         run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
@@ -52,7 +51,7 @@ jobs:
       - uses: actions/cache@v5
         with:
           path: cache
-          key: packages-v2-${{ matrix.arch }}-${{ steps.month.outputs.month }}-${{ hashFiles('aports/ghostty/**', 'aports/squint/**', 'builder/**') }}
+          key: packages-v2-${{ matrix.arch }}-${{ steps.month.outputs.month }}-${{ hashFiles('aports/squint/**', 'builder/**') }}
           restore-keys: packages-v2-${{ matrix.arch }}-${{ steps.month.outputs.month }}-
 
       - name: Build the packages

@@ -35,8 +35,8 @@ without a new image, and to keep a channel that only moves at a release.
    first-party pkgver. apk orders `0.0.1 < 0.0.1_git20260915120301 < 0.0.2`,
    so dev moves ahead with each push and no bump, and meets the next release
    when it arrives. A package no commit touched keeps its version and its
-   published file. ghostty, squint and `alpymist-keys` are versioned by hand on
-   both channels.
+   published file. squint and `alpymist-keys` are versioned by hand on both
+   channels.
 5. **Leaving dev downgrades.** Dev's versions sort above stable's, so
    `alpymistctl channel stable` upgrades with `--available`, which takes the
    repository's versions even when they are older.
@@ -62,8 +62,8 @@ is trusting GitHub Actions, and should know that.
 
 ## Consequences
 
-- A change reaches a dev machine within one build (tens of minutes when
-  ghostty is cached), with `doas apk upgrade -U` or the menu's Update.
+- A change reaches a dev machine within one build, with `doas apk upgrade -U`
+  or the menu's Update.
 - Stable still needs a `pkgrel` or `pkgver` bump per changed package, and
   `cargo xtask publish` still enforces it.
 - Dev rebuilds and re-downloads every Rust package whenever the workspace

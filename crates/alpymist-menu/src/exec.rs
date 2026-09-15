@@ -7,7 +7,6 @@
 //! exits, and init reaps it.
 
 use std::io;
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 /// Something to run.
@@ -103,24 +102,15 @@ impl Launch {
 
 /// How to run a command in a terminal, when the configuration does not say.
 ///
-/// `$TERMINAL` if set, then Ghostty, then foot. Ghostty wants `-e` before the
-/// command; foot takes the command as its trailing arguments. Anything else in
-/// `$TERMINAL` is assumed to follow the xterm convention, which almost all do.
+/// `$TERMINAL` if set, otherwise foot, the terminal on every Wayland tier.
+/// foot takes the command as its trailing arguments. Anything else in
+/// `$TERMINAL` is assumed to follow the xterm convention of `-e`, which almost
+/// all do.
 #[must_use]
 pub fn default_terminal() -> Vec<String> {
-    let path: Vec<PathBuf> = std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p).collect())
-        .unwrap_or_default();
-    let on_path = |name: &str| path.iter().any(|d| d.join(name).is_file());
     let chosen = std::env::var("TERMINAL")
         .ok()
         .filter(|t| !t.is_empty())
-        .or_else(|| {
-            ["ghostty", "foot"]
-                .into_iter()
-                .find(|t| on_path(t))
-                .map(str::to_owned)
-        })
         .unwrap_or_else(|| "foot".into());
     terminal_for(&chosen)
 }
@@ -139,7 +129,7 @@ mod tests {
     use super::{Launch, terminal_for};
 
     fn term() -> Vec<String> {
-        vec!["ghostty".into(), "-e".into()]
+        vec!["xterm".into(), "-e".into()]
     }
 
     #[test]
@@ -160,7 +150,7 @@ mod tests {
             hold: true,
         };
         let argv = l.argv(&term());
-        assert_eq!(&argv[..4], ["ghostty", "-e", "/bin/sh", "-c"]);
+        assert_eq!(&argv[..4], ["xterm", "-e", "/bin/sh", "-c"]);
         assert!(argv[4].starts_with("apk upgrade; "));
         assert!(argv[4].ends_with("read -r _"));
     }
@@ -171,7 +161,7 @@ mod tests {
             argv: vec!["btop".into()],
             terminal: true,
         };
-        assert_eq!(l.argv(&term()), ["ghostty", "-e", "btop"]);
+        assert_eq!(l.argv(&term()), ["xterm", "-e", "btop"]);
         let l = Launch::Argv {
             argv: vec!["librewolf".into(), "--new-window".into()],
             terminal: false,

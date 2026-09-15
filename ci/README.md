@@ -20,10 +20,9 @@ Five workflows:
   signed and published to `dev.pkgs.alpymist.org` by CI. No ISO.
 - **Site** (`.github/workflows/site.yml`): alpymist.org.
 
-ghostty and squint are built from pinned upstream commits, and ghostty's Zig
-build alone was most of a package build. Both are kept in the Actions cache
-under a key of their aport and the builder, and built again only when one of
-those changes, or at least once a month so they follow Alpine's libraries.
+squint is built from a pinned upstream commit. It is kept in the Actions cache
+under a key of its aport and the builder, and built again only when one of
+those changes, or at least once a month so it follows Alpine's libraries.
 The ISO jobs build no packages at all: they index and sign the ones the
 package jobs made. What is left of an image's time is mostly squashing the
 kernel's firmware.

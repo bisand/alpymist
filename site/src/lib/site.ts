@@ -15,7 +15,7 @@ export const tiers = [
 		name: 'Full',
 		backend: 'Hyprland',
 		when: 'Accelerated DRM, GL ES 3.2 or newer, 3 GiB of memory',
-		note: 'Animations, blur, Ghostty as the terminal.'
+		note: 'Animations, blur, foot as the terminal.'
 	},
 	{
 		name: 'Lite',

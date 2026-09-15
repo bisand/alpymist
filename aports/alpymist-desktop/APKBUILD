@@ -183,11 +183,12 @@ _wayland() {
 
 _full() {
 	pkgdesc="Alpymist desktop, Full tier: Hyprland"
-	# Ghostty on this tier only: it draws through GTK4 and wants the GPU the
-	# Full tier assumes. The other tiers keep foot, which is fastest on a CPU.
-	# alpymist-menu is the launcher and system menu hyprland.conf binds; squint
-	# is the editor, as $VISUAL and for text files.
-	depends="$pkgname-wayland=$pkgver-r$pkgrel alpymist-menu ghostty hyprland squint"
+	# The terminal is foot, from the Wayland tools, as on the other tiers:
+	# Ghostty was the terminal here once, at ten times foot's memory, and a Zig
+	# build of our own to maintain. alpymist-menu is the launcher and system
+	# menu hyprland.conf binds; squint is the editor, as $VISUAL and for text
+	# files.
+	depends="$pkgname-wayland=$pkgver-r$pkgrel alpymist-menu hyprland squint"
 	install -Dm644 "$builddir"/desktop/greetd/alpymist-full.toml \
 		"$subpkgdir"/etc/greetd/alpymist-full.toml
 	# hyprland.conf sources /etc/alpymist/hyprland-keyboard.conf, and the

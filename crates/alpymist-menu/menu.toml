@@ -20,8 +20,8 @@
 # `alpymist-menu --check` to find out whether this file parses.
 
 # How `terminal = true` runs a command: the terminal, then whatever flags come
-# before the command. Left out, the menu uses $TERMINAL, then ghostty, then foot.
-# terminal = ["ghostty", "-e"]
+# before the command. Left out, the menu uses $TERMINAL, then foot.
+# terminal = ["xterm", "-e"]
 
 [appearance]
 # Every key is optional. Sizes are logical pixels; colours are #rrggbb or #rrggbbaa.
@@ -85,14 +85,14 @@ title = "Config"
 # $VISUAL is the desktop's editor, a window of its own (squint, set in
 # hyprland.conf); without one, $EDITOR in a terminal.
 items = [
-  { name = "Hyprland", icon = "", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.config/hypr/hyprland.conf", keywords = ["keybindings", "windows"] },
-  { name = "Top bar", icon = "󰍜", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.config/waybar/hyprland.jsonc", keywords = ["waybar"] },
-  { name = "Top bar style", icon = "󰍜", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.config/waybar/style.css", keywords = ["waybar", "css"] },
-  { name = "Menu", icon = "󰍉", exec = "f=${XDG_CONFIG_HOME:-$HOME/.config}/alpymist/menu.toml; [ -e \"$f\" ] || { mkdir -p \"${f%/*}\" && alpymist-menu --print-config > \"$f\"; }; ${VISUAL:-ghostty -e ${EDITOR:-nano}} \"$f\"" },
-  { name = "Terminal", icon = "", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.config/ghostty/config", keywords = ["ghostty"] },
-  { name = "Shell", icon = "", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.zshrc", keywords = ["zsh"] },
-  { name = "Prompt", icon = "\U000F14DE", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.config/starship.toml", keywords = ["starship"] },
-  { name = "Notifications", icon = "󰂚", exec = "${VISUAL:-ghostty -e ${EDITOR:-nano}} ~/.config/mako/config", keywords = ["mako"] },
+  { name = "Hyprland", icon = "", exec = "${VISUAL:-foot ${EDITOR:-nano}} ~/.config/hypr/hyprland.conf", keywords = ["keybindings", "windows"] },
+  { name = "Top bar", icon = "󰍜", exec = "${VISUAL:-foot ${EDITOR:-nano}} ~/.config/waybar/hyprland.jsonc", keywords = ["waybar"] },
+  { name = "Top bar style", icon = "󰍜", exec = "${VISUAL:-foot ${EDITOR:-nano}} ~/.config/waybar/style.css", keywords = ["waybar", "css"] },
+  { name = "Menu", icon = "󰍉", exec = "f=${XDG_CONFIG_HOME:-$HOME/.config}/alpymist/menu.toml; [ -e \"$f\" ] || { mkdir -p \"${f%/*}\" && alpymist-menu --print-config > \"$f\"; }; ${VISUAL:-foot ${EDITOR:-nano}} \"$f\"" },
+  { name = "Terminal", icon = "", exec = "${VISUAL:-foot ${EDITOR:-nano}} ~/.config/foot/foot.ini", keywords = ["foot"] },
+  { name = "Shell", icon = "", exec = "${VISUAL:-foot ${EDITOR:-nano}} ~/.zshrc", keywords = ["zsh"] },
+  { name = "Prompt", icon = "\U000F14DE", exec = "${VISUAL:-foot ${EDITOR:-nano}} ~/.config/starship.toml", keywords = ["starship"] },
+  { name = "Notifications", icon = "󰂚", exec = "${VISUAL:-foot ${EDITOR:-nano}} ~/.config/mako/config", keywords = ["mako"] },
 ]
 
 [menu.install]

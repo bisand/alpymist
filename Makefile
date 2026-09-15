@@ -3,8 +3,8 @@ ARCH ?= $(shell uname -m | sed 's/^arm64$$/aarch64/')
 BUILDER := alpymist-builder
 # The container is the architecture being built for, named explicitly: a
 # DOCKER_DEFAULT_PLATFORM set for other work otherwise decides it, and an
-# aarch64 image built in an emulated x86_64 container fails at ghostty, whose
-# Zig build Rosetta cannot run.
+# aarch64 image built in an emulated x86_64 container is built under emulation
+# from start to finish.
 PLATFORM := linux/$(if $(filter aarch64,$(ARCH)),arm64,amd64)
 
 .PHONY: help check test lint builder shell iso smoke clean

@@ -17,11 +17,10 @@
 #                  a pkgrel bump, and onto the next release when there is one.
 #                  A package no commit has touched keeps its version, and its
 #                  published file (ADR 0006). Needs the git history at /src.
-#   PACKAGE_CACHE  a directory kept between builds. ghostty and squint are
-#                  built from a pinned upstream commit, so what they build to
-#                  depends only on their aport and the builder: they are kept
-#                  there and not built again until one of those changes.
-#                  ghostty's Zig build alone is most of the time this takes.
+#   PACKAGE_CACHE  a directory kept between builds. squint is built from a
+#                  pinned upstream commit, so what it builds to depends only on
+#                  its aport and the builder: it is kept there and not built
+#                  again until one of those changes.
 #   PREBUILT       a directory of this architecture's packages, already built
 #                  by an earlier job, with the public keys they were signed
 #                  with in keys/. Nothing is built: the keys are trusted and
@@ -38,11 +37,11 @@ ARCH="$(apk --print-arch)"
 REPO=~/packages/ap/"$ARCH"
 KEYS=~/packages/keys
 CACHE="${PACKAGE_CACHE:-}"
-CACHED=" ghostty squint "
+CACHED=" squint "
 CHANNEL="${CHANNEL:-stable}"
 # Built from pinned upstream commits or a key file: versioned by hand on every
 # channel.
-UNSTAMPED=" ghostty squint alpymist-keys "
+UNSTAMPED=" squint alpymist-keys "
 
 export CARGO_HOME=/tmp/cargo
 
@@ -96,10 +95,7 @@ if [ -n "${PREBUILT:-}" ]; then
 	reindex
 else
 	copied=false
-	# ghostty is a backport from Alpine edge/testing, where it is packaged but
-	# not yet in a stable branch; `cargo xtask ghostty-check` reports when that
-	# changes.
-	for pkg in alpymist-keys alpymistctl alpymist-install alpymist-menu alpymist-wifi alpymist-auth alpymist-power alpymist-store alpymist-greeter alpymist-splash alpymist-desktop ghostty squint; do
+	for pkg in alpymist-keys alpymistctl alpymist-install alpymist-menu alpymist-wifi alpymist-auth alpymist-power alpymist-store alpymist-greeter alpymist-splash alpymist-desktop squint; do
 		mkdir -p ~/ap/"$pkg"
 		cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
 		if [ "$CHANNEL" = dev ] && [[ "$UNSTAMPED" != *" $pkg "* ]]; then
