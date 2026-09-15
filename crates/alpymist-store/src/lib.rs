@@ -16,6 +16,7 @@
 pub mod catalog;
 pub mod config;
 pub mod icons;
+pub mod pictures;
 pub mod search;
 pub mod source;
 pub mod store;

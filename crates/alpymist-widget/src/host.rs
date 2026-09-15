@@ -22,6 +22,7 @@ use denise::geom::{Point, Rect};
 use denise::{BufferAge, Frame, PixelFormat};
 use smithay_client_toolkit::reexports::calloop::channel::{self, Channel};
 use smithay_client_toolkit::reexports::calloop::generic::Generic;
+use smithay_client_toolkit::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay_client_toolkit::reexports::calloop::{
     EventLoop, Interest, LoopHandle, Mode, PostAction,
 };
@@ -83,6 +84,21 @@ pub struct Options {
     /// Gap between the panel and the bar above it, and the screen's edge, in
     /// logical pixels.
     pub margin: i32,
+    /// Where the panel goes.
+    pub placement: Placement,
+    /// What covers the rest of the output: nothing, or a dimming shade,
+    /// premultiplied `0xAARRGGBB`, for a dialog that wants the whole
+    /// screen's attention.
+    pub backdrop: u32,
+}
+
+/// Where a panel is put on the output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Placement {
+    /// In the top right corner, under the bar: a popup.
+    UnderBar,
+    /// In the middle of the output: a dialog.
+    Centre,
 }
 
 impl Options {
@@ -92,6 +108,8 @@ impl Options {
         Self {
             namespace: namespace.to_owned(),
             margin: 6,
+            placement: Placement::UnderBar,
+            backdrop: 0,
         }
     }
 }
@@ -113,6 +131,8 @@ struct Host<W: Widget> {
 
     widget: W,
     margin: i32,
+    placement: Placement,
+    backdrop: u32,
     scale: u32,
     /// The panel's size, physical pixels, as last laid out.
     size: denise::geom::Size,
@@ -132,6 +152,7 @@ struct Host<W: Widget> {
     configured: bool,
     frame_pending: bool,
     dirty: bool,
+    ticking: bool,
     exit: bool,
     dismissed: bool,
 }
@@ -242,6 +263,8 @@ pub fn run<W: Widget>(
         qh: qh.clone(),
         widget,
         margin: options.margin,
+        placement: options.placement,
+        backdrop: options.backdrop,
         scale: 1,
         size,
         screen: None,
@@ -255,6 +278,7 @@ pub fn run<W: Widget>(
         configured: false,
         frame_pending: false,
         dirty: false,
+        ticking: false,
         exit: false,
         dismissed: false,
     };
@@ -287,6 +311,13 @@ impl<W: Widget> Host<W> {
         let s = i32::try_from(self.scale).unwrap_or(1);
         let logical = |v: u32| i32::try_from(v).unwrap_or(0);
         let pw = logical(self.size.width / self.scale.max(1));
+        if self.placement == Placement::Centre {
+            let ph = logical(self.size.height / self.scale.max(1));
+            let x = ((logical(sw) - pw) / 2).max(0);
+            // A little above the middle, where a dialog is looked for.
+            let y = ((logical(sh) - ph) * 2 / 5).max(0);
+            return Point::new(x * s, y * s);
+        }
         let x = (logical(sw) - pw - self.margin).max(0);
         // A bar at the top takes the difference; one at the bottom would
         // too, and the panel would sit a bar's height low, which is harmless.
@@ -360,9 +391,17 @@ impl<W: Widget> Host<W> {
             self.exit = true;
             return;
         };
-        // Everything outside the panel is transparent; a slot may come back
-        // holding an older frame, so the whole buffer is cleared.
-        canvas.fill(0);
+        // Everything outside the panel is transparent, or the backdrop; a
+        // slot may come back holding an older frame, so the whole buffer is
+        // cleared.
+        if self.backdrop == 0 {
+            canvas.fill(0);
+        } else {
+            let shade = self.backdrop.to_ne_bytes();
+            for px in canvas.chunks_exact_mut(4) {
+                px.copy_from_slice(&shade);
+            }
+        }
 
         if fits && let Ok(words) = bytemuck::try_cast_slice_mut::<u8, u32>(canvas) {
             if let Some(region) = words.get_mut(start..)
@@ -401,8 +440,14 @@ impl<W: Widget> Host<W> {
         }
 
         let surface = self.layer.wl_surface();
-        // What changed is where the panel was and where it is.
-        let damage = self.drawn.map_or(panel, |old| old.union(&panel));
+        // What changed is where the panel was and where it is; with a
+        // backdrop, the backdrop too, the first time.
+        let whole = Rect::new(0, 0, w, h);
+        let damage = match self.drawn {
+            None if self.backdrop != 0 => whole,
+            None => panel,
+            Some(old) => old.union(&panel),
+        };
         surface.damage_buffer(damage.x, damage.y, damage.width, damage.height);
         surface.frame(&self.qh, surface.clone());
         if buffer.attach_to(surface).is_err() {
@@ -412,6 +457,30 @@ impl<W: Widget> Host<W> {
         self.drawn = Some(panel);
         self.frame_pending = true;
         self.dirty = false;
+        self.arm_timer();
+    }
+
+    /// Keep painting while the widget animates.
+    fn arm_timer(&mut self) {
+        if self.ticking || !self.widget.animating() {
+            return;
+        }
+        self.ticking = true;
+        let armed = self.loop_handle.insert_source(
+            Timer::from_duration(std::time::Duration::from_millis(40)),
+            |_, (), host: &mut Host<W>| {
+                if host.exit || !host.widget.animating() {
+                    host.ticking = false;
+                    return TimeoutAction::Drop;
+                }
+                let outcome = host.widget.tick();
+                host.apply(outcome);
+                TimeoutAction::ToDuration(std::time::Duration::from_millis(40))
+            },
+        );
+        if armed.is_err() {
+            self.ticking = false;
+        }
     }
 
     fn apply(&mut self, outcome: Outcome) {
@@ -697,7 +766,12 @@ impl<W: Widget> KeyboardHandler for Host<W> {
         modifiers: Modifiers,
         _: u32,
     ) {
+        let caps = modifiers.caps_lock != self.modifiers.caps_lock;
         self.modifiers = modifiers;
+        if caps {
+            let outcome = self.widget.caps_lock(modifiers.caps_lock);
+            self.apply(outcome);
+        }
     }
 }
 

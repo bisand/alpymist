@@ -1,6 +1,6 @@
 //! `alpymist-store-helper` — the part of the store that needs root.
 //!
-//! Run through doas by `alpymist-store`:
+//! Run through pkexec by `alpymist-store`:
 //!
 //! ```text
 //! alpymist-store-helper add NAME…
@@ -9,8 +9,10 @@
 //! alpymist-store-helper update
 //! ```
 //!
-//! Administrators may run it without a password, so it is the whole of what
-//! that allows, and it is kept small enough to read in one sitting:
+//! polkit's policy (org.alpymist.store.policy) lets an administrator run it
+//! with their password, so it is the whole of what that password allows here,
+//! and it is kept small enough to read in one sitting. It trusts nothing
+//! about its caller:
 //!
 //! - Four verbs, and package names that can be nothing else: lowercase
 //!   letters, digits and `._+-`, starting with a letter or digit. No option
@@ -44,6 +46,8 @@ const PROTECTED: &[&str] = &[
     "linux-*",
     "musl",
     "openrc",
+    "polkit",
+    "polkit-common",
 ];
 
 /// A verb, with its checked names.
@@ -127,7 +131,11 @@ fn argv<'a>(verb: &Verb<'a>) -> Vec<&'a str> {
 }
 
 fn log(message: &str) {
-    let who = std::env::var("DOAS_USER").unwrap_or_else(|_| "unknown".into());
+    // pkexec says who asked by user id; doas, for running it by hand, by name.
+    let who = std::env::var("PKEXEC_UID")
+        .map(|uid| format!("uid {uid}"))
+        .or_else(|_| std::env::var("DOAS_USER"))
+        .unwrap_or_else(|_| "unknown".into());
     let _ = Command::new("/usr/bin/logger")
         .args(["-t", "alpymist-store-helper", "--"])
         .arg(format!("{who}: {message}"))

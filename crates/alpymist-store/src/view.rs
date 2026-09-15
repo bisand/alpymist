@@ -25,6 +25,7 @@
 
 use crate::catalog::{At, Entry, State, human_size};
 use crate::icons::Icons;
+use crate::pictures::{Picture, Pictures};
 use crate::store::{Action, Focus, Loading, Store, Target, View};
 use alpymist_widget::draw::{self, Fonts, Ink, Metrics, Styles};
 use alpymist_widget::{Appearance, Colour};
@@ -106,6 +107,23 @@ pub struct DetailLayout {
     pub body: Rect,
     /// A body line's height.
     pub line_h: i32,
+    /// The screenshot, at the top of the body, where there are any.
+    pub shot: Option<ShotLayout>,
+}
+
+/// The screenshot on an entry's page.
+#[derive(Debug, Clone, Copy)]
+pub struct ShotLayout {
+    /// The picture's frame.
+    pub frame: Rect,
+    /// The caption and count under it.
+    pub caption: Rect,
+    /// Back and on, where there is more than one.
+    pub prev: Option<Rect>,
+    /// On.
+    pub next: Option<Rect>,
+    /// How far the body's text starts below the body's top.
+    pub height: i32,
 }
 
 impl Layout {
@@ -315,6 +333,16 @@ impl Layout {
             if d.link.is_some_and(|r| r.contains(p)) {
                 return Some(Target::Link);
             }
+            if let Some(shot) = d.shot
+                && d.body.contains(p)
+            {
+                if shot.prev.is_some_and(|r| r.contains(p)) {
+                    return Some(Target::Shot(-1));
+                }
+                if shot.next.is_some_and(|r| r.contains(p)) {
+                    return Some(Target::Shot(1));
+                }
+            }
             return None;
         }
         if let Some((filter, _)) = self.chips.iter().find(|(_, r)| r.contains(p)) {
@@ -435,6 +463,37 @@ fn detail_layout(
     });
     let body_y = icon.bottom() + u;
     let body = Rect::new(x, body_y, w, (content.bottom() - body_y - u / 2).max(0));
+    let line_h = fonts.engine.line_height(styles.text) + u / 4;
+    let shots = entry.map_or(0, |e| e.screenshots.len());
+    let shot = (shots > 0).then(|| {
+        // Sixteen by ten, as most screenshots are, no wider than the page
+        // and no taller than a comfortable glance.
+        let mut fw = body.width.min(u * 46);
+        let mut fh = fw * 10 / 16;
+        if fh > u * 22 {
+            fh = u * 22;
+            fw = fh * 16 / 10;
+        }
+        let scroll = i32::try_from(store.detail_scroll).unwrap_or(0) * line_h;
+        let frame = Rect::new(body.x, body.y + u / 2 - scroll, fw, fh);
+        let caption = Rect::new(frame.x, frame.bottom() + u / 4, fw, u * 3 / 2);
+        let side = u * 9 / 4;
+        let arrow = |left: bool| {
+            let ax = if left {
+                frame.x + u / 2
+            } else {
+                frame.right() - u / 2 - side
+            };
+            Rect::new(ax, frame.y + (fh - side) / 2, side, side)
+        };
+        ShotLayout {
+            frame,
+            caption,
+            prev: (shots > 1).then(|| arrow(true)),
+            next: (shots > 1).then(|| arrow(false)),
+            height: fh + u * 9 / 4,
+        }
+    });
     DetailLayout {
         back,
         icon,
@@ -442,7 +501,8 @@ fn detail_layout(
         buttons,
         link,
         body,
-        line_h: fonts.engine.line_height(styles.text) + u / 4,
+        line_h,
+        shot,
     }
 }
 
@@ -454,6 +514,7 @@ pub fn paint(
     appearance: &Appearance,
     fonts: &mut Fonts,
     icons: &mut Icons,
+    pictures: &mut Pictures,
     store: &Store,
 ) {
     let mut canvas = Canvas::new(frame);
@@ -483,7 +544,9 @@ pub fn paint(
     paint_sidebar(&mut pen, fonts, &styles, layout, store, &ink);
 
     if let (Some(d), Some(at)) = (&layout.detail, store.detail) {
-        paint_detail(&mut pen, fonts, &styles, icons, layout, d, store, at, &ink);
+        paint_detail(
+            &mut pen, fonts, &styles, icons, pictures, layout, d, store, at, &ink,
+        );
     } else {
         paint_list(&mut pen, fonts, &styles, icons, layout, store, &ink);
     }
@@ -1233,6 +1296,7 @@ fn paint_detail(
     fonts: &mut Fonts,
     styles: &Styles,
     icons: &mut Icons,
+    pictures: &mut Pictures,
     layout: &Layout,
     d: &DetailLayout,
     store: &Store,
@@ -1423,6 +1487,12 @@ fn paint_detail(
     let mut clip = pen.with_clip(body);
     let scroll = i32::try_from(store.detail_scroll).unwrap_or(0) * d.line_h;
     let mut y = body.y + u / 2 - scroll;
+    if let Some(shot) = d.shot {
+        paint_shot(
+            &mut clip, fonts, styles, pictures, &shot, store, entry, m, ink,
+        );
+        y += shot.height;
+    }
     let engine = &mut fonts.engine;
 
     for line in engine.wrap(styles.strong, &entry.summary, body.width) {
@@ -1503,6 +1573,117 @@ fn paint_detail(
         }
     }
     drop(clip);
+}
+
+/// The screenshot showing, in its frame: the picture, or a spinner while it
+/// comes, or why it cannot; arrows over its sides and a caption beneath.
+#[allow(clippy::too_many_arguments)]
+fn paint_shot(
+    pen: &mut Pen<'_>,
+    fonts: &mut Fonts,
+    styles: &Styles,
+    pictures: &mut Pictures,
+    shot: &ShotLayout,
+    store: &Store,
+    entry: &Entry,
+    m: &Metrics,
+    ink: &Ink,
+) {
+    let u = m.unit;
+    let f = shot.frame;
+    let radius = m.px(10);
+    pen.fill_rounded_rect(f, radius, ink.card);
+    let Some(current) = entry.screenshots.get(store.shot) else {
+        return;
+    };
+    let size = |v: i32| u32::try_from(v.max(1)).unwrap_or(1);
+    match pictures.get(&current.url).cloned() {
+        Some(Picture::Ready(_)) => {
+            if let Some((pixels, w, h)) =
+                pictures.fitted(&current.url, size(f.width), size(f.height))
+                && let Some(view) = denise::PixelView::new(&pixels, Size::new(w, h), w)
+            {
+                let (w, h) = (i32::try_from(w).unwrap_or(0), i32::try_from(h).unwrap_or(0));
+                let dest = Rect::new(f.x + (f.width - w) / 2, f.y + (f.height - h) / 2, w, h);
+                pen.blit_rounded(&view, dest, dest, radius);
+            }
+        }
+        Some(Picture::Failed(e)) => {
+            let engine = &mut fonts.engine;
+            let mid = f.y + f.height / 2;
+            draw::centred(
+                pen,
+                engine,
+                styles.icon_large,
+                Rect::new(f.x, mid - u * 2, f.width, u * 2),
+                WARN,
+                ink.dim,
+            );
+            draw::centred(
+                pen,
+                engine,
+                styles.small,
+                Rect::new(f.x, mid + u / 2, f.width, u * 3 / 2),
+                &e,
+                ink.dim,
+            );
+        }
+        Some(Picture::Loading) | None => {
+            spinner(
+                pen,
+                Point::new(f.x + f.width / 2, f.y + f.height / 2),
+                u,
+                m,
+                store.frame,
+                ink.accent,
+            );
+        }
+    }
+    for (target, rect, glyph) in [
+        (Target::Shot(-1), shot.prev, draw::CHEVRON_LEFT),
+        (Target::Shot(1), shot.next, draw::CHEVRON_RIGHT),
+    ] {
+        let Some(r) = rect else { continue };
+        let hovered = store.hover == Some(target);
+        let fill = if hovered {
+            ink.selection
+        } else {
+            ink.background.with_alpha(200)
+        };
+        pen.fill_circle(
+            Point::new(r.x + r.width / 2, r.y + r.height / 2),
+            r.width / 2,
+            fill,
+        );
+        draw::centred(pen, &mut fonts.engine, styles.icon, r, glyph, ink.text);
+    }
+    let engine = &mut fonts.engine;
+    let n = entry.screenshots.len();
+    let count = if n > 1 {
+        format!("{} / {n}", store.shot + 1)
+    } else {
+        String::new()
+    };
+    let count_x = if count.is_empty() {
+        shot.caption.right()
+    } else {
+        draw::right_label(pen, engine, styles.small, shot.caption, &count, ink.dim)
+    };
+    let caption = Rect::new(
+        shot.caption.x,
+        shot.caption.y,
+        (count_x - u - shot.caption.x).max(0),
+        shot.caption.height,
+    );
+    let mut clip = pen.with_clip(caption);
+    let top = draw::text_top(engine, styles.small, caption.y, caption.height);
+    engine.draw(
+        &mut clip,
+        styles.small,
+        Point::new(caption.x, top),
+        &current.caption,
+        ink.dim,
+    );
 }
 
 fn badge_width(fonts: &mut Fonts, styles: &Styles, store: &Store, source: u16, m: &Metrics) -> i32 {

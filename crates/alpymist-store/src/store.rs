@@ -99,6 +99,8 @@ pub enum Target {
     Button(Action),
     /// The entry's website.
     Link,
+    /// The screenshot before, or after, the one showing.
+    Shot(i8),
     /// Update everything.
     UpdateAll,
     /// Fetch every catalogue again.
@@ -167,6 +169,8 @@ pub enum Command {
     },
     /// Open a web page.
     OpenUrl(String),
+    /// Fetch a screenshot.
+    Fetch(String),
 }
 
 /// What the window should do after the store handled something.
@@ -212,6 +216,14 @@ pub enum Event {
         source: u16,
         /// What it said.
         line: String,
+    },
+    /// A screenshot was fetched, or could not be. The window keeps
+    /// pictures; the store only needs to paint again.
+    Picture {
+        /// Its address.
+        url: String,
+        /// The picture, or why there is none.
+        result: Result<crate::icons::Rgba, String>,
     },
     /// A running operation ended.
     Finished {
@@ -297,6 +309,10 @@ pub struct Store {
     pub page: usize,
     /// How far down an entry's page is scrolled, in lines.
     pub detail_scroll: usize,
+    /// Which of the open entry's screenshots is showing.
+    pub shot: usize,
+    /// A page asked for before its source had loaded.
+    pending: Option<(u16, String)>,
     /// What the pointer is over.
     pub hover: Option<Target>,
     /// Where the keyboard is.
@@ -340,6 +356,8 @@ impl Store {
             scroll: 0,
             page: 8,
             detail_scroll: 0,
+            shot: 0,
+            pending: None,
             hover: None,
             focus: Focus::List,
             focus_visible: false,
@@ -545,6 +563,7 @@ impl Store {
     // ---- Events ----------------------------------------------------------
 
     /// Something arrived from a worker.
+    #[allow(clippy::too_many_lines)] // one arm per event
     pub fn event(&mut self, event: Event) -> Outcome {
         match event {
             Event::Status { source, text } => {
@@ -596,6 +615,13 @@ impl Store {
                 }
                 self.last = None;
                 self.refresh_results();
+                if let Some((s, id)) = self.pending.take_if(|(s, _)| *s == source)
+                    && let Some(at) = self.catalog.find(s, &id)
+                {
+                    self.query.clear();
+                    self.refresh_results();
+                    return self.open(at);
+                }
             }
             Event::Installed { source, result } => match result {
                 Ok(installed) => {
@@ -618,6 +644,7 @@ impl Store {
                     });
                 }
             },
+            Event::Picture { .. } => {}
             Event::Progress { source, line } => {
                 if let Some(job) = self.jobs.iter_mut().find(|j| j.source == source) {
                     job.progress = line;
@@ -776,9 +803,46 @@ impl Store {
         }
         self.detail = Some(at);
         self.detail_scroll = 0;
+        self.shot = 0;
         self.focus = Focus::Button(0);
         self.focus_visible = false;
-        Outcome::Redraw
+        self.fetch_shots()
+    }
+
+    /// Fetch the screenshot showing, and the one after it, so stepping on
+    /// finds it ready.
+    fn fetch_shots(&self) -> Outcome {
+        let Some(entry) = self.detail.and_then(|at| self.catalog.get(at)) else {
+            return Outcome::Redraw;
+        };
+        let commands: Vec<Command> = entry
+            .screenshots
+            .iter()
+            .skip(self.shot)
+            .take(2)
+            .map(|s| Command::Fetch(s.url.clone()))
+            .collect();
+        if commands.is_empty() {
+            Outcome::Redraw
+        } else {
+            Outcome::Run(commands)
+        }
+    }
+
+    /// Show the screenshot `by` places on, wrapping round.
+    pub fn step_shot(&mut self, by: isize) -> Outcome {
+        let Some(n) = self
+            .detail
+            .and_then(|at| self.catalog.get(at))
+            .map(|e| e.screenshots.len())
+            .filter(|&n| n > 1)
+        else {
+            return Outcome::Unchanged;
+        };
+        let n = isize::try_from(n).unwrap_or(1);
+        let at = isize::try_from(self.shot).unwrap_or(0);
+        self.shot = usize::try_from((at + by).rem_euclid(n)).unwrap_or(0);
+        self.fetch_shots()
     }
 
     /// Open the page of the entry `id` in the source `source`, by the
@@ -791,7 +855,11 @@ impl Store {
         if let Some(at) = self.catalog.find(s, id) {
             return self.open(at);
         }
-        // Not loaded yet, or not there: search for it instead.
+        // Not loaded yet: its page opens when its source has loaded. Not
+        // there at all: the search shows what comes closest.
+        if matches!(self.loading.get(usize::from(s)), Some(Loading::Busy(_))) {
+            self.pending = Some((s, id.to_owned()));
+        }
         id.clone_into(&mut self.query);
         self.detail = None;
         self.refresh_results();
@@ -909,6 +977,12 @@ impl Store {
         }
     }
 
+    fn has_shots(&self, at: At) -> bool {
+        self.catalog
+            .get(at)
+            .is_some_and(|e| e.screenshots.len() > 1)
+    }
+
     fn detail_key(&mut self, at: At, key: Key) -> Outcome {
         let actions = self.actions(at);
         let focused = match self.focus {
@@ -926,6 +1000,8 @@ impl Store {
                     self.set_query(q)
                 }
             }
+            Key::Right if self.has_shots(at) => self.step_shot(1),
+            Key::Left if self.has_shots(at) => self.step_shot(-1),
             Key::Tab | Key::Right if !actions.is_empty() => {
                 self.focus = Focus::Button((focused + 1) % actions.len());
                 Outcome::Redraw
@@ -1024,6 +1100,7 @@ impl Store {
                 .map_or(Outcome::Unchanged, |e| {
                     Outcome::Run(vec![Command::OpenUrl(e.homepage.clone())])
                 }),
+            Target::Shot(by) => self.step_shot(isize::from(by)),
             Target::UpdateAll => self.update_all(),
             Target::Refresh => self.refresh(),
         }
@@ -1308,6 +1385,66 @@ mod tests {
         let moved = s.catalog.find(0, "firefox").unwrap();
         assert_eq!(s.detail, Some(moved));
         assert!(s.catalog.get(moved).unwrap().state.installed());
+    }
+
+    #[test]
+    fn a_page_fetches_its_screenshots_as_they_come_up() {
+        let mut s = store();
+        let gimp = s.catalog.find(0, "gimp").unwrap();
+        let shot = |n: u32| crate::catalog::Screenshot {
+            url: format!("https://x/{n}.png"),
+            ..Default::default()
+        };
+        s.event(Event::Loaded {
+            source: 0,
+            result: Ok(vec![Entry {
+                screenshots: vec![shot(1), shot(2), shot(3)],
+                ..entry("gimp", true, 0, 0)
+            }]),
+        });
+        let fetches = |o: Outcome| match o {
+            Outcome::Run(c) => c,
+            _ => Vec::new(),
+        };
+        let gimp = s.catalog.find(0, "gimp").unwrap_or(gimp);
+        assert_eq!(
+            fetches(s.open(gimp)),
+            [
+                Command::Fetch("https://x/1.png".into()),
+                Command::Fetch("https://x/2.png".into())
+            ]
+        );
+        s.key(Key::Left);
+        assert_eq!(s.shot, 2, "stepping back from the first wraps to the last");
+        assert_eq!(
+            fetches(s.click(Target::Shot(1))),
+            [
+                Command::Fetch("https://x/1.png".into()),
+                Command::Fetch("https://x/2.png".into())
+            ]
+        );
+        s.key(Key::Tab);
+        assert_eq!(
+            s.focus,
+            super::Focus::Button(0),
+            "Tab still reaches the buttons"
+        );
+    }
+
+    #[test]
+    fn a_page_asked_for_before_loading_opens_once_loaded() {
+        let mut s = Store::new(vec![source("flathub", true)]);
+        s.open_by_id("flathub", "gimp");
+        assert_eq!(s.detail, None);
+        s.event(Event::Loaded {
+            source: 0,
+            result: Ok(vec![
+                entry("inkscape", true, 0, 0),
+                entry("gimp", true, 0, 0),
+            ]),
+        });
+        assert_eq!(s.detail, s.catalog.find(0, "gimp"));
+        assert!(s.query.is_empty());
     }
 
     #[test]

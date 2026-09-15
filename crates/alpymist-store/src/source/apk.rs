@@ -9,7 +9,9 @@
 //! asked for is `/etc/apk/world`. All of it can be read without root.
 //!
 //! Changing anything needs root, and goes through `alpymist-store-helper`
-//! with doas, which accepts only package names and four verbs.
+//! with pkexec, which accepts only package names and four verbs. polkit
+//! decides who may and asks for the password, in the dialog the store's own
+//! agent shows; see `alpymist-auth`.
 
 use crate::catalog::{Entry, Installed};
 use crate::config;
@@ -39,9 +41,8 @@ impl Apk {
     }
 
     fn helper(verb: &str, names: &[&str]) -> Command {
-        let mut command = Command::new("doas");
-        // -n: never wait for a password nobody can type into a window.
-        command.args(["-n", HELPER, verb]);
+        let mut command = Command::new("pkexec");
+        command.args([HELPER, verb]);
         command.args(names);
         command
     }
@@ -161,12 +162,16 @@ impl Source for Apk {
     }
 }
 
-/// doas's refusals, in words that say what to do.
+/// pkexec's refusals, in words that say what happened.
 fn explain(error: &str) -> String {
-    if error.contains("Authentication required") || error.contains("Operation not permitted") {
-        "Only an administrator can change system packages, and this account is not one".into()
-    } else if error.contains("No such file") && error.contains("doas") {
-        "doas is not installed, so system packages cannot be changed from here".into()
+    if error.contains("dismissed") {
+        "Cancelled".into()
+    } else if error.contains("Not authorized") {
+        "Not allowed: the password was not given, or this account is not an administrator".into()
+    } else if error.contains("No authentication agent") {
+        "Nothing could ask for the password: polkit did not reach the store".into()
+    } else if error.contains("could not run pkexec") {
+        "polkit is not installed, so system packages cannot be changed from here".into()
     } else {
         error.to_owned()
     }

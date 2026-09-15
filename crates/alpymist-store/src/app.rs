@@ -8,6 +8,7 @@
 
 use alpymist_store::config::Config;
 use alpymist_store::icons::Icons;
+use alpymist_store::pictures::{self, Picture, Pictures};
 use alpymist_store::source::{self, Op, Source};
 use alpymist_store::store::{self, Command, Event, Key, SourceInfo, Store, Target};
 use alpymist_store::view::{self, Layout};
@@ -73,6 +74,19 @@ pub fn run(config: &Config, problems: Vec<String>, message: Option<String>) -> R
         state.problems.push("store.toml lists no sources".into());
     }
 
+    // polkit asks this process's own agent for the password when a package
+    // is installed or removed; the agent shows alpymist-auth's dialog. Kept
+    // for as long as the window is open.
+    let agent = match alpymist_auth::agent::register(auth_program()) {
+        Ok(registration) => Some(registration),
+        Err(e) => {
+            state
+                .problems
+                .push(format!("Alpine packages cannot be changed here: {e}"));
+            None
+        }
+    };
+
     let (sender, events) = host::events();
     let workers: Vec<mpsc::Sender<Op>> = config
         .sources
@@ -96,6 +110,8 @@ pub fn run(config: &Config, problems: Vec<String>, message: Option<String>) -> R
         appearance,
         fonts,
         icons: Icons::default(),
+        pictures: Pictures::default(),
+        sender: sender.clone(),
         store: state,
         layout: None,
         size: Size::new(0, 0),
@@ -112,10 +128,19 @@ pub fn run(config: &Config, problems: Vec<String>, message: Option<String>) -> R
         min_size: (560, 400),
     };
     let result = window::run(app, &options, events, listener);
+    drop(agent);
     if let Some(path) = &socket {
         std::fs::remove_file(path).ok();
     }
     result
+}
+
+/// The password dialog: `alpymist-auth` where the package puts it, or where
+/// `ALPYMIST_AUTH` says, for trying a build.
+fn auth_program() -> PathBuf {
+    std::env::var_os("ALPYMIST_AUTH")
+        .filter(|p| !p.is_empty())
+        .map_or_else(|| PathBuf::from("/usr/bin/alpymist-auth"), PathBuf::from)
 }
 
 fn socket_path() -> Option<PathBuf> {
@@ -204,6 +229,9 @@ struct StoreApp {
     appearance: Appearance,
     fonts: Fonts,
     icons: Icons,
+    pictures: Pictures,
+    /// Where fetched screenshots are posted.
+    sender: Sender<Event>,
     store: Store,
     layout: Option<Layout>,
     size: Size,
@@ -257,6 +285,15 @@ impl StoreApp {
                 };
                 spawn_detached(&mut command);
             }
+            Command::Fetch(url) => {
+                if self.pictures.request(&url) {
+                    let sender = self.sender.clone();
+                    std::thread::spawn(move || {
+                        let result = pictures::fetch(&url);
+                        let _ = sender.send(Event::Picture { url, result });
+                    });
+                }
+            }
             Command::OpenUrl(url) => {
                 let mut command = std::process::Command::new("sh");
                 command.args(["-c", "exec ${BROWSER:-xdg-open} \"$1\"", "sh", &url]);
@@ -308,6 +345,7 @@ impl App for StoreApp {
                 &self.appearance,
                 &mut self.fonts,
                 &mut self.icons,
+                &mut self.pictures,
                 &self.store,
             );
         }
@@ -384,7 +422,13 @@ impl App for StoreApp {
     }
 
     fn animating(&self) -> bool {
-        self.store.animating() || self.store.confirm.is_some()
+        let fetching = self
+            .store
+            .detail
+            .and_then(|at| self.store.catalog.get(at))
+            .and_then(|e| e.screenshots.get(self.store.shot))
+            .is_some_and(|s| matches!(self.pictures.get(&s.url), Some(Picture::Loading)));
+        self.store.animating() || self.store.confirm.is_some() || fetching
     }
 
     fn tick(&mut self) -> Outcome {
@@ -393,6 +437,10 @@ impl App for StoreApp {
     }
 
     fn event(&mut self, event: Event) -> Outcome {
+        if let Event::Picture { url, result } = event {
+            self.pictures.arrived(url, result);
+            return Outcome::Redraw;
+        }
         let outcome = self.store.event(event);
         self.apply(outcome)
     }

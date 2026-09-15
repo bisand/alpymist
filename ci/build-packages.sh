@@ -71,7 +71,7 @@ else
 	# ghostty is a backport from Alpine edge/testing, where it is packaged but
 	# not yet in a stable branch; `cargo xtask ghostty-check` reports when that
 	# changes.
-	for pkg in alpymist-keys alpymistctl alpymist-install alpymist-menu alpymist-wifi alpymist-power alpymist-store alpymist-greeter alpymist-splash alpymist-desktop ghostty squint; do
+	for pkg in alpymist-keys alpymistctl alpymist-install alpymist-menu alpymist-wifi alpymist-power alpymist-auth alpymist-store alpymist-greeter alpymist-splash alpymist-desktop ghostty squint; do
 		mkdir -p ~/ap/"$pkg"
 		cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
 		key=""

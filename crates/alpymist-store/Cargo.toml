@@ -11,12 +11,15 @@ repository.workspace = true
 name = "alpymist-store"
 path = "src/main.rs"
 
-# Run as root through doas: apk add, del, upgrade and update, and nothing else.
+# Run as root through pkexec: apk add, del, upgrade and update, and nothing else.
 [[bin]]
 name = "alpymist-store-helper"
 path = "src/bin/helper.rs"
 
 [dependencies]
+# polkit asks the store's own agent for passwords, shown in alpymist-auth's
+# dialog.
+alpymist-auth = { workspace = true }
 # The window is drawn as the menu and the popups are, in the menu's appearance.
 alpymist-widget = { workspace = true }
 denise = { workspace = true }

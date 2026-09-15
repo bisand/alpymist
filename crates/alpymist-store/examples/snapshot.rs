@@ -11,6 +11,7 @@
 use alpymist_store::catalog::Installed;
 use alpymist_store::config;
 use alpymist_store::icons::Icons;
+use alpymist_store::pictures::Pictures;
 use alpymist_store::source::{self, Op};
 use alpymist_store::store::{Action, Event, Key, SourceInfo, Store, Target, View};
 use alpymist_store::view::{self, Layout};
@@ -153,6 +154,22 @@ fn main() {
             store.set_page(layout.rows);
             let layout = Layout::new(&appearance, &mut fonts, store, size, scale);
             let mut icons = Icons::default();
+            let mut pictures = Pictures::default();
+            // A screenshot from a local file, where one is given.
+            if let (Some(at), Ok(file)) = (store.detail, std::env::var("ALPYMIST_STORE_SCREENSHOT"))
+                && let Some(shot) = store
+                    .catalog
+                    .get(at)
+                    .and_then(|e| e.screenshots.get(store.shot))
+                && let Ok(f) = std::fs::File::open(&file)
+            {
+                pictures.request(&shot.url);
+                let decoded = alpymist_store::icons::decode(std::io::BufReader::new(f), 1 << 24);
+                pictures.arrived(
+                    shot.url.clone(),
+                    decoded.ok_or_else(|| "not a PNG".to_owned()),
+                );
+            }
             let mut pixels = vec![0u32; (size.width * size.height) as usize];
             let started = std::time::Instant::now();
             {
@@ -170,6 +187,7 @@ fn main() {
                     &appearance,
                     &mut fonts,
                     &mut icons,
+                    &mut pictures,
                     store,
                 );
             }

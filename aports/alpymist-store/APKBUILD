@@ -2,7 +2,7 @@
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-store
 pkgver=0.0.1
-pkgrel=0
+pkgrel=1
 pkgdesc="Alpymist Store: Flathub applications and Alpine packages, searched and installed from one window"
 url="https://github.com/bisand/alpymist"
 arch="all"
@@ -11,12 +11,14 @@ license="MIT OR Apache-2.0"
 # nothing is linked for them: the window is an xdg toplevel over wl_shm, drawn
 # by Denise on the CPU like the menu, which needs libxkbcommon and the same
 # fonts. Flatpak installs per user through the flatpak command; apk changes go
-# through doas to alpymist-store-helper, which takes four verbs and package
-# names and nothing else. logger is busybox's, for the helper's log.
+# through pkexec to alpymist-store-helper, which takes four verbs and package
+# names and nothing else. polkit asks an administrator's password for them in
+# alpymist-auth's dialog, and keeps the answer a few minutes except for
+# removals. logger is busybox's, for the helper's log.
 makedepends="cargo libxkbcommon-dev"
-depends="doas flatpak font-fira-ttf font-nerd-fonts-symbols"
+depends="alpymist-auth flatpak font-fira-ttf font-nerd-fonts-symbols polkit"
 options="!check"  # the test suite runs in CI, not in the package build
-source="alpymist-store.doas.conf"
+source=""
 builddir="$srcdir"
 
 prepare() {
@@ -38,8 +40,8 @@ package() {
 		"$pkgdir"/usr/bin/alpymist-store
 	install -Dm755 "$builddir"/target/release/alpymist-store-helper \
 		"$pkgdir"/usr/libexec/alpymist-store-helper
-	install -Dm600 "$srcdir"/alpymist-store.doas.conf \
-		"$pkgdir"/etc/doas.d/alpymist-store.conf
+	install -Dm644 "$builddir"/desktop/polkit/org.alpymist.store.policy \
+		"$pkgdir"/usr/share/polkit-1/actions/org.alpymist.store.policy
 	# In the applications menu, and what a downloaded .flatpakref opens with.
 	install -Dm644 "$builddir"/desktop/store/alpymist-store.desktop \
 		"$pkgdir"/usr/share/applications/alpymist-store.desktop

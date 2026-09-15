@@ -7,7 +7,7 @@
 //! What is installed, and everything that changes something, goes through the
 //! `flatpak` command, which is what the terminal uses too.
 
-use crate::catalog::{Category, Entry, Installed};
+use crate::catalog::{Category, Entry, Installed, Screenshot};
 use crate::config::{self, Installation};
 use crate::source::{Op, Source, output, run_command};
 use quick_xml::Reader;
@@ -217,6 +217,10 @@ enum Tag {
     Icon128,
     Releases,
     Bundle,
+    Screenshots,
+    Screenshot,
+    Caption,
+    Image,
     /// Anything else, kept on the stack so ends match.
     Other,
     /// A subtree nothing is read from: translations, screenshots, ratings.
@@ -234,6 +238,44 @@ struct Building {
     released: bool,
     /// The description's last block was a list item.
     in_list: bool,
+    /// The screenshot being read: its caption, and each image offered for
+    /// it as (thumbnail, width, height, address).
+    shot: Option<(String, Vec<Image>)>,
+    /// The attributes of the `<image>` being read.
+    image: (bool, u32, u32),
+}
+
+/// One picture offered for a screenshot: whether it is a thumbnail, its
+/// width and height, and its address.
+type Image = (bool, u32, u32, String);
+
+/// The most screenshots kept for one application.
+const SCREENSHOTS: usize = 8;
+
+/// The widest picture of a screenshot worth fetching: enough to fill the
+/// page on a high-density screen, without pulling in a 4K original.
+const SCREENSHOT_WIDTH: u32 = 1248;
+
+/// Elements whose text is kept.
+fn keeps_text(tag: Tag) -> bool {
+    matches!(
+        tag,
+        Tag::Id
+            | Tag::Name
+            | Tag::Summary
+            | Tag::Paragraph
+            | Tag::Item
+            | Tag::DeveloperName
+            | Tag::License
+            | Tag::Homepage
+            | Tag::Category
+            | Tag::Keyword
+            | Tag::Icon64
+            | Tag::Icon128
+            | Tag::Bundle
+            | Tag::Caption
+            | Tag::Image
+    )
 }
 
 /// Parse `AppStream` XML into entries, with icon paths under `dir`.
@@ -272,22 +314,7 @@ pub fn parse_appstream(xml: &[u8], dir: &Path) -> Vec<Entry> {
                         ..Building::default()
                     });
                 }
-                if matches!(
-                    tag,
-                    Tag::Id
-                        | Tag::Name
-                        | Tag::Summary
-                        | Tag::Paragraph
-                        | Tag::Item
-                        | Tag::DeveloperName
-                        | Tag::License
-                        | Tag::Homepage
-                        | Tag::Category
-                        | Tag::Keyword
-                        | Tag::Icon64
-                        | Tag::Icon128
-                        | Tag::Bundle
-                ) {
+                if keeps_text(tag) {
                     text.clear();
                 }
                 stack.push(tag);
@@ -342,24 +369,7 @@ pub fn parse_appstream(xml: &[u8], dir: &Path) -> Vec<Entry> {
 
 /// Whether text at the top of `stack` is being kept.
 fn collecting(stack: &[Tag]) -> bool {
-    stack.iter().rev().any(|t| {
-        matches!(
-            t,
-            Tag::Id
-                | Tag::Name
-                | Tag::Summary
-                | Tag::Paragraph
-                | Tag::Item
-                | Tag::DeveloperName
-                | Tag::License
-                | Tag::Homepage
-                | Tag::Category
-                | Tag::Keyword
-                | Tag::Icon64
-                | Tag::Icon128
-                | Tag::Bundle
-        )
-    })
+    stack.iter().rev().any(|t| keeps_text(*t))
 }
 
 fn attr(start: &BytesStart<'_>, name: &[u8]) -> Option<String> {
@@ -431,6 +441,26 @@ fn open_tag(start: &BytesStart<'_>, parent: Option<Tag>, current: Option<&mut Bu
             }
             Tag::Skip
         }
+        (Some(Tag::Component), b"screenshots") => Tag::Screenshots,
+        (Some(Tag::Screenshots), b"screenshot") => {
+            if let Some(b) = current {
+                b.shot = Some((String::new(), Vec::new()));
+            }
+            Tag::Screenshot
+        }
+        (Some(Tag::Screenshot), b"caption") if !translated(start) => Tag::Caption,
+        (Some(Tag::Screenshot), b"image") if !translated(start) => {
+            if let Some(b) = current {
+                let number =
+                    |name: &[u8]| attr(start, name).and_then(|v| v.parse().ok()).unwrap_or(0);
+                b.image = (
+                    attr(start, b"type").as_deref() == Some("thumbnail"),
+                    number(b"width"),
+                    number(b"height"),
+                );
+            }
+            Tag::Image
+        }
         (Some(Tag::Component), b"bundle") if attr(start, b"type").as_deref() == Some("flatpak") => {
             Tag::Bundle
         }
@@ -497,9 +527,48 @@ fn close_tag(tag: Tag, b: &mut Building, text: &mut String) {
         Tag::Icon64 => b.icon64 = value(),
         Tag::Icon128 => b.icon128 = value(),
         Tag::Bundle => b.bundle = value(),
+        Tag::Caption => {
+            if let Some((caption, _)) = &mut b.shot {
+                *caption = value();
+            }
+        }
+        Tag::Image => {
+            let url = value();
+            let (thumbnail, width, height) = b.image;
+            if let Some((_, images)) = &mut b.shot
+                && url.starts_with("https://")
+            {
+                images.push((thumbnail, width, height, url));
+            }
+        }
+        Tag::Screenshot => {
+            if let Some((caption, images)) = b.shot.take()
+                && e.screenshots.len() < SCREENSHOTS
+                && let Some(shot) = best_image(caption, &images)
+            {
+                e.screenshots.push(shot);
+            }
+        }
         _ => return,
     }
     text.clear();
+}
+
+/// The picture of a screenshot to fetch: the largest thumbnail no wider than
+/// [`SCREENSHOT_WIDTH`], or the original when there are no thumbnails.
+fn best_image(caption: String, images: &[Image]) -> Option<Screenshot> {
+    let pick = images
+        .iter()
+        .filter(|(thumbnail, width, ..)| *thumbnail && *width <= SCREENSHOT_WIDTH)
+        .max_by_key(|(_, width, ..)| *width)
+        .or_else(|| images.iter().find(|(thumbnail, ..)| !thumbnail))
+        .or_else(|| images.first())?;
+    Some(Screenshot {
+        url: pick.3.clone(),
+        width: pick.1,
+        height: pick.2,
+        caption,
+    })
 }
 
 /// The entry a component makes, if it is an application.
@@ -557,7 +626,17 @@ mod tests {
     <icon height="128" type="cached" width="128">org.gimp.GIMP.png</icon>
     <categories><category>Graphics</category><category>2DGraphics</category></categories>
     <keywords><keyword>Photo</keyword><keyword xml:lang="de">Foto</keyword><keyword>paint</keyword></keywords>
-    <screenshots><screenshot><caption>Main window</caption></screenshot></screenshots>
+    <screenshots>
+      <screenshot type="default">
+        <caption>Main window</caption>
+        <caption xml:lang="de">Hauptfenster</caption>
+        <image height="1158" type="source" width="1836">https://dl.flathub.org/a/orig.png</image>
+        <image height="787" type="thumbnail" width="1248">https://dl.flathub.org/a/1248.png</image>
+        <image height="474" type="thumbnail" width="752">https://dl.flathub.org/a/752.png</image>
+      </screenshot>
+      <screenshot><image type="source" width="800" height="600">https://dl.flathub.org/b/orig.png</image></screenshot>
+      <screenshot><image type="thumbnail" width="624" height="393">http://insecure.example/c.png</image></screenshot>
+    </screenshots>
     <releases><release timestamp="1750000000" version="3.0.4"/><release version="3.0.2"/></releases>
     <bundle type="flatpak" runtime="org.gnome.Platform/aarch64/48">app/org.gimp.GIMP/aarch64/stable</bundle>
   </component>
@@ -595,6 +674,19 @@ mod tests {
             Some(Path::new("/as/icons/128x128/org.gimp.GIMP.png"))
         );
         assert_eq!(gimp.name_lc, "gnu image manipulation program");
+        let shots: Vec<(&str, u32, &str)> = gimp
+            .screenshots
+            .iter()
+            .map(|s| (s.url.as_str(), s.width, s.caption.as_str()))
+            .collect();
+        assert_eq!(
+            shots,
+            [
+                ("https://dl.flathub.org/a/1248.png", 1248, "Main window"),
+                ("https://dl.flathub.org/b/orig.png", 800, ""),
+            ],
+            "the largest thumbnail that fits, the original without one, and nothing but https"
+        );
     }
 
     #[test]

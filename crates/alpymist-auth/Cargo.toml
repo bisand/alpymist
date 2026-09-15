@@ -1,0 +1,31 @@
+[package]
+name = "alpymist-auth"
+description = "Alpymist's password prompt: a polkit authentication agent for one process, with the password checked by polkit's own helper and asked for in a Denise dialog."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "alpymist-auth"
+path = "src/main.rs"
+
+[dependencies]
+alpymist-widget = { workspace = true }
+denise = { workspace = true }
+denise-render = { workspace = true }
+denise-text = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# The password is wiped from memory as soon as it has been handed on.
+zeroize = "1"
+# polkitd is spoken to over the system bus, which needs nothing linked.
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
+blocking = "1"
+
+[dev-dependencies]
+png = "0.17"
+
+[lints]
+workspace = true

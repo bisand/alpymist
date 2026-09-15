@@ -181,6 +181,23 @@ pub trait Widget: 'static {
         Outcome::Unchanged
     }
 
+    /// Caps Lock went on or off: worth saying beside a password field.
+    fn caps_lock(&mut self, on: bool) -> Outcome {
+        let _ = on;
+        Outcome::Unchanged
+    }
+
+    /// Whether the widget should be painted again every so often for now:
+    /// a spinner turning.
+    fn animating(&self) -> bool {
+        false
+    }
+
+    /// A frame passed while animating.
+    fn tick(&mut self) -> Outcome {
+        Outcome::Redraw
+    }
+
     /// How far a touchpad must scroll for one row, in logical pixels.
     fn row_height(&self) -> f64 {
         36.0

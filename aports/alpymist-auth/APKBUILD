@@ -1,0 +1,38 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-auth
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="Alpymist's password prompt: polkit authentication in a Denise dialog"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+# A polkit agent for one process at a time, which is what polkit allows
+# without elogind; the password is checked by polkit's own setuid helper, not
+# by anything here. polkitd is spoken to over the system bus, which needs
+# nothing linked. The dialog is a layer surface drawn by Denise on the CPU, so
+# it needs libxkbcommon and the menu's fonts.
+makedepends="cargo libxkbcommon-dev"
+depends="polkit font-fira-ttf font-nerd-fonts-symbols"
+options="!check"  # the test suite runs in CI, not in the package build
+source=""
+builddir="$srcdir"
+
+prepare() {
+	# Same as alpymistctl: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	cargo build --release --locked -p alpymist-auth
+}
+
+package() {
+	install -Dm755 "$builddir"/target/release/alpymist-auth \
+		"$pkgdir"/usr/bin/alpymist-auth
+}

@@ -116,6 +116,19 @@ impl Category {
     }
 }
 
+/// A screenshot of an application, somewhere on the web.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Screenshot {
+    /// Where the picture is: always `https`.
+    pub url: String,
+    /// Its width, as the catalogue says, or 0.
+    pub width: u32,
+    /// Its height, as the catalogue says, or 0.
+    pub height: u32,
+    /// What it shows.
+    pub caption: String,
+}
+
 /// Whether an entry is installed.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum State {
@@ -185,6 +198,8 @@ pub struct Entry {
     pub icon: Option<PathBuf>,
     /// A large icon, 128 pixels square.
     pub icon_large: Option<PathBuf>,
+    /// Screenshots, to fetch when the entry's page is opened.
+    pub screenshots: Vec<Screenshot>,
     /// Bytes to download, where known.
     pub download_size: Option<u64>,
     /// Bytes installed, where known.

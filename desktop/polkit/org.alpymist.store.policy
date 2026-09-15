@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+  Alpymist Store: what installing, removing and updating Alpine packages asks.
+
+  The store runs alpymist-store-helper through pkexec, and pkexec picks the
+  action by the helper's path and its first argument. auth_admin is a password
+  of an administrator (polkit's default rule: the wheel group); _keep lets the
+  same store window do the same kind of thing again for a few minutes without
+  asking. Removing always asks. There is no elogind, so polkit never sees an
+  active session: allow_any is the setting that applies, and the other two
+  say the same for a system that has one.
+-->
+<policyconfig>
+  <vendor>Alpymist</vendor>
+  <vendor_url>https://github.com/bisand/alpymist</vendor_url>
+
+  <action id="org.alpymist.store.install">
+    <description>Install system packages</description>
+    <message>Authentication is needed to install Alpine packages for everyone on this computer</message>
+    <icon_name>system-software-install</icon_name>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-store-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">add</annotate>
+  </action>
+
+  <action id="org.alpymist.store.remove">
+    <description>Remove system packages</description>
+    <message>Authentication is needed to remove Alpine packages from this computer</message>
+    <icon_name>system-software-install</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-store-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">del</annotate>
+  </action>
+
+  <action id="org.alpymist.store.upgrade">
+    <description>Update system packages</description>
+    <message>Authentication is needed to update Alpine packages on this computer</message>
+    <icon_name>system-software-update</icon_name>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-store-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">upgrade</annotate>
+  </action>
+
+  <action id="org.alpymist.store.refresh">
+    <description>Refresh the package lists</description>
+    <message>Authentication is needed to refresh the lists of Alpine packages</message>
+    <icon_name>system-software-update</icon_name>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-store-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">update</annotate>
+  </action>
+</policyconfig>
