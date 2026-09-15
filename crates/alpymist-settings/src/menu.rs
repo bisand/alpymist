@@ -20,7 +20,10 @@ pub fn fragment(settings: &Settings) -> String {
     let mut out = String::from(
         "# Generated from alpymist-settings' registry when it was packaged: every\n\
          # setting, found by the menu's search, opening Settings at it.\n\n\
-         [menu.settings]\ntitle = \"Settings\"\nitems = [\n",
+         [menu.root]\nitems = [\n  { name = \"Settings\", icon = \"\\U000F0493\", menu = \"settings\", \
+         keywords = [\"preferences\", \"configure\", \"options\", \"control panel\"] },\n]\n\n\
+         [menu.settings]\ntitle = \"Settings\"\nitems = [\n  \
+         { name = \"Open Settings\", icon = \"\\U000F0493\", exec = \"alpymist-settings\" },\n",
     );
     for area in settings.areas() {
         let _ = writeln!(
@@ -80,8 +83,10 @@ mod tests {
         let menus = parsed["menu"].as_table().unwrap();
         assert_eq!(
             menus["settings"]["items"].as_array().unwrap().len(),
-            settings.areas().len()
+            settings.areas().len() + 1,
+            "an Open Settings entry and one per area"
         );
+        assert_eq!(menus["root"]["items"][0]["menu"].as_str(), Some("settings"));
         let touchpad = menus["settings-touchpad"]["items"].as_array().unwrap();
         assert!(
             touchpad.iter().any(|i| {

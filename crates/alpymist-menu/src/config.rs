@@ -202,6 +202,26 @@ impl Config {
         Ok(config)
     }
 
+    /// Add a fragment's menus: a menu the configuration lacks is added whole,
+    /// and one it has gains the fragment's entries it does not already have
+    /// by name.
+    pub fn merge(&mut self, fragment: Fragment) {
+        for (name, def) in fragment.menu {
+            match self.menu.get_mut(&name) {
+                Some(mine) => {
+                    for item in def.items {
+                        if !mine.items.iter().any(|i| i.name == item.name) {
+                            mine.items.push(item);
+                        }
+                    }
+                }
+                None => {
+                    self.menu.insert(name, def);
+                }
+            }
+        }
+    }
+
     /// What `parse` cannot express in types.
     fn check(&self) -> Result<(), String> {
         if !self.menu.contains_key(ROOT) {
@@ -228,6 +248,49 @@ impl Config {
         }
         Ok(())
     }
+}
+
+/// Entries another package adds to the menu: `/usr/share/alpymist/menu.d/*.toml`
+/// and `/etc/alpymist/menu.d/*.toml`, each only `[menu.NAME]` tables in the
+/// configuration's own format. Settings adds every setting this way, so the
+/// menu's search finds them.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Fragment {
+    /// Menus to add or add to.
+    #[serde(default)]
+    pub menu: BTreeMap<String, MenuDef>,
+}
+
+/// Where fragments are read from, in order.
+pub const FRAGMENT_DIRS: [&str; 2] = ["/usr/share/alpymist/menu.d", "/etc/alpymist/menu.d"];
+
+/// Every fragment in `dirs`, by file name within each, with what could not be
+/// read.
+#[must_use]
+pub fn fragments(dirs: &[&Path]) -> (Vec<Fragment>, Vec<String>) {
+    let (mut found, mut problems) = (Vec::new(), Vec::new());
+    for dir in dirs {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        let mut paths: Vec<PathBuf> = entries
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "toml"))
+            .collect();
+        paths.sort();
+        for path in paths {
+            match std::fs::read_to_string(&path)
+                .map_err(|e| e.to_string())
+                .and_then(|t| toml::from_str::<Fragment>(&t).map_err(|e| e.to_string()))
+            {
+                Ok(fragment) => found.push(fragment),
+                Err(e) => problems.push(format!("{}: {}", path.display(), first_line(&e))),
+            }
+        }
+    }
+    (found, problems)
 }
 
 /// A configuration, and what went wrong finding it.
@@ -265,12 +328,26 @@ pub fn load() -> Loaded {
 
 /// As [`load`], from a given list of places.
 pub fn load_from(candidates: impl IntoIterator<Item = PathBuf>) -> Loaded {
-    let mut problems = Vec::new();
+    let dirs: Vec<&Path> = FRAGMENT_DIRS.iter().map(Path::new).collect();
+    load_with(candidates, &dirs)
+}
+
+/// As [`load_from`], with fragments from `dirs`.
+pub fn load_with(candidates: impl IntoIterator<Item = PathBuf>, dirs: &[&Path]) -> Loaded {
+    let (fragments, mut problems) = fragments(dirs);
+    let with_fragments = |text: &str| -> Result<Config, String> {
+        let mut config: Config = toml::from_str(text).map_err(|e| e.to_string())?;
+        for f in &fragments {
+            config.merge(f.clone());
+        }
+        config.check()?;
+        Ok(config)
+    };
     for path in candidates {
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
         };
-        match Config::parse(&text) {
+        match with_fragments(&text) {
             Ok(config) => {
                 return Loaded {
                     config,
@@ -282,7 +359,9 @@ pub fn load_from(candidates: impl IntoIterator<Item = PathBuf>) -> Loaded {
         }
     }
     Loaded {
-        config: Config::parse(DEFAULT).unwrap_or_default(),
+        config: with_fragments(DEFAULT)
+            .or_else(|_| Config::parse(DEFAULT))
+            .unwrap_or_default(),
         path: None,
         problems,
     }
@@ -301,7 +380,28 @@ fn first_line(message: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Colour, Config, DEFAULT, load_from};
+    use super::{Colour, Config, DEFAULT, load_from, load_with};
+
+    #[test]
+    fn fragments_add_menus_and_entries_without_replacing_any() {
+        let dir = std::env::temp_dir().join(format!("alpymist-menu-d-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("settings.toml"),
+            "[menu.root]\nitems = [\n  { name = \"Settings\", menu = \"settings\" },\n  \
+             { name = \"Apps\", exec = \"nope\" },\n]\n\
+             [menu.settings]\nitems = [ { name = \"Touchpad\", exec = \"alpymist-settings touchpad\" } ]\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("broken.toml"), "[menu.x]\nitems = 3\n").unwrap();
+        let loaded = load_with(Vec::new(), &[dir.as_path()]);
+        std::fs::remove_dir_all(&dir).ok();
+        let root = &loaded.config.menu["root"].items;
+        assert_eq!(root.iter().filter(|i| i.name == "Apps").count(), 1);
+        assert_eq!(root.last().map(|i| i.name.as_str()), Some("Settings"));
+        assert!(loaded.config.menu.contains_key("settings"));
+        assert_eq!(loaded.problems.len(), 1, "{:?}", loaded.problems);
+    }
 
     #[test]
     fn the_built_in_configuration_is_valid() {
