@@ -27,6 +27,11 @@ exec --no-startup-id feh --no-fehbg --bg-fill /usr/share/backgrounds/alpymist/al
 # xrender, not glx: machines on this tier are the ones without usable GL.
 exec --no-startup-id picom --backend xrender
 exec --no-startup-id dunst
+# Flathub, for this account: Flatpak installs per user, since without elogind
+# polkit never counts the session as active and would ask every install for a
+# password nobody is there to type. The file ships with the desktop, so this
+# needs no network, and does nothing once the remote is there.
+exec --no-startup-id flatpak remote-add --user --if-not-exists flathub /usr/share/alpymist/flathub.flatpakrepo
 exec --no-startup-id /usr/libexec/pipewire-launcher
 exec_always --no-startup-id sh -c 'pkill -x polybar; exec polybar alpymist'
 

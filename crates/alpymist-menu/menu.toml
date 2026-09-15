@@ -98,23 +98,26 @@ items = [
 [menu.install]
 title = "Install"
 items = [
-  { name = "Application from Flathub", icon = "󰏗", exec = "printf 'Search Flathub for: '; read -r q && flatpak search \"$q\" && printf '\\nApplication ID to install, or Enter to skip: ' && read -r id && [ -n \"$id\" ] && flatpak install flathub \"$id\"", terminal = true, hold = true, keywords = ["flatpak"] },
+  { name = "Store", icon = "\U000F10C1", exec = "alpymist-store", detail = "Flathub and Alpine", keywords = ["software", "flatpak", "flathub", "apk", "apps"] },
+  { name = "Application from Flathub", icon = "󰏗", exec = "flatpak remote-add --user --if-not-exists flathub /usr/share/alpymist/flathub.flatpakrepo && printf 'Search Flathub for: '; read -r q && flatpak search \"$q\" && printf '\\nApplication ID to install, or Enter to skip: ' && read -r id && [ -n \"$id\" ] && flatpak install --user flathub \"$id\"", terminal = true, hold = true, keywords = ["flatpak"] },
   { name = "Alpine package", icon = "", exec = "printf 'Package to install: '; read -r p && [ -n \"$p\" ] && doas apk add $p", terminal = true, hold = true, keywords = ["apk"] },
 ]
 
 [menu.remove]
 title = "Remove"
 items = [
-  { name = "Flatpak application", icon = "󰏗", exec = "flatpak list --app --columns=application,name && printf '\\nApplication ID to remove, or Enter to skip: ' && read -r id && [ -n \"$id\" ] && flatpak uninstall \"$id\"", terminal = true, hold = true, keywords = ["flatpak", "uninstall"] },
+  { name = "Installed software", icon = "\U000F10C1", exec = "alpymist-store installed", detail = "Store", keywords = ["flatpak", "apk"] },
+  { name = "Flatpak application", icon = "󰏗", exec = "flatpak list --user --app --columns=application,name && printf '\\nApplication ID to remove, or Enter to skip: ' && read -r id && [ -n \"$id\" ] && flatpak uninstall --user \"$id\"", terminal = true, hold = true, keywords = ["flatpak", "uninstall"] },
   { name = "Alpine package", icon = "", exec = "printf 'Package to remove: '; read -r p && [ -n \"$p\" ] && doas apk del $p", terminal = true, hold = true, keywords = ["apk", "uninstall"] },
 ]
 
 [menu.update]
 title = "Update"
 items = [
-  { name = "Everything", icon = "󰚰", exec = "doas apk upgrade -U && flatpak update -y", terminal = true, hold = true },
+  { name = "Updates", icon = "\U000F10C1", exec = "alpymist-store updates", detail = "Store", keywords = ["flatpak", "apk"] },
+  { name = "Everything", icon = "󰚰", exec = "doas apk upgrade -U && flatpak update --user -y", terminal = true, hold = true },
   { name = "System packages", icon = "", exec = "doas apk upgrade -U", terminal = true, hold = true, keywords = ["apk", "alpine"] },
-  { name = "Flatpak applications", icon = "󰏗", exec = "flatpak update", terminal = true, hold = true },
+  { name = "Flatpak applications", icon = "󰏗", exec = "flatpak update --user", terminal = true, hold = true },
 ]
 
 [menu.learn]

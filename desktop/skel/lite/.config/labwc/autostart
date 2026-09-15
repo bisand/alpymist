@@ -9,3 +9,8 @@ dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP >/dev/nul
 swaybg -m fill -i /usr/share/backgrounds/alpymist/alpymist.png >/dev/null 2>&1 &
 waybar -c ~/.config/waybar/labwc.jsonc -s ~/.config/waybar/style.css >/dev/null 2>&1 &
 mako >/dev/null 2>&1 &
+# Flathub, for this account: Flatpak installs per user, since without elogind
+# polkit never counts the session as active and would ask every install for a
+# password nobody is there to type. The file ships with the desktop, so this
+# needs no network, and does nothing once the remote is there.
+flatpak remote-add --user --if-not-exists flathub /usr/share/alpymist/flathub.flatpakrepo >/dev/null 2>&1 &

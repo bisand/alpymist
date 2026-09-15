@@ -5,3 +5,6 @@ text/html=librewolf.desktop
 application/xhtml+xml=librewolf.desktop
 x-scheme-handler/http=librewolf.desktop
 x-scheme-handler/https=librewolf.desktop
+# A .flatpakref downloaded from flathub.org's Install button opens the store at
+# that application's page.
+application/vnd.flatpak.ref=alpymist-store.desktop

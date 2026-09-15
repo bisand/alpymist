@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Store
+GenericName=Software
+Comment=Install applications from Flathub and packages from Alpine
+Exec=alpymist-store open %f
+Icon=system-software-install
+Terminal=false
+Categories=System;PackageManager;
+Keywords=install;flatpak;flathub;apk;packages;software;apps;
+MimeType=application/vnd.flatpak.ref;
+StartupWMClass=alpymist-store
