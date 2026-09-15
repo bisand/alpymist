@@ -32,7 +32,7 @@ const GAP: i32 = 10;
 const TOGGLE_W: i32 = 52;
 const TOGGLE_H: i32 = 28;
 const SLIDER_W: i32 = 200;
-const VALUE_W: i32 = 96;
+const VALUE_W: i32 = 124;
 const SELECT_W: i32 = 240;
 const CONTROL_H: i32 = 36;
 const BUTTON_W: i32 = 180;
@@ -129,6 +129,8 @@ pub struct View {
     areas: NodeId,
     content: Option<NodeId>,
     page: Page,
+    /// The area or About page a search returns to.
+    last: Page,
     rows: Vec<Row>,
     open_row: Option<usize>,
     pointer: Point,
@@ -222,6 +224,7 @@ impl View {
             areas,
             content: None,
             page: Page::Area(0),
+            last: Page::Area(0),
             rows: Vec::new(),
             open_row: None,
             pointer: Point::new(0, 0),
@@ -249,6 +252,26 @@ impl View {
             self.areas,
             Rect::new(PAD * s / 4, top, (SIDEBAR - PAD / 2) * s, h - top - PAD * s),
         );
+    }
+
+    /// What the view is doing, for `ALPYMIST_SETTINGS_TRACE`.
+    #[must_use]
+    pub fn trace(&self) -> String {
+        let focused = self.ui.focused();
+        let what = if focused == Some(self.search) {
+            "search".to_owned()
+        } else if focused == Some(self.areas) {
+            "areas".to_owned()
+        } else if let Some(r) = self.rows.iter().find(|r| Some(r.control) == focused) {
+            self.settings.all()[r.setting].id.to_owned()
+        } else {
+            format!("{focused:?}")
+        };
+        format!(
+            "page {:?}, focus {what}, rows {}",
+            self.page,
+            self.rows.len()
+        )
     }
 
     /// Whether there is anything new to paint.
@@ -318,6 +341,10 @@ impl View {
     /// New size or scale: lay everything out again.
     pub fn resize(&mut self, size: Size, scale: u32) {
         let s = i32::try_from(scale.max(1)).unwrap_or(1);
+        // Compositors configure again on focus and other state changes.
+        if size == self.size && s == self.scale {
+            return;
+        }
         self.size = size;
         self.scale = s;
         self.ui.handle(&[InputEvent::SurfaceResized {
@@ -384,6 +411,7 @@ impl View {
         match code {
             KeyCode::Escape if !self.query.is_empty() => {
                 self.clear_search();
+                self.show(self.last.clone());
                 self.ui.focus(Some(self.areas));
                 None
             }
@@ -530,16 +558,7 @@ impl View {
         }
         self.query.clone_from(&text);
         if text.trim().is_empty() {
-            let back = match self
-                .ui
-                .widget::<List<Msg>>(self.areas)
-                .and_then(List::selected)
-            {
-                Some(i) if i < self.settings.areas().len() => Page::Area(i),
-                Some(_) => Page::About,
-                None => Page::Area(0),
-            };
-            self.show(back);
+            self.show(self.last.clone());
         } else {
             self.show(Page::Search(text));
         }
@@ -568,6 +587,9 @@ impl View {
         {
             list.set_selected(None);
         }
+        if !matches!(page, Page::Search(_)) {
+            self.last = page.clone();
+        }
         self.page = page;
         self.build();
     }
@@ -583,6 +605,11 @@ impl View {
     #[allow(clippy::too_many_lines, clippy::many_single_char_names)] // one page, top to bottom
     fn build(&mut self) {
         let focused_search = self.ui.focused() == Some(self.search);
+        let focused_setting = self
+            .rows
+            .iter()
+            .find(|r| Some(r.control) == self.ui.focused())
+            .map(|r| r.setting);
         if let Some(old) = self.content.take() {
             self.ui.remove(old);
         }
@@ -706,6 +733,11 @@ impl View {
             .add(content, Panel::bare(), Rect::new(0, y, 1, PAD * s));
         if focused_search {
             self.ui.focus(Some(self.search));
+        } else if let Some(setting) = focused_setting
+            && let Some(row) = self.rows.iter().find(|r| r.setting == setting)
+        {
+            let control = row.control;
+            self.ui.focus(Some(control));
         }
     }
 
@@ -999,4 +1031,110 @@ fn wrap(ui: &mut Ui<Msg>, style: TextStyle, text: &str, width: i32) -> Vec<Strin
         lines.push(line);
     }
     lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Effect, Fonts, Page, View};
+    use alpymist_about::info::About;
+    use alpymist_settings::{Settings, Value};
+    use denise::{ElementState, InputEvent, KeyCode, Modifiers, Size};
+
+    fn view() -> View {
+        let settings = Settings::new();
+        let values = settings
+            .all()
+            .iter()
+            .map(|s| (s.id, Ok(s.default.clone())))
+            .collect();
+        View::new(
+            Size::new(920, 660),
+            1,
+            alpymist_theme::ThemeFile::default().denise(),
+            Fonts {
+                text: None,
+                strong: None,
+                icons: None,
+            },
+            settings,
+            values,
+            About::sample(),
+        )
+    }
+
+    fn key(code: KeyCode) -> [InputEvent; 2] {
+        let e = |state| InputEvent::Key {
+            code,
+            state,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        };
+        [e(ElementState::Down), e(ElementState::Up)]
+    }
+
+    #[test]
+    fn arrows_move_through_the_areas_after_a_resize() {
+        let mut v = view();
+        v.resize(Size::new(1260, 754), 1);
+        let _ = v.handle(&key(KeyCode::ArrowDown), 10);
+        assert_eq!(v.page, Page::Area(1));
+    }
+
+    #[test]
+    fn tab_from_the_areas_reaches_the_first_switch() {
+        let mut v = view();
+        v.resize(Size::new(1260, 754), 1);
+        let _ = v.handle(&key(KeyCode::ArrowDown), 10);
+        let _ = v.handle(&key(KeyCode::ArrowDown), 20);
+        assert_eq!(v.page, Page::Area(2));
+        let _ = v.handle(&key(KeyCode::Tab), 30);
+        assert_eq!(
+            v.ui.focused(),
+            v.rows.first().map(|r| r.control),
+            "focus after Tab"
+        );
+        let mut events = key(KeyCode::Space).to_vec();
+        events.insert(1, InputEvent::Text { ch: ' ' });
+        let effects = v.handle(&events, 40);
+        assert_eq!(effects.len(), 1, "{effects:?}");
+    }
+
+    #[test]
+    fn a_rebuild_keeps_focus_on_the_same_setting() {
+        let mut v = view();
+        assert!(v.open("touchpad.tap-to-click"));
+        v.resize(Size::new(1000, 700), 1);
+        assert!(
+            v.trace().contains("focus touchpad.tap-to-click"),
+            "{}",
+            v.trace()
+        );
+    }
+
+    #[test]
+    fn space_on_a_focused_switch_changes_it() {
+        let mut v = view();
+        assert!(v.open("touchpad.natural-scroll"));
+        let mut events = key(KeyCode::Space).to_vec();
+        events.insert(1, InputEvent::Text { ch: ' ' });
+        let effects = v.handle(&events, 10);
+        assert_eq!(
+            effects,
+            [Effect::Set {
+                id: "touchpad.natural-scroll",
+                value: Value::Bool(true)
+            }]
+        );
+    }
+
+    #[test]
+    fn typing_searches_and_escape_clears_then_closes() {
+        let mut v = view();
+        let typed: Vec<InputEvent> = "scroll".chars().map(|ch| InputEvent::Text { ch }).collect();
+        let _ = v.handle(&typed, 10);
+        assert_eq!(v.page, Page::Search("scroll".into()));
+        let _ = v.handle(&key(KeyCode::Escape), 20);
+        assert!(matches!(v.page, Page::Area(_)));
+        assert_eq!(v.handle(&key(KeyCode::Escape), 30), [Effect::Close]);
+    }
 }

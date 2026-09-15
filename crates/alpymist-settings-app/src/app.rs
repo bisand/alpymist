@@ -237,6 +237,9 @@ impl SettingsApp {
             return Outcome::Unchanged;
         };
         let effects = view.handle(events, now);
+        if std::env::var_os("ALPYMIST_SETTINGS_TRACE").is_some() && !events.is_empty() {
+            eprintln!("{events:?} -> {} -> {effects:?}", view.trace());
+        }
         let mut outcome = Outcome::redraw_if(view.needs_paint());
         for effect in effects {
             match effect {
@@ -294,6 +297,9 @@ impl App for SettingsApp {
     }
 
     fn resize(&mut self, size: Size, scale: u32) {
+        if std::env::var_os("ALPYMIST_SETTINGS_TRACE").is_some() {
+            eprintln!("resize {size:?} at {scale}");
+        }
         self.scale = scale;
         if let Some(view) = self.view.as_mut() {
             view.resize(size, scale);
