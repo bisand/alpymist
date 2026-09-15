@@ -65,6 +65,9 @@ pub enum Outcome {
 }
 
 /// The dialog.
+// Each flag is something the dialog says: echoing, Caps Lock, checkable,
+// checked. They are independent, not a state machine in disguise.
+#[allow(clippy::struct_excessive_bools)]
 pub struct Prompt {
     /// What is being authorised.
     pub request: Request,
@@ -92,6 +95,11 @@ pub struct Prompt {
     pub hover: Option<Target>,
     /// Animation frames, while checking.
     pub frame: u32,
+    /// Whether the desktop can check this prompt is genuine, and so the
+    /// prompt says how.
+    pub checkable: bool,
+    /// Whether Ctrl+Alt+Delete checked it since it opened.
+    pub verified: bool,
 }
 
 impl Prompt {
@@ -112,6 +120,8 @@ impl Prompt {
             focus: Focus::Field,
             hover: None,
             frame: 0,
+            checkable: false,
+            verified: false,
         }
     }
 
@@ -148,6 +158,17 @@ impl Prompt {
             }
         }
         Outcome::Redraw
+    }
+
+    /// Ctrl+Alt+Delete found this prompt genuine.
+    pub fn verify(&mut self) -> Outcome {
+        let changed = !self.verified;
+        self.verified = true;
+        if changed {
+            Outcome::Redraw
+        } else {
+            Outcome::Unchanged
+        }
     }
 
     /// The helper could not be run at all.

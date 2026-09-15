@@ -11,7 +11,7 @@
 # than system files an upgrade would overwrite.
 pkgname=alpymist-desktop
 pkgver=0.0.1
-pkgrel=11
+pkgrel=12
 pkgdesc="Alpymist desktop: what every tier shares"
 url="https://github.com/bisand/alpymist"
 arch="noarch"
@@ -195,6 +195,10 @@ _full() {
 	# changed, and every upgrade would leave a .apk-new beside it.
 	install -Dm644 "$builddir"/desktop/hypr/hyprland-keyboard.conf \
 		"$subpkgdir"/usr/share/alpymist/hyprland-keyboard.conf
+	# Permissions and Ctrl+Alt+Delete, which hyprland.conf sources; see the
+	# file.
+	install -Dm644 "$builddir"/desktop/hypr/hyprland-security.conf \
+		"$subpkgdir"/usr/share/alpymist/hyprland-security.conf
 	# Text files open in squint under Hyprland only: XDG reads
 	# hyprland-mimeapps.list when XDG_CURRENT_DESKTOP is Hyprland.
 	install -Dm644 "$builddir"/desktop/hypr/hyprland-mimeapps.list \

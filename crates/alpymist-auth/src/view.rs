@@ -31,6 +31,13 @@ use denise_render::Canvas;
 const LOCK: &str = "\u{f033e}";
 /// A warning.
 const WARN: &str = "\u{f05d6}";
+/// A shield with a tick.
+const SHIELD: &str = "\u{f0565}";
+/// A keyboard.
+const KEYS: &str = "\u{f030c}";
+
+/// The colour a genuine check is told in.
+const GOOD: denise::Color = denise::Color::rgb(0x9A, 0xD9, 0xA2);
 
 /// The dialog's width in logical pixels at a 16 px font.
 const WIDTH: i32 = 460;
@@ -62,6 +69,8 @@ pub struct Layout {
     pub cancel: Rect,
     /// Authenticate.
     pub authenticate: Rect,
+    /// How to check the prompt is genuine, or that it was, at the foot.
+    pub check: Option<Rect>,
 }
 
 impl Layout {
@@ -102,7 +111,11 @@ impl Layout {
         let by = status.bottom() + u / 2;
         let authenticate = Rect::new(x + w - aw, by, aw, bh);
         let cancel = Rect::new(authenticate.x - u / 2 - cw, by, cw, bh);
-        let size = metrics.size(authenticate.bottom() + metrics.pad);
+        let check = prompt
+            .checkable
+            .then(|| Rect::new(x, authenticate.bottom() + u * 3 / 4, w, u * 3 / 2));
+        let bottom = check.map_or(authenticate.bottom(), |c| c.bottom());
+        let size = metrics.size(bottom + metrics.pad);
         Self {
             metrics,
             size,
@@ -116,6 +129,7 @@ impl Layout {
             status,
             cancel,
             authenticate,
+            check,
         }
     }
 
@@ -361,6 +375,39 @@ pub fn paint(
             Rect::new(s.x + iw + u / 3, s.y, s.width, s.height),
             "Caps Lock is on",
             ink.warn,
+        );
+    }
+
+    // How to know this is Alpymist's, or that it was checked.
+    if let Some(c) = layout.check {
+        pen.fill_rect(
+            Rect::new(c.x, c.y - u * 3 / 8, c.width, m.px(1)),
+            ink.selection,
+        );
+        let (glyph, text, colour) = if prompt.verified {
+            (SHIELD, "Checked with Ctrl+Alt+Delete", GOOD)
+        } else {
+            (
+                KEYS,
+                "Ctrl+Alt+Delete: the desktop says if this prompt is real",
+                ink.dim,
+            )
+        };
+        let iw = draw::label(
+            &mut pen,
+            engine,
+            styles.icon_small,
+            Rect::new(c.x, c.y, u, c.height),
+            glyph,
+            colour,
+        );
+        draw::label(
+            &mut pen,
+            engine,
+            styles.small,
+            Rect::new(c.x + iw + u / 3, c.y, c.width - iw - u / 3, c.height),
+            text,
+            colour,
         );
     }
 

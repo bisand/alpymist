@@ -631,9 +631,13 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
             .may_fail(),
         );
     }
-    // seat for seatd, video and input for the devices a compositor opens,
-    // audio for pipewire, netdev for choosing Wi-Fi networks through iwd.
-    for group in ["seat", "video", "input", "audio", "netdev"] {
+    // seat for seatd, which opens the keyboard, mouse and display for the
+    // compositor; video for the GPU, where its devices are not open to all;
+    // audio for pipewire;
+    // netdev for choosing Wi-Fi networks through iwd. Not input: that would
+    // let every program of the account read every keystroke straight from
+    // /dev/input, a password typed into any window included.
+    for group in ["seat", "video", "audio", "netdev"] {
         steps.push(
             Step::new(
                 &format!("Adding your account to {group}"),
@@ -1077,6 +1081,10 @@ mod tests {
             "{conf}"
         );
         assert!(titles(&a).contains(&"Adding your account to seat".to_string()));
+        assert!(
+            !titles(&a).contains(&"Adding your account to input".to_string()),
+            "input would let any program read every keystroke"
+        );
     }
 
     #[test]

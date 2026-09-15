@@ -3,6 +3,7 @@
 //! ```text
 //! alpymist-auth run -- COMMAND [ARGS…]   run COMMAND through pkexec, asking here
 //! alpymist-auth prompt                   the dialog, started by an agent
+//! alpymist-auth attention                check the prompt on screen is Alpymist's
 //! ```
 //!
 //! `run` is for a menu entry or a script: it registers an agent for itself
@@ -40,6 +41,7 @@ fn main() -> ExitCode {
             run(command)
         }
         Some("prompt") => prompt(),
+        Some("attention") => attention(),
         Some("-h" | "--help") => {
             println!("{USAGE}");
             ExitCode::SUCCESS
@@ -86,6 +88,63 @@ fn run(command: &[String]) -> ExitCode {
             eprintln!("alpymist-auth: pkexec: {e}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// Ctrl+Alt+Delete: say whether the prompt on screen is Alpymist's.
+///
+/// Hyprland is asked which process drew each overlay, and says the answer in
+/// its own notification, drawn by the compositor. A genuine prompt is told
+/// too, and shows it was checked.
+fn attention() -> ExitCode {
+    use alpymist_auth::attention::{self, Verdict};
+    let hyprctl = |args: &[&str]| {
+        std::process::Command::new("/usr/bin/hyprctl")
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .output()
+    };
+    let layers = match hyprctl(&["-j", "layers"]) {
+        Ok(out) if out.status.success() => serde_json::from_slice(&out.stdout).unwrap_or_default(),
+        _ => {
+            eprintln!("alpymist-auth: could not ask Hyprland for its layers");
+            return ExitCode::FAILURE;
+        }
+    };
+    let verdict = attention::judge(&attention::overlays(&layers), attention::exe);
+    // Permissions are what keep other programs from reading the screen and
+    // typing; without them a genuine prompt is still genuine, but not the
+    // whole story.
+    let protected = hyprctl(&["-j", "getoption", "ecosystem:enforce_permissions"])
+        .ok()
+        .and_then(|out| serde_json::from_slice::<serde_json::Value>(&out.stdout).ok())
+        .and_then(|v| v.get("int").and_then(serde_json::Value::as_i64))
+        .is_some_and(|v| v != 0);
+    let (icon, colour) = match (&verdict, protected) {
+        (Verdict::Genuine(_), true) => ("5", "rgb(9ad9a2)"),
+        (Verdict::Impostor, _) | (Verdict::Genuine(_), false) => ("3", "rgb(e8b06a)"),
+        (Verdict::Nothing, _) => ("1", "rgb(7fb8d9)"),
+    };
+    let mut sentence = verdict.sentence().to_owned();
+    if !protected {
+        sentence.push_str(
+            ". Warning: Hyprland's permissions are off, so other programs can read the screen",
+        );
+    }
+    let _ = hyprctl(&["notify", icon, "8000", colour, &sentence]);
+    if let Verdict::Genuine(pids) = &verdict {
+        for pid in pids {
+            if let Some(path) = attention::socket(*pid)
+                && let Ok(mut stream) = std::os::unix::net::UnixStream::connect(path)
+            {
+                let _ = std::io::Write::write_all(&mut stream, b"verified\n");
+            }
+        }
+    }
+    if matches!(verdict, Verdict::Impostor) {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
     }
 }
 

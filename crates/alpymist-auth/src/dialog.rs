@@ -8,6 +8,7 @@
 //! taken anyway, or a click land outside, the dialog cancels rather than
 //! wait behind a window for a password nobody is typing.
 
+use alpymist_auth::attention;
 use alpymist_auth::helper::{self, Attempt, Step};
 use alpymist_auth::prompt::{Outcome, Prompt};
 use alpymist_auth::request::{Request, own_uid};
@@ -18,6 +19,7 @@ use alpymist_widget::host::{self, Placement, Sender};
 use alpymist_widget::{Appearance, Key, Outcome as AnyOutcome, Widget};
 use denise::Frame;
 use denise::geom::{Point, Size};
+use std::io::Read;
 use std::sync::mpsc;
 
 /// What the dialog tells the conversation.
@@ -32,6 +34,8 @@ enum Order {
 enum Event {
     Step(Step),
     Broken(String),
+    /// Ctrl+Alt+Delete found this prompt genuine.
+    Verified,
 }
 
 struct Dialog {
@@ -130,6 +134,7 @@ impl Widget for Dialog {
         let outcome = match event {
             Event::Step(step) => self.prompt.step(step),
             Event::Broken(why) => self.prompt.broken(why),
+            Event::Verified => self.prompt.verify(),
         };
         self.apply(outcome)
     }
@@ -193,15 +198,41 @@ pub fn ask(request: Request) -> Result<bool, String> {
         .ok_or("no account may authorise this")?;
     let (orders, received) = mpsc::channel();
     let (sender, events) = host::events();
+    let verified = sender.clone();
     let cookie = request.cookie.clone();
     std::thread::spawn(move || converse(&cookie, &received, &sender));
     let _ = orders.send(Order::Start(user));
+
+    // Under Hyprland, Ctrl+Alt+Delete checks the prompt and tells it so
+    // here. Anyone of the user's could connect and say so too; that makes a
+    // genuine prompt look checked, which gains them nothing.
+    let mut prompt = Prompt::new(request, first);
+    let socket = std::env::var("XDG_CURRENT_DESKTOP")
+        .is_ok_and(|d| d.split(':').any(|d| d == "Hyprland"))
+        .then(|| attention::socket(std::process::id()))
+        .flatten();
+    if let Some(path) = &socket {
+        std::fs::remove_file(path).ok();
+        if let Ok(listener) = std::os::unix::net::UnixListener::bind(path) {
+            prompt.checkable = true;
+            let events = verified;
+            std::thread::spawn(move || {
+                for stream in listener.incoming().map_while(Result::ok) {
+                    let mut line = String::new();
+                    let _ = std::io::Read::take(stream, 64).read_to_string(&mut line);
+                    if line.trim() == "verified" && events.send(Event::Verified).is_err() {
+                        return;
+                    }
+                }
+            });
+        }
+    }
 
     let authorised = std::rc::Rc::new(std::cell::Cell::new(false));
     let dialog = Dialog {
         appearance,
         fonts,
-        prompt: Prompt::new(request, first),
+        prompt,
         layout: None,
         orders,
         authorised: std::rc::Rc::clone(&authorised),
@@ -211,6 +242,10 @@ pub fn ask(request: Request) -> Result<bool, String> {
         backdrop: 0x9900_0000,
         ..host::Options::new("alpymist-auth")
     };
-    host::run(dialog, &options, events, None)?;
+    let result = host::run(dialog, &options, events, None);
+    if let Some(path) = &socket {
+        std::fs::remove_file(path).ok();
+    }
+    result?;
     Ok(authorised.get())
 }

@@ -95,6 +95,20 @@ fn main() {
     p.focus = Focus::Cancel;
     scenes.push(("focus-cancel", p));
 
+    let mut p = Prompt::new(request(1), 0);
+    asked(&mut p);
+    p.checkable = true;
+    scenes.push(("checkable", p));
+
+    let mut p = Prompt::new(request(1), 0);
+    asked(&mut p);
+    p.checkable = true;
+    let _ = p.verify();
+    for ch in "hunter".chars() {
+        p.text(ch);
+    }
+    scenes.push(("verified", p));
+
     for (name, prompt) in &scenes {
         let layout = Layout::new(&appearance, &mut fonts, prompt, scale);
         let size = layout.size;
