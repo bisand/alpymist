@@ -61,3 +61,9 @@ package does not. See `ci/README.md`.
 The dev channel is the one exception to the offline key: CI signs its index
 with a key of its own, which only systems that opt in to dev trust. See
 [ADR 0006](0006-release-channels.md).
+
+## Addendum, 2026-09-15: `alpymist`
+
+Decision 3 is carried out by `alpymist`, formerly `alpymistctl`, and the
+`alpymist-settings` library behind it. See
+[ADR 0007](0007-settings.md).
