@@ -123,6 +123,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpymist-power"
+version = "0.0.1"
+dependencies = [
+ "alpymist-widget",
+ "denise",
+ "denise-render",
+ "denise-text",
+ "nix",
+ "png",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
 name = "alpymist-splash"
 version = "0.0.1"
 dependencies = [

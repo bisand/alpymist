@@ -1,0 +1,39 @@
+[package]
+name = "alpymist-power"
+description = "Alpymist's power manager: the battery in the bar, power modes, the lid and the power button, and a popup under the bar drawn with Denise."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "alpymist-power"
+path = "src/main.rs"
+
+# Run as root through doas: a closed set of writes under /sys.
+[[bin]]
+name = "alpymist-power-helper"
+path = "src/bin/helper.rs"
+
+[dependencies]
+# The popup is a widget: its host, its one-click toggle, and the controls it
+# draws, in the menu's appearance.
+alpymist-widget = { workspace = true }
+denise = { workspace = true }
+denise-render = { workspace = true }
+denise-text = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
+
+# Charger and battery changes arrive as kernel uevents; configuration changes
+# as inotify events. Both are polled together.
+[target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.29", default-features = false, features = ["socket", "inotify", "poll"] }
+
+[dev-dependencies]
+png = "0.17"
+
+[lints]
+workspace = true

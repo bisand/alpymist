@@ -6,6 +6,7 @@ members = [
     "crates/alpymist-glesprobe",
     "crates/alpymist-install",
     "crates/alpymist-menu",
+    "crates/alpymist-power",
     "crates/alpymist-splash",
     "crates/alpymist-ui",
     "crates/alpymist-wallpaper",
