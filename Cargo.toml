@@ -9,6 +9,7 @@ members = [
     "crates/alpymist-splash",
     "crates/alpymist-ui",
     "crates/alpymist-wallpaper",
+    "crates/alpymist-wifi",
     "crates/alpymist-hwprobe",
     "crates/alpymistctl",
     "xtask",

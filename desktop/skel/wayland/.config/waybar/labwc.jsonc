@@ -11,7 +11,7 @@
 
   "modules-left": ["custom/alpymist", "wlr/taskbar"],
   "modules-center": ["clock"],
-  "modules-right": ["group/tray-drawer", "bluetooth", "network", "pulseaudio", "cpu", "memory", "battery", "custom/session"],
+  "modules-right": ["group/tray-drawer", "bluetooth", "custom/wifi", "network", "pulseaudio", "cpu", "memory", "battery", "custom/session"],
 
   "custom/alpymist": {
     // The mark is an image, drawn by our own code; see the stylesheet.
@@ -50,15 +50,25 @@
     "tooltip-format-connected": "{device_enumerate}"
   },
 
+  // Wi-Fi is alpymist-wifi: it prints the icon and tooltip whenever iwd
+  // changes anything, and a click opens its popup under the bar; a second
+  // click closes it. Without a Wi-Fi adapter it prints nothing and Waybar
+  // hides it.
+  "custom/wifi": {
+    "exec": "alpymist-wifi --waybar",
+    "return-type": "json",
+    "restart-interval": 5,
+    "on-click": "alpymist-wifi"
+  },
+
+  // The wired port only: an empty format hides the module on Wi-Fi, and when
+  // nothing is plugged in, which custom/wifi already says.
   "network": {
     "interval": 5,
-    "format-wifi": "󰖩",
+    "format-wifi": "",
     "format-ethernet": "󰈀",
-    "format-disconnected": "󰖪",
-    "tooltip-format-wifi": "{essid}  {signalStrength}%\n{ipaddr}",
-    "tooltip-format-ethernet": "{ifname}\n{ipaddr}",
-    "tooltip-format-disconnected": "No network",
-    "on-click": "foot impala"
+    "format-disconnected": "",
+    "tooltip-format-ethernet": "{ifname}\n{ipaddr}"
   },
 
   "pulseaudio": {

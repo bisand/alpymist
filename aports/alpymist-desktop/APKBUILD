@@ -24,8 +24,9 @@ license="MIT OR Apache-2.0"
 # sandboxed apps open and save files; alpymist-keys lets apk trust the Alpymist
 # repository the installer adds. LibreWolf is the browser: Firefox with the
 # tracking and telemetry taken out, built for musl and kept patched by Alpine.
-# Wi-Fi is iwd, managed from impala, which the bar and the menu open; the
-# installer adds the account to netdev, which iwd lets manage networks.
+# Wi-Fi is iwd; the installer adds the account to netdev, which iwd lets manage
+# networks. On the Wayland tiers alpymist-wifi is the bar's icon and popup;
+# impala stays for a terminal, and for the Legacy tier, which has neither.
 # Terminals use FiraCode Nerd Font: Fira Code's ligatures, with the prompt's
 # icons at the size and place they were made for, which a separate symbols
 # font gets wrong.
@@ -146,8 +147,10 @@ _shell() {
 # under any wlroots-style compositor, Hyprland included.
 _wayland() {
 	pkgdesc="Alpymist desktop: tools shared by the Wayland tiers"
+	# alpymist-wifi is the bar's Wi-Fi icon and popup under both compositors.
 	depends="
 		$pkgname=$pkgver-r$pkgrel
+		alpymist-wifi
 		foot
 		fuzzel
 		grim

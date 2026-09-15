@@ -43,6 +43,7 @@ window#waybar {
 }
 
 #bluetooth,
+#custom-wifi,
 #network,
 #pulseaudio,
 #cpu,
@@ -56,6 +57,7 @@ window#waybar {
 }
 
 #bluetooth:hover,
+#custom-wifi:hover,
 #network:hover,
 #pulseaudio:hover,
 #cpu:hover,
@@ -67,7 +69,9 @@ window#waybar {
 #custom-session { color: #7fb8d9; }
 #battery.warning { color: #d9a07f; }
 #battery.critical { color: #d98f7f; }
-#network.disconnected { color: #d98f7f; }
+#custom-wifi.off,
+#custom-wifi.unavailable { color: #5d6b7a; }
+#custom-wifi.connecting { color: #7fb8d9; }
 
 #tray { padding: 0 4px; }
 #tray menu { background: #0b121e; color: #eaf0f6; }
