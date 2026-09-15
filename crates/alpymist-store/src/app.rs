@@ -126,6 +126,7 @@ pub fn run(config: &Config, problems: Vec<String>, message: Option<String>) -> R
     let options = window::Options {
         app_id: NAME.into(),
         min_size: (560, 400),
+        max_size: None,
     };
     let result = window::run(app, &options, events, listener);
     drop(agent);

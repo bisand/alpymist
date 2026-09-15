@@ -95,7 +95,7 @@ if [ -n "${PREBUILT:-}" ]; then
 	reindex
 else
 	copied=false
-	for pkg in alpymist-keys alpymistctl alpymist-install alpymist-menu alpymist-wifi alpymist-auth alpymist-power alpymist-store alpymist-greeter alpymist-splash alpymist-desktop squint; do
+	for pkg in alpymist-keys alpymistctl alpymist-install alpymist-menu alpymist-about alpymist-wifi alpymist-auth alpymist-power alpymist-store alpymist-greeter alpymist-splash alpymist-desktop squint; do
 		mkdir -p ~/ap/"$pkg"
 		cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
 		if [ "$CHANNEL" = dev ] && [[ "$UNSTAMPED" != *" $pkg "* ]]; then

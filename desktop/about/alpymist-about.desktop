@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=About Alpymist
+Comment=The Alpymist version, channel and packages this system runs
+Exec=alpymist-about
+Icon=help-about
+Terminal=false
+Categories=System;
+Keywords=version;release;channel;system;info;
+StartupWMClass=alpymist-about

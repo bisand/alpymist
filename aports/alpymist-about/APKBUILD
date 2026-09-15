@@ -1,0 +1,42 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-about
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="About Alpymist: the version, channel and packages this system runs"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+# The window is an xdg toplevel over wl_shm, drawn by Denise on the CPU like
+# the store, which needs libxkbcommon and the menu's fonts. Everything it shows
+# is read from files any account can read: apk's database, the repositories
+# file, /etc/alpine-release, /proc and /sys. Copy details goes through wl-copy.
+makedepends="cargo libxkbcommon-dev"
+depends="font-fira-ttf font-nerd-fonts-symbols wl-clipboard"
+options="!check"  # the test suite runs in CI, not in the package build
+source=""
+builddir="$srcdir"
+
+prepare() {
+	# Same as alpymistctl: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	cargo build --release --locked -p alpymist-about
+}
+
+package() {
+	install -Dm755 "$builddir"/target/release/alpymist-about \
+		"$pkgdir"/usr/bin/alpymist-about
+	install -Dm644 "$builddir"/desktop/about/alpymist-about.desktop \
+		"$pkgdir"/usr/share/applications/alpymist-about.desktop
+}
+
+# Filled in by `abuild checksum` at build time; see alpymist-install.
+sha512sums=""

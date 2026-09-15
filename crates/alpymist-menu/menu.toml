@@ -124,6 +124,7 @@ items = [
 [menu.learn]
 title = "Learn"
 items = [
+  { name = "About Alpymist", icon = "\U000F02FD", exec = "alpymist-about", detail = "Version and channel", keywords = ["version", "release", "channel", "info"] },
   { name = "Keybindings", icon = "", exec = "grep -E '^bindm? *=' ~/.config/hypr/hyprland.conf | sed 's/^bindm\\? *= *//' | less", terminal = true, keywords = ["shortcuts", "keys"] },
   { name = "Alpymist", icon = "󰊤", exec = "${BROWSER:-librewolf} https://github.com/bisand/alpymist" },
   { name = "Hyprland wiki", icon = "", exec = "${BROWSER:-librewolf} https://wiki.hypr.land" },

@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/alpymist-about",
     "crates/alpymist-auth",
     "crates/alpymist-core",
     "crates/alpymist-greeter",
@@ -27,6 +28,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/bisand/alpymist"
 
 [workspace.dependencies]
+alpymist-about = { path = "crates/alpymist-about" }
 alpymist-auth = { path = "crates/alpymist-auth" }
 alpymist-core = { path = "crates/alpymist-core" }
 alpymist-glesprobe = { path = "crates/alpymist-glesprobe" }

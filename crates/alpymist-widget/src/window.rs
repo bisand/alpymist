@@ -192,6 +192,9 @@ pub struct Options {
     pub app_id: String,
     /// The smallest size, in logical pixels.
     pub min_size: (u32, u32),
+    /// The largest, when there is one. The same as `min_size` makes a
+    /// window of fixed size, which tiling compositors float, as a dialog.
+    pub max_size: Option<(u32, u32)>,
 }
 
 // The flags are frame pacing, as in the popup host.
@@ -266,6 +269,7 @@ pub fn run<A: App>(
     window.set_title(app.title());
     window.set_app_id(&options.app_id);
     window.set_min_size(Some(options.min_size));
+    window.set_max_size(options.max_size);
     window.commit();
 
     let pool = SlotPool::new(size.0 as usize * size.1 as usize * 4, &shm)

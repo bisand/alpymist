@@ -11,7 +11,7 @@
 # than system files an upgrade would overwrite.
 pkgname=alpymist-desktop
 pkgver=0.0.1
-pkgrel=13
+pkgrel=14
 pkgdesc="Alpymist desktop: what every tier shares"
 url="https://github.com/bisand/alpymist"
 arch="noarch"
@@ -154,9 +154,11 @@ _wayland() {
 	pkgdesc="Alpymist desktop: tools shared by the Wayland tiers"
 	# alpymist-wifi and alpymist-power are the bar's Wi-Fi and battery icons
 	# and popups under both compositors, and alpymist-power what the lid and
-	# the power button do. alpymist-store is where software is installed from.
+	# the power button do. alpymist-store is where software is installed from,
+	# and alpymist-about says which Alpymist is running.
 	depends="
 		$pkgname=$pkgver-r$pkgrel
+		alpymist-about
 		alpymist-power
 		alpymist-store
 		alpymist-wifi

@@ -1,0 +1,29 @@
+[package]
+name = "alpymist-about"
+description = "About Alpymist: which version this system runs, from which channel, on what, drawn with Denise."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "alpymist-about"
+path = "src/main.rs"
+
+[dependencies]
+# The channel, read from the repositories file as alpymistctl reads it.
+alpymist-core = { workspace = true }
+# The mark, drawn from the same silhouette as the bar's and the splash's.
+alpymist-ui = { workspace = true }
+# The window, its controls and the menu's appearance.
+alpymist-widget = { workspace = true }
+denise = { workspace = true }
+denise-render = { workspace = true }
+denise-text = { workspace = true }
+
+[dev-dependencies]
+png = "0.17"
+
+[lints]
+workspace = true
