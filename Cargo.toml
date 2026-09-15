@@ -46,7 +46,7 @@ clap = { version = "4", features = ["derive"] }
 # DeniseUI: direct rendering to DRM/KMS or the framebuffer, no compositor.
 # "0.29" accepts 0.29.x, so patch releases arrive via `cargo update`.
 denise = "0.29"
-denise-ui = "0.29"
+denise-ui = "0.29.1"
 denise-render = "0.29"
 denise-text = { version = "0.29", features = ["truetype"] }
 denise-arrange = "0.29"
