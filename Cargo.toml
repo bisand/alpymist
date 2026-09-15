@@ -12,6 +12,7 @@ members = [
     "crates/alpymist-power",
     "crates/alpymist-splash",
     "crates/alpymist-store",
+    "crates/alpymist-theme",
     "crates/alpymist-ui",
     "crates/alpymist-wallpaper",
     "crates/alpymist-widget",
@@ -33,6 +34,7 @@ alpymist-auth = { path = "crates/alpymist-auth" }
 alpymist-core = { path = "crates/alpymist-core" }
 alpymist-glesprobe = { path = "crates/alpymist-glesprobe" }
 alpymist-hwprobe = { path = "crates/alpymist-hwprobe" }
+alpymist-theme = { path = "crates/alpymist-theme" }
 alpymist-ui = { path = "crates/alpymist-ui" }
 alpymist-widget = { path = "crates/alpymist-widget" }
 alpymist-wifi = { path = "crates/alpymist-wifi", default-features = false }

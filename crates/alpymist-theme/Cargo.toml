@@ -1,0 +1,16 @@
+[package]
+name = "alpymist-theme"
+description = "Alpymist's theme: one file for light or dark, the accent and the fonts, read into DeniseUI's theme and the colours Alpymist's windows draw with."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+denise = { workspace = true }
+serde = { workspace = true }
+toml = { version = "0.9", default-features = false, features = ["parse", "display", "serde", "std"] }
+
+[lints]
+workspace = true

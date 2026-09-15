@@ -126,22 +126,39 @@ pub struct Appearance {
 }
 
 impl Default for Appearance {
+    /// Alpymist's theme (`theme.toml`), read once per process: what the menu's
+    /// own `[appearance]` does not set comes from there, and so does every
+    /// window that dresses itself like the menu.
     fn default() -> Self {
-        // The palette the splash, installer and fuzzel already share.
-        let p = alpymist_ui::Palette::alpymist();
-        let rgb = |c: alpymist_ui::palette::Rgb| Colour([c.r, c.g, c.b, 0xFF]);
+        static THEME: std::sync::OnceLock<alpymist_theme::ThemeFile> = std::sync::OnceLock::new();
+        Self::from_theme(THEME.get_or_init(|| {
+            // Tests and snapshots draw the same whatever this machine's theme is.
+            if cfg!(test) {
+                alpymist_theme::ThemeFile::default()
+            } else {
+                alpymist_theme::load().file
+            }
+        }))
+    }
+}
+
+impl Appearance {
+    /// The appearance a theme gives, with the menu's own sizes.
+    #[must_use]
+    pub fn from_theme(theme: &alpymist_theme::ThemeFile) -> Self {
+        let c = theme.colours();
         Self {
-            font: "/usr/share/fonts/TTF/FiraSans-Regular.ttf".into(),
-            icon_font: "/usr/share/fonts/nerd-fonts/SymbolsNerdFontMono-Regular.ttf".into(),
-            font_size: 16,
+            font: theme.font.clone(),
+            icon_font: theme.icon_font.clone(),
+            font_size: theme.font_size,
             width: 560,
             rows: 9,
-            background: Colour([0x0B, 0x12, 0x1E, 0xF2]),
-            border: rgb(p.accent),
-            text: rgb(p.ink),
-            dim: rgb(p.ink_dim),
-            accent: rgb(p.accent),
-            selection: Colour([0x3A, 0x4C, 0x63, 0xFF]),
+            background: Colour(c.background),
+            border: Colour(c.border),
+            text: Colour(c.text),
+            dim: Colour(c.dim),
+            accent: Colour(c.accent),
+            selection: Colour(c.selection),
         }
     }
 }
