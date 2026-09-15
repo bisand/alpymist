@@ -1,0 +1,47 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-settings
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="Alpymist Settings: every setting in one window, searched by keyboard"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+# The window is an xdg toplevel over wl_shm, drawn with Denise's widgets on
+# the CPU, which needs libxkbcommon and the menu's fonts. Settings are read and
+# changed through the same library as `alpymist`; a system setting runs
+# `alpymist set` through alpymist-auth's password dialog and polkit. The menu
+# finds every setting through the fragment generated here from the registry,
+# so its entries are always the installed window's (ADR 0007).
+makedepends="cargo libxkbcommon-dev"
+depends="alpymist alpymist-auth font-fira-ttf font-nerd-fonts-symbols polkit wl-clipboard"
+options="!check"  # the test suite runs in CI, not in the package build
+source=""
+builddir="$srcdir"
+
+prepare() {
+	# Same as alpymist: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	cargo build --release --locked -p alpymist-settings-app -p alpymist
+	./target/release/alpymist menu-fragment > settings.toml
+}
+
+package() {
+	install -Dm755 "$builddir"/target/release/alpymist-settings \
+		"$pkgdir"/usr/bin/alpymist-settings
+	install -Dm644 "$builddir"/settings.toml \
+		"$pkgdir"/usr/share/alpymist/menu.d/settings.toml
+	install -Dm644 "$builddir"/desktop/settings/alpymist-settings.desktop \
+		"$pkgdir"/usr/share/applications/alpymist-settings.desktop
+}
+
+# Filled in by `abuild checksum` at build time; see alpymist-install.
+sha512sums=""

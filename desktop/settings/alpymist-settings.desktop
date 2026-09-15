@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Settings
+GenericName=Settings
+Comment=Appearance, keyboard, touchpad, mouse, Wi-Fi, power and updates
+Exec=alpymist-settings
+Icon=preferences-system
+Terminal=false
+Categories=Settings;System;
+Keywords=preferences;configure;options;control;panel;keyboard;touchpad;theme;
+StartupWMClass=alpymist-settings

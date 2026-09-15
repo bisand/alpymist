@@ -1,0 +1,33 @@
+[package]
+name = "alpymist-settings-app"
+description = "Alpymist Settings: every setting in one window, searched by keyboard, drawn with Denise's widgets."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "alpymist-settings"
+path = "src/main.rs"
+
+[dependencies]
+# The About page, from what apk and /proc say.
+alpymist-about = { workspace = true }
+# Search that forgives punctuation and case, as the installer's lists do.
+alpymist-core = { workspace = true }
+# Fonts parsed lazily, as the menu's are.
+alpymist-menu = { path = "../alpymist-menu" }
+alpymist-settings = { workspace = true }
+alpymist-theme = { workspace = true }
+# The window.
+alpymist-widget = { workspace = true }
+denise = { workspace = true }
+denise-text = { workspace = true }
+denise-ui = { workspace = true }
+
+[dev-dependencies]
+png = "0.17"
+
+[lints]
+workspace = true

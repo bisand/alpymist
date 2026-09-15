@@ -151,6 +151,12 @@ pub trait App: 'static {
     /// The left button was pressed at `at`.
     fn press(&mut self, at: Point) -> Outcome;
 
+    /// The left button was let go at `at`: the end of a click or a drag.
+    fn release(&mut self, at: Point) -> Outcome {
+        let _ = at;
+        Outcome::Unchanged
+    }
+
     /// The wheel turned by `rows`, downwards positive.
     fn scroll(&mut self, rows: i32) -> Outcome;
 
@@ -764,6 +770,9 @@ impl<A: App> PointerHandler for Host<A> {
                     self.app.pointer(None)
                 }
                 PointerEventKind::Press { button, .. } if button == BTN_LEFT => self.app.press(at),
+                PointerEventKind::Release { button, .. } if button == BTN_LEFT => {
+                    self.app.release(at)
+                }
                 PointerEventKind::Axis { vertical, .. } => {
                     let rows = if vertical.discrete != 0 {
                         vertical.discrete

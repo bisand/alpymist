@@ -190,6 +190,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpymist-settings-app"
+version = "0.0.1"
+dependencies = [
+ "alpymist-about",
+ "alpymist-core",
+ "alpymist-menu",
+ "alpymist-settings",
+ "alpymist-theme",
+ "alpymist-widget",
+ "denise",
+ "denise-text",
+ "denise-ui",
+ "png",
+]
+
+[[package]]
 name = "alpymist-splash"
 version = "0.0.1"
 dependencies = [

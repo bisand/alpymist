@@ -30,7 +30,7 @@ pub const AREAS: &[Area] = &[
         id: "touchpad",
         title: "Touchpad",
         description: "Tapping, scrolling and typing with a touchpad",
-        icon: "\u{f0cc3}",
+        icon: "\u{f0322}",
         keywords: &["trackpad", "gestures"],
     },
     Area {

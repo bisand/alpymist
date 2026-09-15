@@ -11,6 +11,7 @@ members = [
     "crates/alpymist-menu",
     "crates/alpymist-power",
     "crates/alpymist-settings",
+    "crates/alpymist-settings-app",
     "crates/alpymist-splash",
     "crates/alpymist-store",
     "crates/alpymist-theme",

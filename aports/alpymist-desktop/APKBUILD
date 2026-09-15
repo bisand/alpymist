@@ -155,10 +155,12 @@ _wayland() {
 	# alpymist-wifi and alpymist-power are the bar's Wi-Fi and battery icons
 	# and popups under both compositors, and alpymist-power what the lid and
 	# the power button do. alpymist-store is where software is installed from,
-	# and alpymist-about says which Alpymist is running.
+	# alpymist-about says which Alpymist is running, and alpymist-settings is
+	# where settings are changed.
 	depends="
 		$pkgname=$pkgver-r$pkgrel
 		alpymist-about
+		alpymist-settings
 		alpymist-power
 		alpymist-store
 		alpymist-wifi
