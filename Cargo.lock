@@ -160,7 +160,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "alpymist-wifi"
+name = "alpymist-widget"
 version = "0.0.1"
 dependencies = [
  "alpymist-menu",
@@ -168,10 +168,21 @@ dependencies = [
  "denise",
  "denise-render",
  "denise-text",
+ "serde_json",
+ "smithay-client-toolkit",
+]
+
+[[package]]
+name = "alpymist-wifi"
+version = "0.0.1"
+dependencies = [
+ "alpymist-widget",
+ "denise",
+ "denise-render",
+ "denise-text",
  "nix",
  "png",
  "serde_json",
- "smithay-client-toolkit",
  "zbus",
 ]
 

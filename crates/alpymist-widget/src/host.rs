@@ -1,9 +1,9 @@
-//! The popup on screen: a wlr layer surface under the bar, drawn in shared
+//! A widget on screen: a wlr layer surface under the bar, drawn in shared
 //! memory — the menu's host, placed in the corner instead of the middle.
 //!
 //! The surface covers the whole output, bar included, and is transparent
 //! except for the panel drawn in its corner. That is what makes a click
-//! anywhere else close the popup — on a window, the desktop, or the Wi-Fi icon
+//! anywhere else close the popup — on a window, the desktop, or the bar icon
 //! that opened it. A layer with the keyboard exclusively is also given the
 //! pointer exclusively by Hyprland, so a click outside it reaches no other
 //! surface at all, not even one of the popup's own: whatever catches those
@@ -14,17 +14,11 @@
 //! to the space the bar leaves, and the difference from the full output is
 //! where the panel starts.
 //!
-//! iwd is driven from two threads so the surface never waits on it: a worker
-//! runs one [`Command`] at a time (joining blocks for seconds), and a watcher
-//! reads the state again whenever iwd signals a change, and every few seconds
-//! besides, since signal strength drifts without a signal. Both post into the
-//! event loop through a calloop channel, which wakes it.
+//! A widget's own threads — reading a daemon, running a command that blocks
+//! — post into the event loop through the [`Events`] channel, which wakes it.
 
-use crate::Worker;
-use alpymist_menu::config::Appearance;
-use alpymist_wifi::popup::{Command, Key, Outcome, Popup};
-use alpymist_wifi::view::{self, Fonts, Layout};
-use denise::geom::Point;
+use crate::{Key, Outcome, Widget};
+use denise::geom::{Point, Rect};
 use denise::{BufferAge, Frame, PixelFormat};
 use smithay_client_toolkit::reexports::calloop::channel::{self, Channel};
 use smithay_client_toolkit::reexports::calloop::generic::Generic;
@@ -64,30 +58,47 @@ use smithay_client_toolkit::reexports::protocols::wp::cursor_shape::v1::client::
 use smithay_client_toolkit::seat::pointer::cursor_shape::CursorShapeManager;
 use std::os::unix::net::UnixListener;
 
-/// The layer surface's namespace, for compositor rules:
-/// `layerrule = match:namespace alpymist-wifi, …` in Hyprland.
-pub const NAMESPACE: &str = "alpymist-wifi";
+/// The sending end of a widget's events: clone it into each thread.
+pub type Sender<E> = channel::Sender<E>;
 
-/// The namespace of the probe that measures the space the bar leaves.
-pub const PROBE_NAMESPACE: &str = "alpymist-wifi-probe";
+/// The receiving end of a widget's events, handed to [`run`].
+pub type Events<E> = Channel<E>;
 
-/// Gap between the popup and the bar above it, and the screen's edge.
-const MARGIN: i32 = 6;
+/// A channel for a widget's threads to post into the event loop.
+#[must_use]
+pub fn events<E>() -> (Sender<E>, Events<E>) {
+    channel::channel()
+}
 
 /// `BTN_LEFT` from linux/input-event-codes.h.
 const BTN_LEFT: u32 = 0x110;
 
-/// What the worker and watcher send.
-pub enum Event {
-    /// A fresh reading of iwd.
-    State(alpymist_wifi::model::State),
-    /// A command finished.
-    Done(Command, Result<(), String>),
+/// How a widget is put on screen.
+#[derive(Debug, Clone)]
+pub struct Options {
+    /// The layer surface's namespace, for compositor rules:
+    /// `layerrule = match:namespace NAME, no_anim on` in Hyprland. The probe
+    /// takes the same with `-probe` after it.
+    pub namespace: String,
+    /// Gap between the panel and the bar above it, and the screen's edge, in
+    /// logical pixels.
+    pub margin: i32,
+}
+
+impl Options {
+    /// The defaults, under `namespace`.
+    #[must_use]
+    pub fn new(namespace: &str) -> Self {
+        Self {
+            namespace: namespace.to_owned(),
+            margin: 6,
+        }
+    }
 }
 
 // The flags are the frame-pacing state machine, as in the menu's host.
 #[allow(clippy::struct_excessive_bools)]
-struct Host {
+struct Host<W: Widget> {
     registry: RegistryState,
     seats: SeatState,
     outputs: OutputState,
@@ -97,21 +108,20 @@ struct Host {
     probe: Option<LayerSurface>,
     cursor_shapes: Option<CursorShapeManager>,
     cursor: Option<WpCursorShapeDeviceV1>,
-    loop_handle: LoopHandle<'static, Host>,
-    qh: QueueHandle<Host>,
+    loop_handle: LoopHandle<'static, Host<W>>,
+    qh: QueueHandle<Host<W>>,
 
-    appearance: Appearance,
+    widget: W,
+    margin: i32,
     scale: u32,
-    layout: Layout,
+    /// The panel's size, physical pixels, as last laid out.
+    size: denise::geom::Size,
     /// The whole output, in logical pixels, once configured.
     screen: Option<(u32, u32)>,
     /// The part of it the bar leaves, once the probe is configured.
     free: Option<(u32, u32)>,
     /// Where the panel was last drawn, in physical pixels, for damage.
-    drawn: Option<denise::geom::Rect>,
-    popup: Popup,
-    fonts: Fonts,
-    worker: Worker,
+    drawn: Option<Rect>,
 
     keyboard: Option<wl_keyboard::WlKeyboard>,
     pointer: Option<wl_pointer::WlPointer>,
@@ -126,24 +136,27 @@ struct Host {
     dismissed: bool,
 }
 
-/// Open the popup and run it until it is dismissed. Returns whether it was
-/// dismissed from outside — a click elsewhere, or focus going elsewhere.
+/// Open `widget` and run it until it closes. Returns whether it was
+/// dismissed from outside — a click elsewhere, or focus going elsewhere —
+/// which is what [`crate::instance::toggle`] wants to know.
+///
+/// `toggle` is the listener from [`crate::instance::toggle`]: a connection to
+/// it closes the popup.
 ///
 /// # Errors
 /// No Wayland session, or a compositor without the layer shell.
 #[allow(clippy::too_many_lines)] // setting up two surfaces, in order
-pub fn run(
-    appearance: Appearance,
-    fonts: Fonts,
-    worker: Worker,
-    events: Channel<Event>,
+pub fn run<W: Widget>(
+    mut widget: W,
+    options: &Options,
+    events: Events<W::Event>,
     toggle: Option<UnixListener>,
 ) -> Result<bool, String> {
     let conn = Connection::connect_to_env().map_err(|e| format!("no Wayland session: {e}"))?;
     let (globals, event_queue) =
-        registry_queue_init::<Host>(&conn).map_err(|e| format!("Wayland registry: {e}"))?;
+        registry_queue_init::<Host<W>>(&conn).map_err(|e| format!("Wayland registry: {e}"))?;
     let qh = event_queue.handle();
-    let mut event_loop: EventLoop<'static, Host> =
+    let mut event_loop: EventLoop<'static, Host<W>> =
         EventLoop::try_new().map_err(|e| format!("event loop: {e}"))?;
     WaylandSource::new(conn.clone(), event_queue)
         .insert(event_loop.handle())
@@ -155,8 +168,7 @@ pub fn run(
         .map_err(|_| "this compositor does not support wlr-layer-shell")?;
     let shm = Shm::bind(&globals, &qh).map_err(|_| "the compositor has no wl_shm")?;
 
-    let popup = Popup::new(view::ROWS);
-    let layout = Layout::new(&appearance, &popup, 1);
+    let size = widget.layout(1);
 
     // Anchored to every edge, the compositor sizes it; an exclusive zone of
     // -1 puts it over the bar as well.
@@ -164,7 +176,7 @@ pub fn run(
         &qh,
         compositor.create_surface(&qh),
         Layer::Overlay,
-        Some(NAMESPACE),
+        Some(options.namespace.clone()),
         None,
     );
     layer.set_anchor(Anchor::all());
@@ -178,7 +190,7 @@ pub fn run(
         &qh,
         compositor.create_surface(&qh),
         Layer::Background,
-        Some(PROBE_NAMESPACE),
+        Some(format!("{}-probe", options.namespace)),
         None,
     );
     probe.set_anchor(Anchor::all());
@@ -188,23 +200,16 @@ pub fn run(
     probe.commit();
     conn.flush().ok();
 
-    let pool = SlotPool::new(
-        layout.size.width as usize * layout.size.height as usize * 4,
-        &shm,
-    )
-    .map_err(|e| format!("shared memory: {e}"))?;
+    let pool = SlotPool::new(size.width as usize * size.height as usize * 4, &shm)
+        .map_err(|e| format!("shared memory: {e}"))?;
 
     event_loop
         .handle()
-        .insert_source(events, |event, (), host: &mut Host| {
-            let channel::Event::Msg(event) = event else {
-                return;
-            };
-            let outcome = match event {
-                Event::State(state) => host.popup.update(state),
-                Event::Done(command, result) => host.popup.finished(&command, result),
-            };
-            host.apply(outcome);
+        .insert_source(events, |event, (), host: &mut Host<W>| {
+            if let channel::Event::Msg(event) = event {
+                let outcome = host.widget.event(event);
+                host.apply(outcome);
+            }
         })
         .map_err(|e| format!("event loop: {e}"))?;
 
@@ -214,7 +219,7 @@ pub fn run(
             .handle()
             .insert_source(
                 Generic::new(listener, Interest::READ, Mode::Level),
-                |_, listener, host: &mut Host| {
+                |_, listener, host: &mut Host<W>| {
                     listener.as_ref().accept().ok();
                     host.exit = true;
                     Ok(PostAction::Remove)
@@ -235,15 +240,13 @@ pub fn run(
         cursor: None,
         loop_handle: event_loop.handle(),
         qh: qh.clone(),
-        appearance,
+        widget,
+        margin: options.margin,
         scale: 1,
-        layout,
+        size,
         screen: None,
         free: None,
         drawn: None,
-        popup,
-        fonts,
-        worker,
         keyboard: None,
         pointer: None,
         modifiers: Modifiers::default(),
@@ -268,7 +271,7 @@ pub fn run(
     Ok(dismissed)
 }
 
-impl Host {
+impl<W: Widget> Host<W> {
     fn dismiss(&mut self) {
         self.dismissed = !self.exit;
         self.exit = true;
@@ -283,24 +286,34 @@ impl Host {
         let (_, fh) = free.unwrap_or((sw, sh));
         let s = i32::try_from(self.scale).unwrap_or(1);
         let logical = |v: u32| i32::try_from(v).unwrap_or(0);
-        let (pw, _) = self.layout.logical_size();
-        let x = (logical(sw) - logical(pw) - MARGIN).max(0);
+        let pw = logical(self.size.width / self.scale.max(1));
+        let x = (logical(sw) - pw - self.margin).max(0);
         // A bar at the top takes the difference; one at the bottom would
         // too, and the panel would sit a bar's height low, which is harmless.
-        let y = logical(sh.saturating_sub(fh)) + MARGIN;
+        let y = logical(sh.saturating_sub(fh)) + self.margin;
         Point::new(x * s, y * s)
     }
 
     /// The panel's rectangle on the surface, in physical pixels.
-    fn panel(&self) -> denise::geom::Rect {
+    fn panel(&self) -> Rect {
         let o = self.origin();
-        let size = self.layout.size;
-        denise::geom::Rect::new(
+        Rect::new(
             o.x,
             o.y,
-            i32::try_from(size.width).unwrap_or(0),
-            i32::try_from(size.height).unwrap_or(0),
+            i32::try_from(self.size.width).unwrap_or(0),
+            i32::try_from(self.size.height).unwrap_or(0),
         )
+    }
+
+    /// A surface-local position, in physical pixels on the panel, if it is
+    /// on the panel.
+    fn on_panel(&self, at: (f64, f64)) -> Option<Point> {
+        let point = self.physical(at);
+        if !self.panel().contains(point) {
+            return None;
+        }
+        let o = self.origin();
+        Some(Point::new(point.x - o.x, point.y - o.y))
     }
 
     fn draw(&mut self) {
@@ -310,7 +323,7 @@ impl Host {
         if !self.configured || self.exit {
             return;
         }
-        self.layout = Layout::new(&self.appearance, &self.popup, self.scale);
+        self.size = self.widget.layout(self.scale);
         if self.frame_pending {
             self.dirty = true;
             return;
@@ -321,10 +334,7 @@ impl Host {
         // The hover follows the layout, which may have moved under a still
         // pointer.
         if let Some(at) = self.pointer_at {
-            let target = self.hit(at);
-            if target != self.popup.hover() {
-                self.popup.hover_over(target);
-            }
+            let _ = self.widget.pointer(self.on_panel(at));
         }
         let (Ok(w), Ok(h)) = (
             i32::try_from(sw * self.scale),
@@ -334,9 +344,9 @@ impl Host {
         };
         let panel = self
             .panel()
-            .intersect(&denise::geom::Rect::new(0, 0, w, h))
+            .intersect(&Rect::new(0, 0, w, h))
             .unwrap_or_default();
-        let size = self.layout.size;
+        let size = self.size;
         let stride = u32::try_from(w).unwrap_or(0);
         let start = usize::try_from(panel.y).unwrap_or(0) * usize::try_from(w).unwrap_or(0)
             + usize::try_from(panel.x).unwrap_or(0);
@@ -346,7 +356,7 @@ impl Host {
             .pool
             .create_buffer(w, h, w * 4, wl_shm::Format::Argb8888)
         else {
-            eprintln!("alpymist-wifi: could not allocate a buffer");
+            eprintln!("{}: could not allocate a buffer", program());
             self.exit = true;
             return;
         };
@@ -364,13 +374,7 @@ impl Host {
                     BufferAge::Undefined,
                 )
             {
-                view::paint(
-                    &mut frame,
-                    &self.layout,
-                    &self.appearance,
-                    &mut self.fonts,
-                    &self.popup,
-                );
+                self.widget.paint(&mut frame);
             }
         } else if fits {
             // The pool's slots are aligned for u32, so this is not expected;
@@ -383,13 +387,7 @@ impl Host {
                 PixelFormat::Argb8888,
                 BufferAge::Undefined,
             ) {
-                view::paint(
-                    &mut frame,
-                    &self.layout,
-                    &self.appearance,
-                    &mut self.fonts,
-                    &self.popup,
-                );
+                self.widget.paint(&mut frame);
             }
             let row = size.width as usize;
             for (y, line) in words.chunks_exact(row).enumerate() {
@@ -416,21 +414,10 @@ impl Host {
         self.dirty = false;
     }
 
-    /// What is under a surface-local position, if it is on the panel.
-    fn hit(&self, at: (f64, f64)) -> Option<alpymist_wifi::popup::Target> {
-        let point = self.physical(at);
-        let o = self.origin();
-        self.layout.hit(Point::new(point.x - o.x, point.y - o.y))
-    }
-
     fn apply(&mut self, outcome: Outcome) {
         match outcome {
             Outcome::Unchanged => {}
             Outcome::Redraw => self.draw(),
-            Outcome::Run(command) => {
-                self.worker.send(command);
-                self.draw();
-            }
             Outcome::Close => self.exit = true,
         }
     }
@@ -442,6 +429,8 @@ impl Host {
             Keysym::Return | Keysym::KP_Enter => Some(Key::Enter),
             Keysym::Up | Keysym::KP_Up => Some(Key::Up),
             Keysym::Down | Keysym::KP_Down => Some(Key::Down),
+            Keysym::Left | Keysym::KP_Left => Some(Key::Left),
+            Keysym::Right | Keysym::KP_Right => Some(Key::Right),
             Keysym::Home | Keysym::KP_Home => Some(Key::Home),
             Keysym::End | Keysym::KP_End => Some(Key::End),
             // Shift+Tab arrives as ISO_Left_Tab with most keymaps, and as Tab
@@ -461,7 +450,7 @@ impl Host {
             _ => None,
         };
         if let Some(key) = key {
-            let outcome = self.popup.key(key);
+            let outcome = self.widget.key(key);
             self.apply(outcome);
             return;
         }
@@ -471,9 +460,7 @@ impl Host {
         if let Some(text) = &event.utf8 {
             let mut outcome = Outcome::Unchanged;
             for ch in text.chars() {
-                if self.popup.text(ch) != Outcome::Unchanged {
-                    outcome = Outcome::Redraw;
-                }
+                outcome = outcome.and(self.widget.text(ch));
             }
             self.apply(outcome);
         }
@@ -486,7 +473,15 @@ impl Host {
     }
 }
 
-impl CompositorHandler for Host {
+/// The program's name, for the log.
+fn program() -> String {
+    std::env::args()
+        .next()
+        .and_then(|a| a.rsplit('/').next().map(str::to_owned))
+        .unwrap_or_else(|| "widget".into())
+}
+
+impl<W: Widget> CompositorHandler for Host<W> {
     fn scale_factor_changed(
         &mut self,
         _: &Connection,
@@ -539,7 +534,7 @@ impl CompositorHandler for Host {
     }
 }
 
-impl OutputHandler for Host {
+impl<W: Widget> OutputHandler for Host<W> {
     fn output_state(&mut self) -> &mut OutputState {
         &mut self.outputs
     }
@@ -548,7 +543,7 @@ impl OutputHandler for Host {
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 }
 
-impl LayerShellHandler for Host {
+impl<W: Widget> LayerShellHandler for Host<W> {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &LayerSurface) {
         // Either surface: the popup means nothing without the other.
         self.exit = true;
@@ -587,7 +582,7 @@ impl LayerShellHandler for Host {
     }
 }
 
-impl SeatHandler for Host {
+impl<W: Widget> SeatHandler for Host<W> {
     fn seat_state(&mut self) -> &mut SeatState {
         &mut self.seats
     }
@@ -610,7 +605,7 @@ impl SeatHandler for Host {
                     &seat,
                     None,
                     handle,
-                    Box::new(|host: &mut Host, _, event| host.on_key(&event)),
+                    Box::new(|host: &mut Self, _, event| host.on_key(&event)),
                 )
                 .ok();
         }
@@ -644,7 +639,7 @@ impl SeatHandler for Host {
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
 }
 
-impl KeyboardHandler for Host {
+impl<W: Widget> KeyboardHandler for Host<W> {
     fn enter(
         &mut self,
         _: &Connection,
@@ -706,7 +701,7 @@ impl KeyboardHandler for Host {
     }
 }
 
-impl PointerHandler for Host {
+impl<W: Widget> PointerHandler for Host<W> {
     fn pointer_frame(
         &mut self,
         _: &Connection,
@@ -718,7 +713,7 @@ impl PointerHandler for Host {
             if &event.surface != self.layer.wl_surface() {
                 continue;
             }
-            let target = self.hit(event.position);
+            let at = self.on_panel(event.position);
             let outcome = match event.kind {
                 PointerEventKind::Enter { serial } => {
                     // Nothing else sets the cursor over the empty part of the
@@ -727,31 +722,29 @@ impl PointerHandler for Host {
                         cursor.set_shape(serial, Shape::Default);
                     }
                     self.pointer_at = Some(event.position);
-                    self.popup.hover_over(target)
+                    self.widget.pointer(at)
                 }
                 PointerEventKind::Motion { .. } => {
                     self.pointer_at = Some(event.position);
-                    self.popup.hover_over(target)
+                    self.widget.pointer(at)
                 }
                 PointerEventKind::Leave { .. } => {
                     self.pointer_at = None;
-                    self.popup.hover_over(None)
+                    self.widget.pointer(None)
                 }
-                PointerEventKind::Press { .. }
-                    if !self.panel().contains(self.physical(event.position)) =>
-                {
+                PointerEventKind::Press { .. } if at.is_none() => {
                     self.dismiss();
                     return;
                 }
                 PointerEventKind::Press { button, .. } if button == BTN_LEFT => {
-                    target.map_or(Outcome::Unchanged, |t| self.popup.click(t))
+                    at.map_or(Outcome::Unchanged, |p| self.widget.press(p))
                 }
                 PointerEventKind::Axis { vertical, .. } => {
                     let rows = if vertical.discrete != 0 {
                         vertical.discrete
                     } else {
                         self.scroll_rest += vertical.absolute;
-                        let row_h = f64::from(self.layout.unit * 9 / 4) / f64::from(self.scale);
+                        let row_h = self.widget.row_height().max(1.0);
                         #[allow(clippy::cast_possible_truncation)]
                         let whole = (self.scroll_rest / row_h).trunc() as i32;
                         self.scroll_rest -= f64::from(whole) * row_h;
@@ -760,7 +753,7 @@ impl PointerHandler for Host {
                     if rows == 0 {
                         Outcome::Unchanged
                     } else {
-                        self.popup.scroll_by(rows)
+                        self.widget.scroll(rows)
                     }
                 }
                 _ => Outcome::Unchanged,
@@ -770,24 +763,24 @@ impl PointerHandler for Host {
     }
 }
 
-impl ShmHandler for Host {
+impl<W: Widget> ShmHandler for Host<W> {
     fn shm_state(&mut self) -> &mut Shm {
         &mut self.shm
     }
 }
 
-impl ProvidesRegistryState for Host {
+impl<W: Widget> ProvidesRegistryState for Host<W> {
     fn registry(&mut self) -> &mut RegistryState {
         &mut self.registry
     }
     registry_handlers![OutputState, SeatState];
 }
 
-delegate_compositor!(Host);
-delegate_output!(Host);
-delegate_shm!(Host);
-delegate_seat!(Host);
-delegate_keyboard!(Host);
-delegate_pointer!(Host);
-delegate_layer!(Host);
-delegate_registry!(Host);
+delegate_compositor!(@<W: Widget> Host<W>);
+delegate_output!(@<W: Widget> Host<W>);
+delegate_shm!(@<W: Widget> Host<W>);
+delegate_seat!(@<W: Widget> Host<W>);
+delegate_keyboard!(@<W: Widget> Host<W>);
+delegate_pointer!(@<W: Widget> Host<W>);
+delegate_layer!(@<W: Widget> Host<W>);
+delegate_registry!(@<W: Widget> Host<W>);

@@ -1,0 +1,26 @@
+[package]
+name = "alpymist-widget"
+description = "Popups under the bar for Alpymist: a Wayland layer-surface host, one-click open and close, and the controls drawn with Denise in the menu's appearance."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# The appearance a widget wears, and the lazy font source its text goes
+# through, are the menu's: a theme set for the menu dresses every widget.
+alpymist-menu = { path = "../alpymist-menu" }
+denise = { workspace = true }
+denise-render = { workspace = true }
+denise-text = { workspace = true }
+serde_json = { workspace = true }
+
+# The host: a wlr layer surface over wl_shm, as the menu's. Linux only, so a
+# widget's logic, its drawing and its offscreen snapshots build anywhere.
+[target.'cfg(target_os = "linux")'.dependencies]
+bytemuck = "1"
+smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop", "xkbcommon"] }
+
+[lints]
+workspace = true

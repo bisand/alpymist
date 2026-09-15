@@ -12,12 +12,10 @@ default = ["popup"]
 # The popup and its drawing. Without it the crate is iwd, the model and the
 # bar's line — what the installer uses, with no Wayland or fonts behind it.
 popup = [
-    "dep:alpymist-menu",
+    "dep:alpymist-widget",
     "dep:denise",
     "dep:denise-render",
     "dep:denise-text",
-    "dep:bytemuck",
-    "dep:smithay-client-toolkit",
 ]
 
 [[bin]]
@@ -30,9 +28,9 @@ name = "snapshot"
 required-features = ["popup"]
 
 [dependencies]
-# The popup wears the menu's appearance and draws text through its lazy font
-# source, so the two look like one thing and a theme set for one reaches both.
-alpymist-menu = { path = "../alpymist-menu", optional = true }
+# The popup is a widget: its host, its one-click toggle, and the controls it
+# draws, in the menu's appearance.
+alpymist-widget = { workspace = true, optional = true }
 denise = { workspace = true, optional = true }
 denise-render = { workspace = true, optional = true }
 denise-text = { workspace = true, optional = true }
@@ -42,11 +40,6 @@ serde_json = { workspace = true }
 zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
 # The address is not on iwd's bus; it is read from the interface.
 nix = { version = "0.29", default-features = false, features = ["net"] }
-
-# The same host as the menu's: a wlr layer surface over wl_shm.
-[target.'cfg(target_os = "linux")'.dependencies]
-bytemuck = { version = "1", optional = true }
-smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop", "xkbcommon"], optional = true }
 
 [dev-dependencies]
 png = "0.17"

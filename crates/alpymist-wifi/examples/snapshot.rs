@@ -9,7 +9,7 @@
 
 #![allow(clippy::too_many_lines, clippy::many_single_char_names)]
 
-use alpymist_menu::config::Appearance;
+use alpymist_widget::Appearance;
 use alpymist_wifi::model::{Radio, State, Station, sample};
 use alpymist_wifi::popup::{Busy, Command, Key, Popup, Target};
 use alpymist_wifi::view::{self, Fonts, Layout};

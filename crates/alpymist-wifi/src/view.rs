@@ -14,13 +14,13 @@
 use crate::bar;
 use crate::model::{Radio, Security, Station, band};
 use crate::popup::{Busy, Focus, Popup, Target};
-use alpymist_menu::config::{Appearance, Colour};
-use alpymist_menu::font::LazyFont;
+use alpymist_widget::Appearance;
+use alpymist_widget::draw::{self, Ink, Metrics, Styles, text_top};
+use denise::Frame;
 use denise::geom::{Point, Rect, Size};
 use denise::painter::Pen;
-use denise::{Color, Frame};
 use denise_render::Canvas;
-use denise_text::{FontId, TextEngine, TextStyle};
+use denise_text::TextEngine;
 
 /// Popup width in logical pixels, at a 16 px font.
 const WIDTH: i32 = 380;
@@ -32,56 +32,7 @@ const RESCAN: &str = "\u{f0450}";
 const EYE: &str = "\u{f0208}";
 const EYE_OFF: &str = "\u{f0209}";
 
-/// The fonts, loaded once.
-pub struct Fonts {
-    engine: TextEngine,
-    text: FontId,
-    strong: FontId,
-    icons: FontId,
-    /// Paths that could not be loaded, for the log.
-    pub problems: Vec<String>,
-}
-
-impl Fonts {
-    /// Load the appearance's fonts, and the semibold face beside the text
-    /// face when there is one. Never fails: a missing face falls back to
-    /// Denise's built-in bitmap.
-    #[must_use]
-    pub fn load(appearance: &Appearance) -> Self {
-        let mut engine = TextEngine::new();
-        let mut problems = Vec::new();
-        let built_in = TextStyle::built_in(0).font;
-        let mut add =
-            |engine: &mut TextEngine, path: &str, required: bool| match std::fs::read(path)
-                .map_err(|e| e.to_string())
-                .and_then(|bytes| LazyFont::from_vec(path, bytes))
-            {
-                Ok(source) => Some(engine.add_font(Box::new(source))),
-                Err(e) => {
-                    if required {
-                        problems.push(format!("{path}: {e}"));
-                    }
-                    None
-                }
-            };
-        let text = add(&mut engine, &appearance.font, true).unwrap_or(built_in);
-        let strong = appearance
-            .font
-            .contains("Regular")
-            .then(|| appearance.font.replace("Regular", "SemiBold"))
-            .and_then(|path| add(&mut engine, &path, false))
-            .unwrap_or(text);
-        let icons = add(&mut engine, &appearance.icon_font, true).unwrap_or(built_in);
-        engine.set_default_font(text);
-        Self {
-            engine,
-            text,
-            strong,
-            icons,
-            problems,
-        }
-    }
-}
+pub use alpymist_widget::draw::Fonts;
 
 /// The joined network's card.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,6 +48,8 @@ pub struct Card {
 /// Where everything goes, in physical pixels.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layout {
+    /// The sizes everything else is measured in.
+    pub metrics: Metrics,
     /// Output scale.
     pub scale: u32,
     /// The whole surface.
@@ -155,18 +108,20 @@ impl Layout {
     #[must_use]
     #[allow(clippy::too_many_lines)]
     pub fn new(appearance: &Appearance, popup: &Popup, scale: u32) -> Self {
-        let scale = scale.max(1);
-        let s = i32::try_from(scale).unwrap_or(1);
-        let font = i32::from(appearance.font_size.clamp(8, 64));
-        let u = font * s;
-        let px = |logical: i32| logical * s;
-        let text_px = u16::try_from(u).unwrap_or(u16::MAX);
-        let small_px = u16::try_from(u * 13 / 16).unwrap_or(u16::MAX);
-        let border = px(2);
-        let pad = u * 3 / 4;
-        let width = px(WIDTH * font / 16);
-        let inner_x = border + pad;
-        let inner_w = width - 2 * inner_x;
+        let metrics = Metrics::new(appearance, scale, WIDTH);
+        let Metrics {
+            scale,
+            unit: u,
+            pad,
+            border,
+            text_px,
+            small_px,
+            width,
+            ..
+        } = metrics;
+        let px = |logical: i32| metrics.px(logical);
+        let inner_x = metrics.inner_x();
+        let inner_w = metrics.inner_w();
         let state = popup.state();
 
         let header = Rect::new(inner_x, border + pad / 2, inner_w, u * 5 / 2);
@@ -282,6 +237,7 @@ impl Layout {
         let height = footer.bottom() + border + pad / 4;
 
         Self {
+            metrics,
             scale,
             size: Size::new(
                 u32::try_from(width).unwrap_or(0),
@@ -290,7 +246,7 @@ impl Layout {
             unit: u,
             pad,
             border,
-            radius: px(10),
+            radius: metrics.radius,
             text_px,
             small_px,
             header,
@@ -354,45 +310,6 @@ impl Layout {
     }
 }
 
-fn colour(Colour([red, green, blue, alpha]): Colour) -> Color {
-    Color::rgba(red, green, blue, alpha)
-}
-
-/// `a` moved towards `b` by `percent`, alpha included.
-fn mix(a: Colour, b: Colour, percent: u16) -> Color {
-    let p = percent.min(100);
-    let m = |x: u8, y: u8| {
-        u8::try_from((u16::from(x) * (100 - p) + u16::from(y) * p) / 100).unwrap_or(u8::MAX)
-    };
-    let (Colour(a), Colour(b)) = (a, b);
-    Color::rgba(m(a[0], b[0]), m(a[1], b[1]), m(a[2], b[2]), m(a[3], b[3]))
-}
-
-/// The warning colour the menu uses for its notices.
-const WARN: Color = Color::rgb(0xE8, 0xB0, 0x6A);
-
-/// Where text sits to be centred vertically in a box at `y` of `h`.
-fn text_top(engine: &TextEngine, style: TextStyle, y: i32, h: i32) -> i32 {
-    y + (h - engine.line_height(style)) / 2
-}
-
-struct Ink {
-    text: Color,
-    dim: Color,
-    accent: Color,
-    selection: Color,
-    card: Color,
-    on_accent: Color,
-}
-
-struct Styles {
-    text: TextStyle,
-    strong: TextStyle,
-    small: TextStyle,
-    icon: TextStyle,
-    icon_small: TextStyle,
-}
-
 /// Paint the whole popup.
 #[allow(clippy::too_many_lines, clippy::many_single_char_names)]
 pub fn paint(
@@ -404,56 +321,10 @@ pub fn paint(
 ) {
     let mut canvas = Canvas::new(frame);
     let mut pen = canvas.pen();
-    let full = Rect::from_size(layout.size);
-    let ink = Ink {
-        text: colour(appearance.text),
-        dim: colour(appearance.dim),
-        accent: colour(appearance.accent),
-        selection: colour(appearance.selection),
-        card: mix(appearance.background, appearance.selection, 45),
-        on_accent: {
-            let Colour([r, g, b, _]) = appearance.background;
-            Color::rgb(r, g, b)
-        },
-    };
-    pen.clear(Color::rgba(0, 0, 0, 0));
-    pen.fill_rounded_rect(full, layout.radius, colour(appearance.background));
-    pen.stroke_rounded_rect(
-        full,
-        layout.radius,
-        layout.border,
-        colour(appearance.border),
-    );
-
-    let Fonts {
-        engine,
-        text,
-        strong,
-        icons,
-        ..
-    } = fonts;
-    let st = Styles {
-        text: TextStyle {
-            font: *text,
-            size_px: layout.text_px,
-        },
-        strong: TextStyle {
-            font: *strong,
-            size_px: layout.text_px,
-        },
-        small: TextStyle {
-            font: *text,
-            size_px: layout.small_px,
-        },
-        icon: TextStyle {
-            font: *icons,
-            size_px: layout.text_px,
-        },
-        icon_small: TextStyle {
-            font: *icons,
-            size_px: layout.small_px,
-        },
-    };
+    let ink = Ink::new(appearance);
+    draw::panel(&mut pen, layout.size, &layout.metrics, &ink);
+    let st = fonts.styles(&layout.metrics);
+    let engine = &mut fonts.engine;
     let state = popup.state();
     let u = layout.unit;
     let hover = popup.hover();
@@ -494,20 +365,14 @@ pub fn paint(
             _ => None,
         };
         let lit = switching.unwrap_or(on);
-        let r = layout.switch;
-        let track = if lit { ink.accent } else { ink.selection };
-        pen.fill_rounded_rect(r, r.height / 2, track);
-        if hover == Some(Target::Switch) {
-            pen.stroke_rounded_rect(r, r.height / 2, layout.px(1), ink.text);
-        }
-        let knob_r = r.height / 2 - layout.px(3);
-        let cx = if lit {
-            r.right() - r.height / 2
-        } else {
-            r.x + r.height / 2
-        };
-        let knob = if lit { ink.on_accent } else { ink.text };
-        pen.fill_circle(Point::new(cx, r.y + r.height / 2), knob_r, knob);
+        draw::switch(
+            &mut pen,
+            layout.switch,
+            lit,
+            hover == Some(Target::Switch),
+            &layout.metrics,
+            &ink,
+        );
     }
 
     // No list to show: say why.
@@ -515,8 +380,8 @@ pub fn paint(
         let (line, colour) = if popup.loaded() {
             match (state.radio, popup.busy()) {
                 (_, Some(Busy::Switching(true))) => ("Switching Wi-Fi on…", ink.dim),
-                (Radio::NoDaemon, _) => ("iwd is not running.", WARN),
-                (Radio::NoAdapter, _) => ("There is no Wi-Fi adapter.", WARN),
+                (Radio::NoDaemon, _) => ("iwd is not running.", ink.warn),
+                (Radio::NoAdapter, _) => ("There is no Wi-Fi adapter.", ink.warn),
                 _ => ("Wi-Fi is off.", ink.dim),
             }
         } else {
@@ -670,15 +535,14 @@ pub fn paint(
             st.small,
             Point::new(r.x, top),
             &message.text,
-            if message.error { WARN } else { ink.accent },
+            if message.error { ink.warn } else { ink.accent },
         );
     }
 
     if popup.focus_visible()
         && let Some((rect, radius)) = focus_rect(layout, popup)
     {
-        let ring = rect.inflate(layout.px(3));
-        pen.stroke_rounded_rect(ring, radius + layout.px(3), layout.px(2), ink.text);
+        draw::focus_ring(&mut pen, rect, radius, &layout.metrics, &ink);
     }
 
     let foot = layout.footer;
@@ -716,32 +580,6 @@ fn focus_rect(layout: &Layout, popup: &Popup) -> Option<(Rect, i32)> {
         Focus::Reveal => layout.ask.map(|a| (a.reveal, layout.px(6))),
         Focus::Join => layout.ask.map(|a| pill(a.join)),
     }
-}
-
-fn button(
-    pen: &mut Pen<'_>,
-    engine: &mut TextEngine,
-    style: TextStyle,
-    r: Rect,
-    label: &str,
-    (fill, text): (Option<Color>, Color),
-    outline: Option<(i32, Color)>,
-) {
-    if let Some(fill) = fill {
-        pen.fill_rounded_rect(r, r.height / 2, fill);
-    }
-    if let Some((width, colour)) = outline {
-        pen.stroke_rounded_rect(r, r.height / 2, width, colour);
-    }
-    let w = engine.measure_line(style, label);
-    let top = text_top(engine, style, r.y, r.height);
-    engine.draw(
-        pen,
-        style,
-        Point::new(r.x + (r.width - w) / 2, top),
-        label,
-        text,
-    );
 }
 
 #[allow(clippy::too_many_lines)]
@@ -817,27 +655,27 @@ fn paint_card(
     }
     let leaving = matches!(popup.busy(), Some(Busy::Disconnecting));
     if let Some(b) = card.disconnect {
-        let lit = hover == Some(Target::Disconnect);
-        button(
+        draw::outline_button(
             pen,
             engine,
             st.small,
             b,
             if leaving { "Leaving…" } else { "Disconnect" },
-            (lit.then_some(ink.selection), ink.text),
-            Some((layout.px(1), ink.dim)),
+            hover == Some(Target::Disconnect),
+            &layout.metrics,
+            ink,
         );
     }
     if let Some(b) = card.forget {
-        let lit = hover == Some(Target::Forget);
-        button(
+        draw::outline_button(
             pen,
             engine,
             st.small,
             b,
             "Forget",
-            (lit.then_some(ink.selection), ink.text),
-            Some((layout.px(1), ink.dim)),
+            hover == Some(Target::Forget),
+            &layout.metrics,
+            ink,
         );
     }
 
@@ -870,37 +708,16 @@ fn paint_card(
     if let Some(rate) = joined.rx_mbit.or(joined.tx_mbit) {
         details.push(("Speed", format!("{rate} Mbit/s")));
     }
-    let col_w = (r.width - 2 * layout.pad) / 2;
-    let label_w = (0..details.len())
-        .step_by(2)
-        .filter_map(|i| details.get(i))
-        .map(|(l, _)| engine.measure_line(st.small, l))
-        .max()
-        .unwrap_or(0)
-        .max(
-            (1..details.len())
-                .step_by(2)
-                .filter_map(|i| details.get(i))
-                .map(|(l, _)| engine.measure_line(st.small, l))
-                .max()
-                .unwrap_or(0),
-        );
-    for (i, (label, value)) in details.iter().enumerate() {
-        let column = i32::try_from(i % 2).unwrap_or(0);
-        let row = i32::try_from(i / 2).unwrap_or(0);
-        let cx = x + column * col_w;
-        let cy = y + row * small_h;
-        let top = text_top(engine, st.small, cy, small_h);
-        let mut clip = pen.with_clip(Rect::new(cx, cy, col_w - layout.px(4), small_h));
-        engine.draw(&mut clip, st.small, Point::new(cx, top), label, ink.dim);
-        engine.draw(
-            &mut clip,
-            st.small,
-            Point::new(cx + label_w + u / 2, top),
-            value,
-            ink.text,
-        );
-    }
+    draw::details(
+        pen,
+        engine,
+        st.small,
+        ink,
+        &layout.metrics,
+        (x, y, r.width - 2 * layout.pad),
+        small_h,
+        &details,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -978,7 +795,7 @@ fn paint_ask(
 
     let joining = matches!(popup.busy(), Some(Busy::Joining(_)));
     let lit = popup.hover() == Some(Target::Join);
-    button(
+    draw::button(
         pen,
         engine,
         st.small,
@@ -994,7 +811,7 @@ mod tests {
     use super::Layout;
     use crate::model::sample;
     use crate::popup::{Key, Popup, Target};
-    use alpymist_menu::config::Appearance;
+    use alpymist_widget::Appearance;
     use denise::geom::Point;
 
     fn centre(r: denise::geom::Rect) -> Point {
