@@ -2,7 +2,7 @@
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymistctl
 pkgver=0.0.1
-pkgrel=0
+pkgrel=1
 pkgdesc="Alpymist system control CLI"
 url="https://github.com/bisand/alpymist"
 arch="all"

@@ -12,6 +12,7 @@ mod publish;
 mod qemu;
 mod serial;
 
+use alpymist_core::Channel;
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
@@ -54,17 +55,31 @@ enum Command {
         #[arg(long, default_value = "aports/ghostty/APKBUILD")]
         apkbuild: PathBuf,
     },
-    /// Sign and publish a Release run's packages to pkgs.alpymist.org.
+    /// Sign and publish a channel's packages: stable to pkgs.alpymist.org,
+    /// dev to dev.pkgs.alpymist.org.
     ///
-    /// Signs the repository index with the release key, which stays on this
-    /// machine, verifies it, and with --push replaces the Pages site.
+    /// Signs the repository index with the channel's key, verifies it, and
+    /// with --push replaces the Pages site. Stable's key stays on a
+    /// maintainer's machine; dev's is CI's (ADR 0006).
     Publish {
-        /// The Release workflow run to publish (`gh run list -w Release`).
+        /// The channel to publish to.
+        #[arg(long, default_value = "stable", value_parser = parse_channel)]
+        channel: Channel,
+        /// The workflow run to publish: Release for stable, Dev for dev
+        /// (`gh run list -w Release`).
+        #[arg(long, required_unless_present = "packages")]
+        run: Option<String>,
+        /// Packages already downloaded, one packages-<arch> directory per
+        /// architecture, instead of a run's. Dev only; CI publishes this way.
+        #[arg(long, conflicts_with = "run", requires = "commit")]
+        packages: Option<PathBuf>,
+        /// The commit of main those packages were built from.
+        #[arg(long, requires = "packages")]
+        commit: Option<String>,
+        /// The channel's signing key. By default,
+        /// ~/.config/alpymist/keys/<its name>.
         #[arg(long)]
-        run: String,
-        /// The release signing key.
-        #[arg(long, default_value_os_t = publish::default_key())]
-        key: PathBuf,
+        key: Option<PathBuf>,
         /// Push the signed site. Without it, stop after verifying.
         #[arg(long)]
         push: bool,
@@ -112,13 +127,32 @@ fn main() -> Result<()> {
             verbose,
         ),
         Command::GhosttyCheck { apkbuild } => ghostty::check(&apkbuild),
-        Command::Publish { run, key, push } => publish::publish(&run, &key, push),
+        Command::Publish {
+            channel,
+            run,
+            packages,
+            commit,
+            key,
+            push,
+        } => {
+            let packages = match (run, packages, commit) {
+                (Some(run), _, _) => publish::Packages::Run(run),
+                (None, Some(dir), Some(commit)) => publish::Packages::Downloaded { dir, commit },
+                _ => bail!("give --run, or --packages with --commit"),
+            };
+            let key = key.unwrap_or_else(|| publish::default_key(channel));
+            publish::publish(channel, &packages, &key, push)
+        }
         Command::InstallerData {
             bkeymaps,
             zoneinfo,
             out,
         } => installer_data::generate(&bkeymaps, &zoneinfo, &out),
     }
+}
+
+fn parse_channel(s: &str) -> Result<Channel, String> {
+    s.parse()
 }
 
 /// Boot `iso` and check that the first-boot probe reported a tier.

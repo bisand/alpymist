@@ -2,6 +2,9 @@
 
 #![forbid(unsafe_code)]
 
+mod channel;
+
+use alpymist_core::Channel;
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
@@ -22,6 +25,15 @@ enum Command {
         /// Output format.
         #[arg(long, value_enum, default_value_t = Format::Human)]
         format: Format,
+    },
+    /// Show or change the release channel: stable, or dev for every push to
+    /// main. Changing it needs root, and upgrades to the new channel.
+    Channel {
+        /// The channel to follow. Without it, print the current one.
+        channel: Option<Channel>,
+        /// Only switch; leave the upgrade for later.
+        #[arg(long)]
+        no_upgrade: bool,
     },
 }
 
@@ -44,9 +56,17 @@ fn main() -> std::process::ExitCode {
     }
 }
 
-fn run(cli: &Cli) -> alpymist_core::Result<()> {
+fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
-        Command::Probe { format } => probe(format),
+        Command::Probe { format } => Ok(probe(format)?),
+        Command::Channel {
+            channel: None,
+            no_upgrade: _,
+        } => channel::show(),
+        Command::Channel {
+            channel: Some(to),
+            no_upgrade,
+        } => channel::switch(to, !no_upgrade),
     }
 }
 

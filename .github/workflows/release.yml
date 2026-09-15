@@ -7,7 +7,9 @@ name: Release
 # (ADR 0002), so what this workflow produces is a candidate, not an update.
 #
 # Run it by hand to try a change before releasing it: the same builds, kept as
-# artifacts, with no release to attach them to.
+# artifacts, with no release to attach them to. An ISO is only needed for a
+# release: systems already installed upgrade from the repository, stable or
+# dev, whose packages Packages builds without one (ADR 0006).
 on:
   release:
     types: [published]
@@ -22,63 +24,9 @@ concurrency:
 
 jobs:
   packages:
-    name: Packages (${{ matrix.arch }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            runner: ubuntu-24.04
-          # Native, not emulated: ghostty's zig build under QEMU would take
-          # hours.
-          - arch: aarch64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Build the builder container
-        run: docker build -t alpymist-builder builder
-
-      # ghostty and squint are built from pinned upstream commits and take
-      # most of the time. build-packages.sh keeps them here, each under a key
-      # of its aport and the builder, and builds again only what has changed.
-      # The month is in the cache's name so they are rebuilt at least that
-      # often against Alpine's libraries as they are updated.
-      - name: When the kept packages were built
-        id: month
-        run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/cache@v5
-        with:
-          path: cache
-          key: packages-v2-${{ matrix.arch }}-${{ steps.month.outputs.month }}-${{ hashFiles('aports/ghostty/**', 'aports/squint/**', 'builder/**') }}
-          restore-keys: packages-v2-${{ matrix.arch }}-${{ steps.month.outputs.month }}-
-
-      - name: Build the packages
-        run: |
-          mkdir -p out cache && chmod 777 out cache
-          docker run --rm -v "$PWD":/src -v "$PWD/out":/out -v "$PWD/cache":/cache \
-            -e PACKAGE_CACHE=/cache \
-            alpymist-builder bash /src/ci/build-packages.sh /out/packages
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: packages-${{ matrix.arch }}
-          path: out/packages/${{ matrix.arch }}/*.apk
-          if-no-files-found: error
-          retention-days: 90
-
-      # The public halves of the throwaway keys the packages are signed with,
-      # for the ISO job to trust. Apart from the packages, which
-      # `cargo xtask publish` takes as they are: installed systems trust the
-      # release key's index, not these.
-      - uses: actions/upload-artifact@v7
-        with:
-          name: package-keys-${{ matrix.arch }}
-          path: out/packages/${{ matrix.arch }}/keys/*.rsa.pub
-          if-no-files-found: error
-          retention-days: 90
+    uses: ./.github/workflows/packages.yml
+    with:
+      channel: stable
 
   iso:
     name: ISO (${{ matrix.arch }})

@@ -55,3 +55,9 @@ compromised workflow can produce a bad artifact but not an update anyone
 installs. Tested both ways before relying on it: a package signed by an
 unknown build key installs from a trusted index, and a swapped or modified
 package does not. See `ci/README.md`.
+
+## Addendum, 2026-09-15: the dev channel
+
+The dev channel is the one exception to the offline key: CI signs its index
+with a key of its own, which only systems that opt in to dev trust. See
+[ADR 0006](0006-release-channels.md).

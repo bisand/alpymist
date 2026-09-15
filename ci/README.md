@@ -1,19 +1,23 @@
 # CI
 
-Three workflows:
+Five workflows:
 
 - **CI** (`.github/workflows/ci.yml`): `cargo fmt --check`, clippy with
   `-D warnings`, and the tests, on every push to `main` and every pull request.
   A couple of minutes.
+- **Packages** (`.github/workflows/packages.yml`): every Alpymist package for
+  x86_64 and aarch64, on native runners, for one channel. Not run on its own:
+  the next two call it.
 - **Release** (`.github/workflows/release.yml`): what a release is made of,
-  built when a GitHub release is published. Every Alpymist package for x86_64
-  and aarch64, on native runners; then an ISO for each architecture from
-  exactly those packages, with the x86_64 one booted in QEMU with KVM to
-  assert the reported tier. The ISOs and their `.sha256` files are attached to
-  the release, which is where to download them. The packages are an artifact,
-  published separately (below). "Run workflow" in the Actions tab runs the
-  same builds without a release, keeping everything as artifacts, to try a
-  change before releasing it.
+  built when a GitHub release is published. Stable packages, then an ISO for
+  each architecture from exactly those packages, with the x86_64 one booted in
+  QEMU with KVM to assert the reported tier. The ISOs and their `.sha256` files
+  are attached to the release, which is where to download them. The packages
+  are an artifact, published by hand (below). "Run workflow" in the Actions
+  tab runs the same builds without a release, keeping everything as
+  artifacts, to try a change before releasing it.
+- **Dev** (`.github/workflows/dev.yml`): dev packages on every push to `main`,
+  signed and published to `dev.pkgs.alpymist.org` by CI. No ISO.
 - **Site** (`.github/workflows/site.yml`): alpymist.org.
 
 ghostty and squint are built from pinned upstream commits, and ghostty's Zig
@@ -24,7 +28,44 @@ The ISO jobs build no packages at all: they index and sign the ones the
 package jobs made. What is left of an image's time is mostly squashing the
 kernel's firmware.
 
-## Publishing packages
+## Channels
+
+Installed systems upgrade with `apk upgrade`; an ISO is only for installing
+(ADR 0006). They follow one of two channels:
+
+- **stable**, `https://pkgs.alpymist.org/v3.24/alpymist`: Release runs,
+  signed by hand. What the installer sets up.
+- **dev**, `https://dev.pkgs.alpymist.org/v3.24/alpymist`: every push to
+  main, signed by CI with the dev key.
+
+```sh
+alpymistctl channel               # which one this system follows
+doas alpymistctl channel dev      # follow dev, trust its key, upgrade
+doas alpymistctl channel stable   # back, distrust it, downgrade to stable
+```
+
+Dev packages are versioned `<pkgver>_git<UTC time of their last commit>`, which
+apk sorts after the pkgver and before the next one, so dev needs no bumps.
+
+### Setting up the dev channel (once)
+
+1. Create `bisand/alpymist-packages-dev`, public, empty. In Settings → Pages,
+   serve `main` from the root, with the custom domain `dev.pkgs.alpymist.org`
+   and HTTPS enforced. Add a DNS `CNAME` from `dev.pkgs.alpymist.org` to
+   `bisand.github.io`.
+2. Make an SSH key, add its public half to that repository as a deploy key
+   with write access, and nowhere else.
+3. In `bisand/alpymist`, Settings → Environments, create `dev-channel`, limit
+   its deployment branches to `main`, and give it two secrets:
+   `DEV_CHANNEL_SIGNING_KEY` (`~/.config/alpymist/keys/alpymist-dev-2026.rsa`)
+   and `DEV_CHANNEL_DEPLOY_KEY` (the SSH private key).
+4. Publish stable once with `alpymist-keys` 2026-r1 and `alpymistctl`
+   0.0.1-r1, so stable systems have the dev key and the command to switch.
+
+Keep an offline copy of the dev signing key as well, and never put it in
+`/etc/apk/keys` on a machine that should follow only stable.
+
+## Publishing stable
 
 The repository at `https://pkgs.alpymist.org/v3.24/alpymist` is a GitHub
 Pages site (`bisand/alpymist-packages`). Installed systems have it in
@@ -33,7 +74,8 @@ Pages site (`bisand/alpymist-packages`). Installed systems have it in
 Only the index is signed, with the release key, on a maintainer's machine
 (ADR 0002). CI never sees that key. apk takes a package whose hash is in a
 trusted index and refuses one whose hash is not, whatever key abuild signed
-the package with in CI.
+the package with in CI. Dev is published by the same command, run by CI with
+`--channel dev --packages <dir> --commit <sha>`, which stable refuses.
 
 ```sh
 gh run list -w Release                    # pick a green run of main

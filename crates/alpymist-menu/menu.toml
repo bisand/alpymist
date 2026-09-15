@@ -118,6 +118,7 @@ items = [
   { name = "Everything", icon = "󰚰", exec = "doas apk upgrade -U && flatpak update --user -y", terminal = true, hold = true },
   { name = "System packages", icon = "", exec = "doas apk upgrade -U", terminal = true, hold = true, keywords = ["apk", "alpine"] },
   { name = "Flatpak applications", icon = "󰏗", exec = "flatpak update --user", terminal = true, hold = true },
+  { name = "Release channel", icon = "\U000F062C", exec = "printf 'Following: '; alpymistctl channel && printf '\\nstable is released packages; dev is every change to main.\\nSwitch to stable or dev, or Enter to stay: ' && read -r c && [ -n \"$c\" ] && doas alpymistctl channel \"$c\"", terminal = true, hold = true, keywords = ["alpymist", "dev", "stable", "channel"] },
 ]
 
 [menu.learn]

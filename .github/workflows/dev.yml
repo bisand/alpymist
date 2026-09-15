@@ -1,0 +1,88 @@
+name: Dev
+
+# The dev channel: every push to main, built and published to
+# dev.pkgs.alpymist.org without an ISO or a release. Systems that ran
+# `alpymistctl channel dev` get it with apk upgrade.
+#
+# Unlike stable, CI signs this index, with the dev key (ADR 0006). The key and
+# the push access to bisand/alpymist-packages-dev are secrets of the dev-channel
+# environment, which only main may deploy to. Neither reaches stable: its key
+# is trusted only by systems following dev, and its site is another repository.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'site/**'
+      - 'docs/**'
+      - '**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push makes an older build pointless; each publish replaces the whole
+# site, so one cut short leaves the previous one standing.
+concurrency:
+  group: dev-channel
+  cancel-in-progress: true
+
+jobs:
+  packages:
+    uses: ./.github/workflows/packages.yml
+    with:
+      channel: dev
+
+  publish:
+    name: Publish to dev
+    needs: packages
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment:
+      name: dev-channel
+      url: https://dev.pkgs.alpymist.org/
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@1.96
+
+      # One packages-<arch> directory each, as `cargo xtask publish` expects.
+      # Outside out/publish, which publish clears.
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: packages-*
+          path: out/dev-packages
+
+      - name: Build the builder container
+        run: docker build -q -t alpymist-builder builder
+
+      # The signing key under the name apk knows it by, and an SSH deploy key
+      # that can push to bisand/alpymist-packages-dev and nothing else, with
+      # GitHub's published host key so the push cannot be redirected.
+      - name: Keys
+        env:
+          DEV_KEY: ${{ secrets.DEV_CHANNEL_SIGNING_KEY }}
+          DEPLOY_KEY: ${{ secrets.DEV_CHANNEL_DEPLOY_KEY }}
+        run: |
+          install -d -m 700 "$RUNNER_TEMP/keys"
+          printf '%s\n' "$DEV_KEY" > "$RUNNER_TEMP/keys/alpymist-dev-2026.rsa"
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/keys/deploy"
+          chmod 600 "$RUNNER_TEMP/keys/"*
+          echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$RUNNER_TEMP/keys/known_hosts"
+
+      - name: Sign and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIT_SSH_COMMAND: ssh -i ${{ runner.temp }}/keys/deploy -o IdentitiesOnly=yes -o UserKnownHostsFile=${{ runner.temp }}/keys/known_hosts
+          GIT_AUTHOR_NAME: Alpymist CI
+          GIT_AUTHOR_EMAIL: ci@alpymist.org
+          GIT_COMMITTER_NAME: Alpymist CI
+          GIT_COMMITTER_EMAIL: ci@alpymist.org
+        run: |
+          cargo run -q -p xtask -- publish --channel dev \
+            --packages out/dev-packages --commit "$GITHUB_SHA" \
+            --key "$RUNNER_TEMP/keys/alpymist-dev-2026.rsa" --push
+
+      - name: Forget the keys
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"

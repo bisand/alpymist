@@ -11,7 +11,7 @@
 # than system files an upgrade would overwrite.
 pkgname=alpymist-desktop
 pkgver=0.0.1
-pkgrel=12
+pkgrel=13
 pkgdesc="Alpymist desktop: what every tier shares"
 url="https://github.com/bisand/alpymist"
 arch="noarch"
@@ -22,7 +22,8 @@ license="MIT OR Apache-2.0"
 # Alpine elogind would otherwise provide; pipewire for sound; flatpak is how
 # applications are installed (ADR 0001), and the GTK portal is what lets those
 # sandboxed apps open and save files; alpymist-keys lets apk trust the Alpymist
-# repository the installer adds. LibreWolf is the browser: Firefox with the
+# repository the installer adds, and alpymistctl switches it between stable and
+# dev (ADR 0006). LibreWolf is the browser: Firefox with the
 # tracking and telemetry taken out, built for musl and kept patched by Alpine.
 # Wi-Fi is iwd; the installer adds the account to netdev, which iwd lets manage
 # networks. On the Wayland tiers alpymist-wifi is the bar's icon and popup;
@@ -36,6 +37,7 @@ depends="
 	alpymist-keys
 	alpymist-shell=$pkgver-r$pkgrel
 	alpymist-splash-openrc
+	alpymistctl
 	brightnessctl
 	dbus
 	flatpak

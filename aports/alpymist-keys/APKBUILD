@@ -7,18 +7,26 @@
 #
 # Rotating the key means shipping the new one here, in a release still signed
 # by the old one, before the first index signed by the new one.
+#
+# The dev channel's key is here too, but not where apk looks: CI signs dev's
+# index with it, and apk trusts every key in /etc/apk/keys for every
+# repository, so `alpymistctl channel dev` copies it there only for a system
+# that asks to follow dev, and `alpymistctl channel stable` removes it
+# (ADR 0006).
 pkgname=alpymist-keys
 pkgver=2026
-pkgrel=0
-pkgdesc="Public key for the Alpymist package repository"
+pkgrel=1
+pkgdesc="Public keys for the Alpymist package repositories"
 url="https://github.com/bisand/alpymist"
 arch="noarch"
 license="MIT OR Apache-2.0"
 options="!check"  # nothing to test
-source="alpymist-2026.rsa.pub"
+source="alpymist-2026.rsa.pub alpymist-dev-2026.rsa.pub"
 builddir="$srcdir"
 
 package() {
 	install -Dm644 "$srcdir"/alpymist-2026.rsa.pub \
 		"$pkgdir"/etc/apk/keys/alpymist-2026.rsa.pub
+	install -Dm644 "$srcdir"/alpymist-dev-2026.rsa.pub \
+		"$pkgdir"/usr/share/alpymist/keys/alpymist-dev-2026.rsa.pub
 }

@@ -7,8 +7,16 @@
 # nobody: what installed systems trust is the repository index, which
 # `cargo xtask publish` signs off CI with the release key (ADR 0002).
 #
-# Two variables change what it does:
+# Three variables change what it does:
 #
+#   CHANNEL        stable (the default) or dev. For dev, each first-party
+#                  package's pkgver gets _git and the UTC time of the last
+#                  commit that could change it: 0.0.1 becomes
+#                  0.0.1_git20260915120301. apk sorts that above 0.0.1 and
+#                  below 0.0.2, so dev moves on with every push to main without
+#                  a pkgrel bump, and onto the next release when there is one.
+#                  A package no commit has touched keeps its version, and its
+#                  published file (ADR 0006). Needs the git history at /src.
 #   PACKAGE_CACHE  a directory kept between builds. ghostty and squint are
 #                  built from a pinned upstream commit, so what they build to
 #                  depends only on their aport and the builder: they are kept
@@ -31,8 +39,28 @@ REPO=~/packages/ap/"$ARCH"
 KEYS=~/packages/keys
 CACHE="${PACKAGE_CACHE:-}"
 CACHED=" ghostty squint "
+CHANNEL="${CHANNEL:-stable}"
+# Built from pinned upstream commits or a key file: versioned by hand on every
+# channel.
+UNSTAMPED=" ghostty squint alpymist-keys "
 
 export CARGO_HOME=/tmp/cargo
+
+case "$CHANNEL" in
+stable | dev) ;;
+*)
+	echo "CHANNEL is stable or dev, not $CHANNEL" >&2
+	exit 1
+	;;
+esac
+
+# The UTC time of the last commit touching what a first-party package is built
+# from: its aport, and the workspace every one of them copies in.
+stamp() {
+	TZ=UTC git -C /src -c safe.directory=/src log -1 \
+		--format=%cd --date=format-local:%Y%m%d%H%M%S -- \
+		"aports/$1" crates desktop Cargo.toml Cargo.lock rust-toolchain.toml
+}
 
 if [ ! -e ~/.abuild/abuild.conf ]; then
 	abuild-keygen -a -i -n >/dev/null 2>&1
@@ -74,6 +102,13 @@ else
 	for pkg in alpymist-keys alpymistctl alpymist-install alpymist-menu alpymist-wifi alpymist-auth alpymist-power alpymist-store alpymist-greeter alpymist-splash alpymist-desktop ghostty squint; do
 		mkdir -p ~/ap/"$pkg"
 		cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
+		if [ "$CHANNEL" = dev ] && [[ "$UNSTAMPED" != *" $pkg "* ]]; then
+			when=$(stamp "$pkg")
+			[ -n "$when" ] || { echo "no commit touches $pkg; is the history there?" >&2; exit 1; }
+			sed -i "s/^pkgver=\([^_]*\)$/pkgver=\1_git$when/" ~/ap/"$pkg"/APKBUILD
+			grep -q "^pkgver=.*_git$when$" ~/ap/"$pkg"/APKBUILD \
+				|| { echo "could not stamp $pkg's pkgver" >&2; exit 1; }
+		fi
 		key=""
 		if [ -n "$CACHE" ] && [[ "$CACHED" == *" $pkg "* ]]; then
 			key=$(cd /src && sha256sum aports/"$pkg"/* builder/Dockerfile | sha256sum | cut -c1-16)

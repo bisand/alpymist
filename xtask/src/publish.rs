@@ -13,7 +13,14 @@
 //! publish replaces it with a single commit, so the repository never grows
 //! old binaries past Pages' size limit; rolling back means publishing an
 //! older run again.
+//!
+//! The dev channel is the same, with a key and a site of its own
+//! (`dev.pkgs.alpymist.org`), and published by CI on every push to main
+//! (ADR 0006). Its key is trusted only by systems that ask to follow dev, and
+//! CI's credentials reach only its site, so a compromised workflow can reach
+//! those systems and no others.
 
+use alpymist_core::Channel;
 use anyhow::{Context, Result, bail, ensure};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -26,18 +33,67 @@ const ALPINE_VERSION: &str = "v3.24";
 const REPOSITORY: &str = "alpymist";
 /// Every architecture the Release workflow builds, by artifact suffix.
 const ARCHES: [&str; 2] = ["x86_64", "aarch64"];
-/// The release key's file name, which is also the name apk looks it up by.
-const KEY_NAME: &str = "alpymist-2026.rsa";
-/// The public half, as shipped by `alpymist-keys`.
-const PUBLIC_KEY: &str = "aports/alpymist-keys/alpymist-2026.rsa.pub";
-/// The Pages repository.
-const SITE_REMOTE: &str = "git@github.com:bisand/alpymist-packages.git";
-/// The address the site is served from.
-const DOMAIN: &str = "pkgs.alpymist.org";
-/// The workflows whose runs are publishable: Release, which builds the packages
-/// with each release, and Packages, which built them on every push before it and
-/// whose runs are still kept.
-const WORKFLOWS: [&str; 2] = ["Release", "Packages"];
+
+/// What one channel is published with and to.
+struct Target {
+    channel: Channel,
+    /// The key's file name, which is also the name apk looks it up by.
+    key_name: &'static str,
+    /// The public half, as shipped by `alpymist-keys`.
+    public_key: &'static str,
+    /// The Pages repository.
+    remote: &'static str,
+    /// The workflows whose runs it takes packages from.
+    workflows: &'static [&'static str],
+}
+
+impl Target {
+    const fn of(channel: Channel) -> Self {
+        match channel {
+            Channel::Stable => Self {
+                channel,
+                key_name: "alpymist-2026.rsa",
+                public_key: "aports/alpymist-keys/alpymist-2026.rsa.pub",
+                remote: "git@github.com:bisand/alpymist-packages.git",
+                // Release builds the packages with each release; Packages built
+                // them on every push before it, and its runs are still kept.
+                workflows: &["Release", "Packages"],
+            },
+            Channel::Dev => Self {
+                channel,
+                key_name: "alpymist-dev-2026.rsa",
+                public_key: "aports/alpymist-keys/alpymist-dev-2026.rsa.pub",
+                remote: "git@github.com:bisand/alpymist-packages-dev.git",
+                workflows: &["Dev"],
+            },
+        }
+    }
+
+    /// The address the site is served from, out of the channel's repository
+    /// line, which is `https://<domain>/<release>/<repository>`.
+    fn domain(&self) -> &'static str {
+        self.channel
+            .repository()
+            .strip_prefix("https://")
+            .and_then(|rest| rest.strip_suffix(&format!("/{ALPINE_VERSION}/{REPOSITORY}")))
+            .unwrap_or_else(|| {
+                panic!(
+                    "{} is not https://<domain>/{ALPINE_VERSION}/{REPOSITORY}",
+                    self.channel.repository()
+                )
+            })
+    }
+}
+
+/// Where the packages to publish come from.
+pub enum Packages {
+    /// A workflow run's artifacts, downloaded with gh.
+    Run(String),
+    /// Artifacts already downloaded, one `packages-<arch>` directory per
+    /// architecture, built from `commit`. How CI publishes dev.
+    Downloaded { dir: PathBuf, commit: String },
+}
+
 /// Where the work happens; under `out/`, which Docker Desktop shares.
 const STAGING: &str = "out/publish";
 /// The container every Alpine tool runs in.
@@ -64,27 +120,41 @@ apk --arch "$arch" --keys-dir /tmp/keys --repositories-file /dev/null \
 	> "/work/verify-$arch.txt" 2>&1
 "#;
 
-/// Publish the packages from a Release run.
+/// Publish a channel's packages.
 ///
 /// Without `push` it stops after signing and verifying, and says where the
 /// site is, so it can be looked at first.
 ///
 /// # Errors
-/// Fails when the run is not a successful Release run of main, when a
-/// package was rebuilt without a version bump, when the signed index does not
-/// verify, or when any tool it drives fails.
-pub fn publish(run: &str, key: &Path, push: bool) -> Result<()> {
+/// Fails when the packages are not from a successful run of the channel's
+/// workflow on main, when stable is given packages that were not downloaded
+/// from such a run, when a package was rebuilt without a version bump, when
+/// the signed index does not verify, or when any tool it drives fails.
+pub fn publish(channel: Channel, packages: &Packages, key: &Path, push: bool) -> Result<()> {
+    let target = Target::of(channel);
     ensure!(
-        key.file_name().and_then(|n| n.to_str()) == Some(KEY_NAME),
-        "expected the release key, {KEY_NAME}; got {}",
+        key.file_name().and_then(|n| n.to_str()) == Some(target.key_name),
+        "expected {channel}'s key, {}; got {}",
+        target.key_name,
         key.display()
     );
     ensure!(key.is_file(), "no key at {}", key.display());
     let key = key.canonicalize()?;
 
-    let sha = check_run(run)?;
+    let (sha, what) = match packages {
+        Packages::Run(run) => (check_run(&target, run)?, format!("run {run}")),
+        // Stable is signed by hand from what CI built for a reviewed commit;
+        // packages from anywhere else would skip that.
+        Packages::Downloaded { .. } if channel == Channel::Stable => {
+            bail!("stable is published from a Release run: use --run")
+        }
+        Packages::Downloaded { commit, .. } => {
+            ensure!(on_main(commit)?, "{commit} is not on main");
+            (commit.clone(), format!("main at {commit}"))
+        }
+    };
     let short: String = sha.chars().take(12).collect();
-    println!("publishing run {run} (main at {short})");
+    println!("publishing {what} to {channel} (main at {short})");
     ensure_builder()?;
 
     let staging = Path::new(STAGING);
@@ -93,31 +163,37 @@ pub fn publish(run: &str, key: &Path, push: bool) -> Result<()> {
     }
     std::fs::create_dir_all(staging)?;
     let staging = staging.canonicalize()?;
-    let downloads = staging.join("downloads");
     let old = staging.join("old");
     let site = staging.join("site");
 
-    println!("downloading the packages");
-    let mut download = Command::new("gh");
-    download
-        .args(["run", "download", run, "--dir"])
-        .arg(&downloads);
-    for arch in ARCHES {
-        download.args(["--name", &format!("packages-{arch}")]);
-    }
-    run_tool(&mut download)?;
+    let downloads = match packages {
+        Packages::Run(run) => {
+            println!("downloading the packages");
+            let downloads = staging.join("downloads");
+            let mut download = Command::new("gh");
+            download
+                .args(["run", "download", run, "--dir"])
+                .arg(&downloads);
+            for arch in ARCHES {
+                download.args(["--name", &format!("packages-{arch}")]);
+            }
+            run_tool(&mut download)?;
+            downloads
+        }
+        Packages::Downloaded { dir, .. } => dir.clone(),
+    };
 
     println!("fetching what is published now");
     std::fs::create_dir_all(&old)?;
     run_tool(
         Command::new("git")
-            .args(["clone", "--quiet", "--depth", "1", SITE_REMOTE])
+            .args(["clone", "--quiet", "--depth", "1", target.remote])
             .arg(&old),
     )?;
 
-    stage(run, &downloads, &old, &site)?;
+    stage(&target, &what, &downloads, &old, &site)?;
     for arch in ARCHES {
-        sign(arch, &short, &site, &old, &staging, &key)?;
+        sign(&target, arch, &short, &site, &old, &staging, &key)?;
     }
     println!("signed and verified");
 
@@ -129,16 +205,19 @@ pub fn publish(run: &str, key: &Path, push: bool) -> Result<()> {
         return Ok(());
     }
 
-    let message = format!("Publish run {run}\n\nFrom bisand/alpymist at {sha}.");
+    let message = format!("Publish {what}\n\nFrom bisand/alpymist at {sha}.");
     for args in [
         &["init", "--quiet", "-b", "main"][..],
         &["add", "--all"],
         &["commit", "--quiet", "-m", &message],
-        &["push", "--quiet", "--force", SITE_REMOTE, "main"],
+        &["push", "--quiet", "--force", target.remote, "main"],
     ] {
         run_tool(Command::new("git").arg("-C").arg(&site).args(args))?;
     }
-    println!("pushed; GitHub Pages serves it at https://{DOMAIN}/ within a minute or two");
+    println!(
+        "pushed; GitHub Pages serves it at https://{}/ within a minute or two",
+        target.domain()
+    );
     Ok(())
 }
 
@@ -149,7 +228,7 @@ pub fn publish(run: &str, key: &Path, push: bool) -> Result<()> {
 /// same version comes out with a different hash each time; replacing it would
 /// break the cached index of every system that already has it, for no change.
 /// The flip side: a change ships only with a new pkgver or pkgrel.
-fn stage(run: &str, downloads: &Path, old: &Path, site: &Path) -> Result<()> {
+fn stage(target: &Target, what: &str, downloads: &Path, old: &Path, site: &Path) -> Result<()> {
     for arch in ARCHES {
         let dir = site.join(ALPINE_VERSION).join(REPOSITORY).join(arch);
         let published = old.join(ALPINE_VERSION).join(REPOSITORY).join(arch);
@@ -164,6 +243,11 @@ fn stage(run: &str, downloads: &Path, old: &Path, site: &Path) -> Result<()> {
                 continue;
             }
             let name = path.file_name().unwrap_or_default();
+            ensure!(
+                target.channel == Channel::Dev || !dev_stamped(&name.to_string_lossy()),
+                "{} carries a dev version; stable takes only Release runs' packages",
+                name.to_string_lossy()
+            );
             let previous = published.join(name);
             if previous.is_file() {
                 std::fs::copy(&previous, dir.join(name))?;
@@ -173,7 +257,7 @@ fn stage(run: &str, downloads: &Path, old: &Path, site: &Path) -> Result<()> {
                 new.push(name.to_string_lossy().into_owned());
             }
         }
-        ensure!(kept + new.len() > 0, "run {run} has no packages for {arch}");
+        ensure!(kept + new.len() > 0, "{what} has no packages for {arch}");
         new.sort();
         println!(
             "  {arch}: {} new, {kept} already published and kept as they are",
@@ -183,18 +267,22 @@ fn stage(run: &str, downloads: &Path, old: &Path, site: &Path) -> Result<()> {
             println!("    + {name}");
         }
     }
-    std::fs::copy(PUBLIC_KEY, site.join(format!("{KEY_NAME}.pub")))
-        .context("copying the public key")?;
-    std::fs::write(site.join("CNAME"), format!("{DOMAIN}\n"))?;
+    std::fs::copy(
+        target.public_key,
+        site.join(format!("{}.pub", target.key_name)),
+    )
+    .context("copying the public key")?;
+    std::fs::write(site.join("CNAME"), format!("{}\n", target.domain()))?;
     // Jekyll would otherwise process the site, slowly, for nothing.
     std::fs::write(site.join(".nojekyll"), "")?;
-    std::fs::write(site.join("index.html"), landing_page())?;
+    std::fs::write(site.join("index.html"), landing_page(target))?;
 
     Ok(())
 }
 
 /// Index and sign one architecture, then check it the way a system would.
 fn sign(
+    target: &Target,
     arch: &str,
     short: &str,
     site: &Path,
@@ -208,7 +296,7 @@ fn sign(
             .args(["run", "--rm", "--user", "root"])
             .args(["--env", &format!("VERSION={ALPINE_VERSION}")])
             .args(["--env", &format!("REPO={REPOSITORY}")])
-            .args(["--env", &format!("KEY={KEY_NAME}")])
+            .args(["--env", &format!("KEY={}", target.key_name)])
             .arg("-v")
             .arg(format!("{}:/site", site.display()))
             .arg("-v")
@@ -216,7 +304,7 @@ fn sign(
             .arg("-v")
             .arg(format!("{}:/work", staging.display()))
             .arg("-v")
-            .arg(format!("{}:/key/{KEY_NAME}:ro", key.display()))
+            .arg(format!("{}:/key/{}:ro", key.display(), target.key_name))
             .args([BUILDER, "sh", "-c", SIGN, "sign"])
             .args([arch, &format!("alpymist {short}")]),
     )?;
@@ -224,7 +312,8 @@ fn sign(
     let verified = std::fs::read_to_string(staging.join(format!("verify-{arch}.txt")))?;
     ensure!(
         verified.trim() == "alpymist-keys",
-        "the signed {arch} index does not verify with the release key alone:\n{verified}"
+        "the signed {arch} index does not verify with {} alone:\n{verified}",
+        target.key_name
     );
 
     let new = std::fs::read_to_string(staging.join(format!("new-{arch}.txt")))?;
@@ -241,13 +330,13 @@ fn sign(
     Ok(())
 }
 
-/// The run must be a successful Release run of a commit on main, so what gets
+/// The run must be a successful run of the channel's workflow, for a commit on main, so what gets
 /// signed is what was reviewed. Returns the commit it built.
 ///
 /// A run from the Run workflow button says main as its branch. A run for a
 /// release says the release's tag instead, which could name any commit, so
 /// that one is asked of GitHub: the tagged commit must be main or behind it.
-fn check_run(run: &str) -> Result<String> {
+fn check_run(target: &Target, run: &str) -> Result<String> {
     let out = Command::new("gh")
         .args([
             "run",
@@ -274,9 +363,10 @@ fn check_run(run: &str) -> Result<String> {
         bail!("unexpected answer from gh: {text}");
     };
     ensure!(
-        WORKFLOWS.contains(&workflow),
-        "run {run} is a {workflow} run, not {}",
-        WORKFLOWS.join(" or ")
+        target.workflows.contains(&workflow),
+        "run {run} is a {workflow} run, not {}, which {} is published from",
+        target.workflows.join(" or "),
+        target.channel
     );
     ensure!(
         branch == "main" || on_main(sha)?,
@@ -372,41 +462,95 @@ fn identities(index: &str) -> BTreeMap<String, String> {
 }
 
 /// What a person who opens the address in a browser sees.
-fn landing_page() -> String {
-    let mut page = String::from(
-        "<!doctype html>\n<meta charset=\"utf-8\">\n<title>Alpymist packages</title>\n\
-         <style>body{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:3rem auto;\
-         padding:0 1rem;background:#0b121e;color:#eaf0f6}code,pre{font-family:\"Fira Mono\",\
-         monospace}pre{background:#070c14;padding:1rem;overflow-x:auto}a{color:#7fb8d9}</style>\n\
-         <h1>Alpymist packages</h1>\n\
-         <p>The apk repository for <a href=\"https://alpymist.org\">Alpymist</a>. \
-         Installed systems already use it. On another Alpine machine:</p>\n<pre>",
+fn landing_page(target: &Target) -> String {
+    let (title, key) = (
+        match target.channel {
+            Channel::Stable => "Alpymist packages",
+            Channel::Dev => "Alpymist packages: dev",
+        },
+        target.key_name,
     );
-    let _ = write!(
-        page,
-        "doas wget -O /etc/apk/keys/{KEY_NAME}.pub https://{DOMAIN}/{KEY_NAME}.pub\n\
-         echo https://{DOMAIN}/{ALPINE_VERSION}/{REPOSITORY} | doas tee -a /etc/apk/repositories\n\
-         doas apk update</pre>\n"
+    let mut page = format!(
+        "<!doctype html>\n<meta charset=\"utf-8\">\n<title>{title}</title>\n\
+         <style>body{{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:3rem auto;\
+         padding:0 1rem;background:#0b121e;color:#eaf0f6}}code,pre{{font-family:\"Fira Mono\",\
+         monospace}}pre{{background:#070c14;padding:1rem;overflow-x:auto}}a{{color:#7fb8d9}}</style>\n\
+         <h1>{title}</h1>\n"
     );
-    page.push_str(
-        "<p>Only the index is signed, by hand, with a key CI never sees; it pins every \
-         package's hash. Check the key's fingerprint against the source repository before \
-         trusting it.</p>\n",
-    );
+    match target.channel {
+        Channel::Stable => {
+            page.push_str(
+                "<p>The apk repository for <a href=\"https://alpymist.org\">Alpymist</a>. \
+                 Installed systems already use it. On another Alpine machine:</p>\n<pre>",
+            );
+            let _ = write!(
+                page,
+                "doas wget -O /etc/apk/keys/{key}.pub https://{domain}/{key}.pub\n\
+                 echo {repo} | doas tee -a /etc/apk/repositories\n\
+                 doas apk update</pre>\n",
+                domain = target.domain(),
+                repo = target.channel.repository(),
+            );
+            page.push_str(
+                "<p>Only the index is signed, by hand, with a key CI never sees; it pins every \
+                 package's hash. Check the key's fingerprint against the source repository before \
+                 trusting it.</p>\n",
+            );
+        }
+        Channel::Dev => {
+            page.push_str(
+                "<p>Every push to main of <a href=\"https://github.com/bisand/alpymist\">Alpymist</a>, \
+                 built and signed by CI with a key of its own. Expect breakage. On Alpymist:</p>\n\
+                 <pre>doas alpymistctl channel dev</pre>\n\
+                 <p>and back with <code>doas alpymistctl channel stable</code>, which also \
+                 stops trusting this key.</p>\n",
+            );
+        }
+    }
     page
 }
 
-/// Where the release key lives unless told otherwise.
-pub fn default_key() -> PathBuf {
+/// Where a channel's key lives unless told otherwise.
+pub fn default_key(channel: Channel) -> PathBuf {
     let home = std::env::var_os("HOME").unwrap_or_default();
     PathBuf::from(home)
         .join(".config/alpymist/keys")
-        .join(KEY_NAME)
+        .join(Target::of(channel).key_name)
+}
+
+/// Whether an apk file name carries the version `build-packages.sh` gives dev
+/// packages: `_git` and a fourteen-digit time. Upstream snapshots such as
+/// ghostty's `_git20260908` have a date only.
+fn dev_stamped(file: &str) -> bool {
+    file.match_indices("_git").any(|(i, m)| {
+        let rest = &file[i + m.len()..];
+        rest.len() > 14
+            && rest.as_bytes()[..14].iter().all(u8::is_ascii_digit)
+            && rest.as_bytes()[14] == b'-'
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::rebuilt_in_place;
+    use super::{Target, dev_stamped, rebuilt_in_place};
+    use alpymist_core::Channel;
+
+    #[test]
+    fn each_channel_is_served_where_systems_look() {
+        assert_eq!(Target::of(Channel::Stable).domain(), "pkgs.alpymist.org");
+        assert_eq!(Target::of(Channel::Dev).domain(), "dev.pkgs.alpymist.org");
+        for channel in Channel::ALL {
+            let target = Target::of(channel);
+            assert!(std::path::Path::new("..").join(target.public_key).is_file());
+        }
+    }
+
+    #[test]
+    fn dev_versions_are_told_from_upstream_snapshots() {
+        assert!(dev_stamped("alpymist-menu-0.0.1_git20260915120301-r6.apk"));
+        assert!(!dev_stamped("ghostty-1.3.1_git20260908-r0.apk"));
+        assert!(!dev_stamped("alpymist-menu-0.0.1-r6.apk"));
+    }
 
     const PUBLISHED: &str = "C:Q1aaa=\nP:ghostty\nV:1.3.1-r0\nA:x86_64\n\n\
                              C:Q1bbb=\nP:alpymist-desktop\nV:0.0.1-r0\n\n";

@@ -8,9 +8,11 @@
 #![forbid(unsafe_code)]
 
 mod capabilities;
+mod channel;
 mod tier;
 
 pub use capabilities::{Capabilities, GlesInfo, GpuDevice, Virtualisation};
+pub use channel::Channel;
 pub use tier::{Rationale, SessionBackend, Tier, select_tier};
 
 /// Errors produced by Alpymist libraries.
