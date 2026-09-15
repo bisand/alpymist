@@ -8,6 +8,7 @@ members = [
     "crates/alpymist-menu",
     "crates/alpymist-power",
     "crates/alpymist-splash",
+    "crates/alpymist-store",
     "crates/alpymist-ui",
     "crates/alpymist-wallpaper",
     "crates/alpymist-widget",
@@ -67,6 +68,13 @@ strip = true
 # keystroke, and nearly all of that time is spent rasterising glyphs. Size is
 # the wrong trade there; everything else keeps it.
 [profile.release.package.alpymist-menu]
+opt-level = 3
+# The store searches some thirty thousand entries at every keystroke.
+[profile.release.package.alpymist-store]
+opt-level = 3
+[profile.release.package.quick-xml]
+opt-level = 3
+[profile.release.package.miniz_oxide]
 opt-level = 3
 [profile.release.package.denise-render]
 opt-level = 3

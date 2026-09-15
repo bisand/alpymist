@@ -20,6 +20,8 @@
 //!   label and value grids.
 //! - [`focus::FocusRing`]: Tab order over whatever controls are present.
 //! - [`waybar`]: printing a Waybar custom module's line whenever it changes.
+//! - `window`: an ordinary application window, for what stays open beside
+//!   people's work rather than dropping from the bar.
 //!
 //! A minimal widget:
 //!
@@ -54,6 +56,8 @@ pub mod focus;
 pub mod host;
 pub mod instance;
 pub mod waybar;
+#[cfg(target_os = "linux")]
+pub mod window;
 
 pub use alpymist_menu::config::{Appearance, Colour};
 use denise::Frame;

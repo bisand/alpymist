@@ -1,0 +1,71 @@
+# Alpymist Store
+#
+# Where software comes from, and how the store shows it. The first file found
+# is used: ~/.config/alpymist/store.toml, then /etc/alpymist/store.toml, then
+# this copy, built into the binary. Colours, fonts and sizes are the menu's
+# ([appearance] in menu.toml), so a theme set there dresses the store too.
+#
+# Print this file with `alpymist-store --print-config`.
+
+[store]
+# The window's size when the compositor leaves it to the store, in logical
+# pixels.
+width = 1080
+height = 720
+
+# Each [[source]] is one place software comes from. They are listed in the
+# store in this order, and every one can be switched off with enabled = false.
+# `id` names a source on the command line (`alpymist-store install flathub
+# org.gimp.GIMP`) and must be unique; `label`, `icon` and `colour` are how it
+# is shown on its results.
+
+# Flatpak applications from Flathub, installed for this account alone: no
+# password, and nothing outside the home directory is touched. `url` is where
+# the remote is added from when this account does not have it yet, a
+# .flatpakrepo file or its address. `installation` is "user" or "system"; a
+# system installation needs a polkit agent to ask for a password, which the
+# Alpymist desktops do not run.
+[[source]]
+id = "flathub"
+kind = "flatpak"
+label = "Flathub"
+icon = "\U000F03D7"
+colour = "#7fb8d9"
+remote = "flathub"
+url = "/usr/share/alpymist/flathub.flatpakrepo"
+installation = "user"
+
+# Alpine packages from the repositories in /etc/apk/repositories, installed
+# system-wide through alpymist-store-helper. Packages whose names match `hide`
+# are left out of results unless searched for by their exact name: split-off
+# documentation, headers, translations and completions would otherwise bury
+# the package itself. Packages matching `protect` cannot be removed from the
+# store; the helper refuses them too.
+[[source]]
+id = "alpine"
+kind = "apk"
+label = "Alpine"
+icon = "\uF300"
+colour = "#9ad9a2"
+hide = [
+  "*-bash-completion",
+  "*-dbg",
+  "*-dev",
+  "*-doc",
+  "*-fish-completion",
+  "*-lang",
+  "*-openrc",
+  "*-pyc",
+  "*-static",
+  "*-zsh-completion",
+]
+protect = [
+  "alpine-base",
+  "alpymist-*",
+  "apk-tools",
+  "busybox",
+  "doas",
+  "linux-*",
+  "musl",
+  "openrc",
+]

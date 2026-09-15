@@ -1,0 +1,36 @@
+[package]
+name = "alpymist-store"
+description = "Alpymist's software store: Flathub applications and Alpine packages in one window, searched offline and drawn with Denise."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "alpymist-store"
+path = "src/main.rs"
+
+# Run as root through doas: apk add, del, upgrade and update, and nothing else.
+[[bin]]
+name = "alpymist-store-helper"
+path = "src/bin/helper.rs"
+
+[dependencies]
+# The window is drawn as the menu and the popups are, in the menu's appearance.
+alpymist-widget = { workspace = true }
+denise = { workspace = true }
+denise-render = { workspace = true }
+denise-text = { workspace = true }
+serde = { workspace = true }
+toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
+# The catalogues are read from what Flatpak and apk already keep on disk:
+# Flathub's AppStream XML and its PNG icons, and apk's gzipped index files,
+# named after the SHA-1 of their URL. Pure Rust, nothing linked.
+quick-xml = "0.41"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+png = "0.17"
+sha1_smol = "1"
+
+[lints]
+workspace = true
