@@ -48,6 +48,14 @@ mkdir -p "$tmp"/etc/apk
 # running system needs must be listed here — not only in the mkimage profile.
 # Mesa is what gives the EGL probe something to ask; without it every machine
 # reports "libEGL.so.1 could not be loaded" and lands on the Potato tier.
+#
+# Nothing here may install a file under /lib/firmware. The live system's
+# firmware is the modloop's, and modloop links it in only where /lib/firmware
+# is empty: it tries `rmdir /lib/firmware` and quietly gives up when that
+# fails. wireless-regdb was listed here once, and its regulatory.db cost the
+# live system every firmware file — on an Asus E200HA the ath10k Wi-Fi never
+# came up, so the installer had no Wi-Fi to offer. The regulatory database is
+# in the modloop too: mkimage builds it with wireless-regdb.
 makefile root:root 0644 "$tmp"/etc/apk/world <<EOF
 alpine-base
 doas
@@ -70,7 +78,6 @@ iwd
 iwd-openrc
 iw
 openresolv
-wireless-regdb
 EOF
 
 # iwd configures the address itself once it has joined a network, and hands
