@@ -1,6 +1,6 @@
 [package]
 name = "alpymist"
-description = "Alpymist system control CLI."
+description = "Alpymist's command line: every setting, the release channel and the hardware probe."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 alpymist-core = { workspace = true }
 alpymist-hwprobe = { workspace = true }
+alpymist-settings = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
 

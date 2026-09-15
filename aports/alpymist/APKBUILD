@@ -35,4 +35,7 @@ build() {
 package() {
 	install -Dm755 "$builddir"/target/release/alpymist \
 		"$pkgdir"/usr/bin/alpymist
+	# System settings run `alpymist set` through pkexec; what that asks.
+	install -Dm644 "$builddir"/desktop/polkit/org.alpymist.settings.policy \
+		"$pkgdir"/usr/share/polkit-1/actions/org.alpymist.settings.policy
 }

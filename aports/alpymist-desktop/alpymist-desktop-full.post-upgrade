@@ -18,4 +18,16 @@ for home in /root /home/*; do
 		echo "    Change its \$terminal line to: \$terminal = foot"
 	fi
 done
+# Hyprland sources ~/.config/alpymist/hypr/settings.conf and refuses a missing
+# one. `alpymist session hyprland` writes it at login; for accounts already
+# logged in, whose Hyprland reloads when this package's files change, write it
+# now, as each account.
+if command -v alpymist >/dev/null 2>&1; then
+	for home in /home/*; do
+		[ -d "$home/.config/hypr" ] || continue
+		owner=$(stat -c %U "$home" 2>/dev/null) || continue
+		[ "$owner" = root ] && continue
+		su -s /bin/sh "$owner" -c "alpymist session prepare" >/dev/null 2>&1 || true
+	done
+fi
 exit 0

@@ -1,0 +1,22 @@
+[package]
+name = "alpymist-settings"
+description = "Every Alpymist setting, once: what it is, where it lives, how it changes. Behind the alpymist command, the settings app and the popups."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# The release channel and the keyboard layouts.
+alpymist-core = { workspace = true }
+# power.toml, the power modes and the charge limit, without the popup.
+alpymist-power = { workspace = true }
+alpymist-theme = { workspace = true }
+# iwd, without the popup.
+alpymist-wifi = { workspace = true }
+serde_json = { workspace = true }
+toml = { version = "0.9", default-features = false, features = ["parse", "display", "serde", "std"] }
+
+[lints]
+workspace = true

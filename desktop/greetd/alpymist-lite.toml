@@ -10,5 +10,7 @@ service = "alpymist-greetd"
 vt = 7
 
 [default_session]
-command = "alpymist-greeter --cmd 'dbus-run-session labwc'"
+# `alpymist session` writes the files the desktop reads from Settings, then
+# becomes the compositor (ADR 0007).
+command = "alpymist-greeter --cmd 'dbus-run-session alpymist session labwc'"
 user = "greetd"

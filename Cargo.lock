@@ -49,6 +49,7 @@ version = "0.0.1"
 dependencies = [
  "alpymist-core",
  "alpymist-hwprobe",
+ "alpymist-settings",
  "clap",
  "serde_json",
 ]
@@ -172,6 +173,18 @@ dependencies = [
  "nix",
  "png",
  "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
+name = "alpymist-settings"
+version = "0.0.1"
+dependencies = [
+ "alpymist-core",
+ "alpymist-power",
+ "alpymist-theme",
+ "alpymist-wifi",
  "serde_json",
  "toml",
 ]
