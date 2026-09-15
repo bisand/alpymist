@@ -1,104 +1,19 @@
-// Alpymist: the top bar under Hyprland.
+// Your top bar under Hyprland.
 //
-// Slim, solid and icon-led: the desktop is the wallpaper, not the bar. Details
-// live in tooltips rather than on screen, and every icon comes from the Nerd
-// Font symbols, with Fira Mono for text.
+// Alpymist's bar is included from /usr/share/alpymist/waybar/hyprland.jsonc,
+// which upgrades keep current. Anything set here wins over it, a setting at a
+// time: add only what you want different, and the rest still follows
+// Alpymist. For example, the clock with the date:
+//
+//   "clock": { "format": "{:%a %d %b %H:%M}" },
+//
+// or a bar without the processor and memory icons (a list replaces
+// Alpymist's whole list):
+//
+//   "modules-right": ["group/tray-drawer", "bluetooth", "custom/wifi",
+//                     "network", "pulseaudio", "custom/battery", "custom/session"],
+//
+// Save, then restart the bar: Toggle › Top bar in the menu, twice.
 {
-  "layer": "top",
-  "position": "top",
-  "height": 26,
-  "spacing": 0,
-
-  "modules-left": ["custom/alpymist", "hyprland/workspaces"],
-  "modules-center": ["clock"],
-  "modules-right": ["group/tray-drawer", "bluetooth", "custom/wifi", "network", "pulseaudio", "cpu", "memory", "custom/battery", "custom/session"],
-
-  "custom/alpymist": {
-    // The mark is an image, drawn by our own code; see the stylesheet.
-    "format": " ",
-    "tooltip-format": "Menu",
-    "on-click": "alpymist-menu"
-  },
-
-  "hyprland/workspaces": {
-    "format": "{name}",
-    "on-click": "activate",
-    "persistent-workspaces": { "*": 5 }
-  },
-
-  "clock": {
-    "format": "{:%a %H:%M}",
-    "format-alt": "{:%A %d %B %H:%M}",
-    "tooltip-format": "<tt>{calendar}</tt>"
-  },
-
-  "group/tray-drawer": {
-    "orientation": "inherit",
-    "drawer": { "transition-duration": 300, "children-class": "tray-item", "transition-left-to-right": false },
-    "modules": ["custom/tray-arrow", "tray"]
-  },
-  "custom/tray-arrow": { "format": "󰅁", "tooltip-format": "Background applications" },
-  "tray": { "spacing": 10 },
-
-  "bluetooth": {
-    "format": "󰂯",
-    "format-connected": "󰂱",
-    "format-disabled": "",
-    "format-off": "",
-    "format-no-controller": "",
-    "tooltip-format": "{controller_alias}",
-    "tooltip-format-connected": "{device_enumerate}"
-  },
-
-  // Wi-Fi is alpymist-wifi: it prints the icon and tooltip whenever iwd
-  // changes anything, and a click opens its popup under the bar; a second
-  // click closes it. Without a Wi-Fi adapter it prints nothing and Waybar
-  // hides it.
-  "custom/wifi": {
-    "exec": "alpymist-wifi --waybar",
-    "return-type": "json",
-    "restart-interval": 5,
-    "on-click": "alpymist-wifi"
-  },
-
-  // The wired port only: an empty format hides the module on Wi-Fi, and when
-  // nothing is plugged in, which custom/wifi already says.
-  "network": {
-    "interval": 5,
-    "format-wifi": "",
-    "format-ethernet": "󰈀",
-    "format-disconnected": "",
-    "tooltip-format-ethernet": "{ifname}\n{ipaddr}"
-  },
-
-  "pulseaudio": {
-    "format": "{icon}",
-    "format-muted": "󰝟",
-    "format-icons": { "default": ["󰕿", "󰖀", "󰕾"] },
-    "tooltip-format": "{desc}  {volume}%",
-    "on-click": "pavucontrol",
-    "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
-    "scroll-step": 5
-  },
-
-  "cpu": { "interval": 5, "format": "󰍛", "tooltip-format": "Processor  {usage}%" },
-  "memory": { "interval": 10, "format": "󰘚", "tooltip-format": "Memory  {percentage}%  ({used:0.1f}G of {total:0.1f}G)" },
-
-  // The battery is alpymist-power: an icon for every ten percent, with a bolt
-  // while charging, and beside it whatever its popup's "Show in the bar" boxes
-  // say. It prints again when the charger or the level changes, and a click
-  // opens the popup; a second click closes it. Without a battery it prints
-  // nothing and Waybar hides it.
-  "custom/battery": {
-    "exec": "alpymist-power --waybar",
-    "return-type": "json",
-    "restart-interval": 5,
-    "on-click": "alpymist-power"
-  },
-
-  "custom/session": {
-    "format": "󰐥",
-    "tooltip-format": "Session",
-    "on-click": "alpymist-menu system"
-  }
+  "include": ["/usr/share/alpymist/waybar/hyprland.jsonc"]
 }

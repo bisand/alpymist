@@ -175,7 +175,13 @@ _wayland() {
 		wl-clipboard
 		xdg-desktop-portal-wlr
 		"
+	# The bar itself, which each account's ~/.config/waybar includes, so an
+	# upgrade reaches accounts made before it.
 	local conf
+	for conf in modules.jsonc hyprland.jsonc labwc.jsonc style.css; do
+		install -Dm644 "$builddir"/desktop/waybar/$conf \
+			"$subpkgdir"/usr/share/alpymist/waybar/$conf
+	done
 	for conf in hyprland labwc; do
 		install -Dm644 "$builddir"/desktop/xdg-desktop-portal/$conf-portals.conf \
 			"$subpkgdir"/etc/xdg/xdg-desktop-portal/$conf-portals.conf

@@ -1,0 +1,29 @@
+// Alpymist: the top bar under Hyprland.
+//
+// Belongs to the alpymist-desktop-wayland package and is replaced on every
+// upgrade: change ~/.config/waybar/hyprland.jsonc instead, which includes this.
+// The modules shared with the other desktop are in modules.jsonc.
+{
+  "include": ["/usr/share/alpymist/waybar/modules.jsonc"],
+
+  "modules-left": ["custom/alpymist", "hyprland/workspaces"],
+
+  "custom/alpymist": {
+    // The mark is an image, drawn by our own code; see the stylesheet.
+    "format": " ",
+    "tooltip-format": "Menu",
+    "on-click": "alpymist-menu"
+  },
+
+  "hyprland/workspaces": {
+    "format": "{name}",
+    "on-click": "activate",
+    "persistent-workspaces": { "*": 5 }
+  },
+
+  "custom/session": {
+    "format": "󰐥",
+    "tooltip-format": "Session",
+    "on-click": "alpymist-menu system"
+  }
+}

@@ -1,0 +1,89 @@
+// Alpymist: the top bar's modules, shared by every Wayland desktop.
+//
+// Slim, solid and icon-led: the desktop is the wallpaper, not the bar. Details
+// live in tooltips rather than on screen, and every icon comes from the Nerd
+// Font symbols, with Fira Mono for text.
+//
+// This file belongs to the alpymist-desktop-wayland package and is replaced on
+// every upgrade: change nothing here. hyprland.jsonc and labwc.jsonc beside it
+// add what differs between the compositors, and ~/.config/waybar includes
+// those, so anything set there wins over what is set here.
+{
+  "layer": "top",
+  "position": "top",
+  "height": 26,
+  "spacing": 0,
+
+  "modules-center": ["clock"],
+  "modules-right": ["group/tray-drawer", "bluetooth", "custom/wifi", "network", "pulseaudio", "cpu", "memory", "custom/battery", "custom/session"],
+
+  "clock": {
+    "format": "{:%a %H:%M}",
+    "format-alt": "{:%A %d %B %H:%M}",
+    "tooltip-format": "<tt>{calendar}</tt>"
+  },
+
+  "group/tray-drawer": {
+    "orientation": "inherit",
+    "drawer": { "transition-duration": 300, "children-class": "tray-item", "transition-left-to-right": false },
+    "modules": ["custom/tray-arrow", "tray"]
+  },
+  "custom/tray-arrow": { "format": "󰅁", "tooltip-format": "Background applications" },
+  "tray": { "spacing": 10 },
+
+  "bluetooth": {
+    "format": "󰂯",
+    "format-connected": "󰂱",
+    "format-disabled": "",
+    "format-off": "",
+    "format-no-controller": "",
+    "tooltip-format": "{controller_alias}",
+    "tooltip-format-connected": "{device_enumerate}"
+  },
+
+  // Wi-Fi is alpymist-wifi: it prints the icon and tooltip whenever iwd
+  // changes anything, and a click opens its popup under the bar; a second
+  // click closes it. Without a Wi-Fi adapter it prints nothing and Waybar
+  // hides it.
+  "custom/wifi": {
+    "exec": "alpymist-wifi --waybar",
+    "return-type": "json",
+    "restart-interval": 5,
+    "on-click": "alpymist-wifi"
+  },
+
+  // The wired port only: an empty format hides the module on Wi-Fi, and when
+  // nothing is plugged in, which custom/wifi already says.
+  "network": {
+    "interval": 5,
+    "format-wifi": "",
+    "format-ethernet": "󰈀",
+    "format-disconnected": "",
+    "tooltip-format-ethernet": "{ifname}\n{ipaddr}"
+  },
+
+  "pulseaudio": {
+    "format": "{icon}",
+    "format-muted": "󰝟",
+    "format-icons": { "default": ["󰕿", "󰖀", "󰕾"] },
+    "tooltip-format": "{desc}  {volume}%",
+    "on-click": "pavucontrol",
+    "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+    "scroll-step": 5
+  },
+
+  "cpu": { "interval": 5, "format": "󰍛", "tooltip-format": "Processor  {usage}%" },
+  "memory": { "interval": 10, "format": "󰘚", "tooltip-format": "Memory  {percentage}%  ({used:0.1f}G of {total:0.1f}G)" },
+
+  // The battery is alpymist-power: an icon for every ten percent, with a bolt
+  // while charging, and beside it whatever its popup's "Show in the bar" boxes
+  // say. It prints again when the charger or the level changes, and a click
+  // opens the popup; a second click closes it. Without a battery it prints
+  // nothing and Waybar hides it.
+  "custom/battery": {
+    "exec": "alpymist-power --waybar",
+    "return-type": "json",
+    "restart-interval": 5,
+    "on-click": "alpymist-power"
+  }
+}
