@@ -1,0 +1,10 @@
+#!/bin/sh
+# Hyprland's keyboard layout: the US default, where the installer or the user
+# has not already written one. See _full in the APKBUILD for why the file in
+# /etc is not the package's own.
+conf=/etc/alpymist/hyprland-keyboard.conf
+if [ ! -e "$conf" ]; then
+	mkdir -p /etc/alpymist
+	cp /usr/share/alpymist/hyprland-keyboard.conf "$conf"
+fi
+exit 0
