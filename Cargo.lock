@@ -94,6 +94,7 @@ dependencies = [
  "alpymist-core",
  "alpymist-hwprobe",
  "alpymist-ui",
+ "alpymist-wifi",
  "denise",
  "denise-drm",
  "denise-evdev",

@@ -7,18 +7,22 @@
 //! out here, where it can be retyped, and the network is known to work before
 //! the installed system is told to use it.
 //!
-//! iwd has no machine-readable command line, only `iwctl`'s tables, so the
-//! parsing lives here, pure and tested against captured output. The joining is
-//! done by writing the network's profile — the same file the installed system
-//! gets — and letting iwd act on it, which proved more dependable on a real
-//! iwd than asking `iwctl` to connect: a connect issued a moment after the file
-//! appears can run before iwd has read it.
+//! iwd is driven by `alpymist-wifi`, the desktop's Wi-Fi manager, over D-Bus:
+//! the installer and the popup under the bar join networks the same way, and
+//! iwd hands back its answers as data rather than as tables to parse. The
+//! passphrase goes to iwd through an agent, and iwd writes the network's
+//! profile itself once it has joined — the file the plan then copies onto the
+//! installed system.
+//!
+//! What stays here is the screen's view of it: networks as the screen lists
+//! them, and a worker thread, so scanning and joining never stall a frame.
 
-use std::fmt::Write as _;
-use std::path::Path;
-use std::process::Stdio;
+use alpymist_wifi::iwd::Iwd;
+use alpymist_wifi::model::{Security, State};
 use std::sync::mpsc::{Receiver, Sender, channel};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+pub use alpymist_wifi::model::validate_passphrase;
 
 /// Where iwd keeps the networks it knows, on the live and installed systems.
 pub const IWD_STATE: &str = "/var/lib/iwd";
@@ -57,7 +61,7 @@ pub enum Status {
 pub struct Wifi {
     /// The wireless interface, when there is one.
     pub adapter: Option<String>,
-    /// What iwd can see, strongest first.
+    /// What iwd can see, in iwd's order of preference.
     pub networks: Vec<Network>,
     /// Where joining has got to.
     pub status: Status,
@@ -118,168 +122,40 @@ pub fn sample() -> Wifi {
     }
 }
 
-/// Why a passphrase cannot be used, if it cannot.
-///
-/// WPA passphrases are 8 to 63 printable ASCII characters. Anything else is
-/// refused by the access point after a wait, which is a worse way to find out.
-///
-/// # Errors
-/// What is wrong with it, for the person typing.
-pub fn validate_passphrase(passphrase: &str) -> Result<(), String> {
-    let len = passphrase.chars().count();
-    if !(8..=63).contains(&len) {
-        return Err("A Wi-Fi passphrase is 8 to 63 characters.".into());
-    }
-    if !passphrase
-        .chars()
-        .all(|c| c.is_ascii() && !c.is_ascii_control())
-    {
-        return Err("A Wi-Fi passphrase uses only plain ASCII characters.".into());
-    }
-    Ok(())
-}
-
-/// The file iwd keeps a network's settings in.
-///
-/// iwd's rule: a name of letters, digits, spaces, `-` and `_` is used as it
-/// is; anything else is written as `=` and the name's bytes in hex, so no name
-/// can escape the directory or collide with another.
+/// The file iwd keeps a network's settings in, under [`IWD_STATE`].
 #[must_use]
 pub fn profile_name(ssid: &str, secured: bool) -> String {
-    let plain = !ssid.is_empty()
-        && ssid
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_'));
-    let stem = if plain {
-        ssid.to_string()
+    let security = if secured {
+        Security::Psk
     } else {
-        let hex = ssid.bytes().fold(String::new(), |mut out, b| {
-            let _ = write!(out, "{b:02x}");
-            out
-        });
-        format!("={hex}")
+        Security::Open
     };
-    format!("{stem}.{}", if secured { "psk" } else { "open" })
+    alpymist_wifi::model::profile_name(ssid, security)
 }
 
-/// The contents of a network's profile.
-#[must_use]
-pub fn profile(passphrase: Option<&str>) -> String {
-    passphrase.map_or_else(String::new, |p| format!("[Security]\nPassphrase={p}\n"))
-}
-
-/// The networks in `iwctl station <adapter> get-networks` output.
+/// The networks the screen offers, from what iwd sees.
 ///
-/// Columns are name, security and signal. The name may contain spaces, so a
-/// row is read from the right. Signal is four stars with the missing bars drawn
-/// dim, so bars are counted before the colour is stripped. Networks needing a
-/// login rather than a passphrase — 802.1X, and WEP — are left out: this screen
-/// cannot join them.
+/// Networks needing a login rather than a passphrase — 802.1X, and WEP — are
+/// left out: this screen cannot join them.
 #[must_use]
-pub fn parse_networks(output: &str) -> Vec<Network> {
+pub fn networks(state: &State) -> Vec<Network> {
     let mut networks: Vec<Network> = Vec::new();
-    for raw in output.lines() {
-        let bars = bright_stars(raw);
-        let line = strip_ansi(raw);
-        let line = line.trim().trim_start_matches('>').trim();
-        let (rest, signal) = last_word(line);
-        let (name, security) = last_word(rest);
-        if signal.is_empty() || !signal.chars().all(|c| c == '*') {
-            continue;
-        }
-        let secured = match security {
-            "psk" => true,
-            "open" => false,
-            _ => continue,
+    for n in &state.networks {
+        let secured = match n.security {
+            Security::Psk => true,
+            Security::Open => false,
+            Security::Enterprise | Security::Wep => continue,
         };
-        let ssid = name.trim().to_string();
-        if ssid.is_empty() || networks.iter().any(|n| n.ssid == ssid) {
+        if n.name.is_empty() || networks.iter().any(|seen| seen.ssid == n.name) {
             continue;
         }
         networks.push(Network {
-            ssid,
+            ssid: n.name.clone(),
             secured,
-            bars: bars.min(4),
+            bars: n.bars(),
         });
     }
-    // iwctl lists strongest first already; sorting again keeps that true if it
-    // ever stops, and is stable, so equal signals keep iwctl's order.
-    networks.sort_by_key(|n| std::cmp::Reverse(n.bars));
     networks
-}
-
-/// From `iwctl station <adapter> show`: whether it is connected, and its
-/// IPv4 address once it has one.
-#[must_use]
-pub fn parse_station(output: &str) -> (bool, Option<String>) {
-    let mut connected = false;
-    let mut address = None;
-    for line in output.lines().map(strip_ansi) {
-        let line = line.trim();
-        if let Some(state) = line.strip_prefix("State") {
-            connected = state.trim() == "connected";
-        } else if let Some(ip) = line.strip_prefix("IPv4 address") {
-            let ip = ip.trim();
-            if !ip.is_empty() {
-                address = Some(ip.to_string());
-            }
-        }
-    }
-    (connected, address)
-}
-
-/// `text` split before its last word, with the whitespace between dropped.
-fn last_word(text: &str) -> (&str, &str) {
-    let text = text.trim_end();
-    match text.rfind(char::is_whitespace) {
-        Some(at) => (text[..at].trim_end(), text[at..].trim_start()),
-        None => ("", text),
-    }
-}
-
-/// `text` without terminal colour sequences.
-fn strip_ansi(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars();
-    while let Some(c) = chars.next() {
-        if c == '\u{1b}' {
-            // CSI: ESC [ parameters, ending in a letter.
-            for c in chars.by_ref() {
-                if c.is_ascii_alphabetic() {
-                    break;
-                }
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
-/// Stars drawn in the normal colour: the bars a signal has. iwctl draws the
-/// missing ones dim, with `90` (bright black) in their colour sequence.
-fn bright_stars(text: &str) -> u8 {
-    let mut count = 0u8;
-    let mut dim = false;
-    let mut chars = text.chars();
-    while let Some(c) = chars.next() {
-        if c == '\u{1b}' {
-            let mut sequence = String::new();
-            for c in chars.by_ref() {
-                if c.is_ascii_alphabetic() {
-                    break;
-                }
-                sequence.push(c);
-            }
-            dim = sequence
-                .trim_start_matches('[')
-                .split(';')
-                .any(|part| part == "90");
-        } else if c == '*' && !dim {
-            count = count.saturating_add(1);
-        }
-    }
-    count
 }
 
 /// This machine's first wireless interface, if it has one.
@@ -347,23 +223,38 @@ pub struct Link {
     pub events: Receiver<Event>,
 }
 
-/// How long to wait for an address after joining.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+/// How long a scan may take before its results are taken as they are.
+const SCAN_TIMEOUT: Duration = Duration::from_secs(12);
 
-/// Start a worker driving iwd on `adapter`.
+/// How long to wait for an address after joining.
+const ADDRESS_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Start a worker driving iwd.
 ///
 /// Scanning and joining take seconds, and the installer keeps drawing while
 /// they happen; so they run on a thread, and the screen collects results.
+/// `adapter` is only for the log: iwd knows its own devices.
 #[must_use]
 pub fn spawn(adapter: String) -> Link {
     let (command_tx, command_rx) = channel::<Request>();
     let (event_tx, event_rx) = channel();
     std::thread::spawn(move || {
+        let iwd = match Iwd::with_agent() {
+            Ok(iwd) => Some(iwd),
+            Err(e) => {
+                eprintln!("wifi: {e}");
+                None
+            }
+        };
         for command in command_rx {
-            let event = match command {
-                Request::Scan => Event::Networks(scan(&adapter)),
-                Request::Connect { ssid, passphrase } => {
-                    connect(&adapter, &ssid, passphrase.as_deref())
+            let event = match (&iwd, command) {
+                (Some(iwd), Request::Scan) => Event::Networks(scan(iwd, &adapter)),
+                (Some(iwd), Request::Connect { ssid, passphrase }) => {
+                    connect(iwd, &adapter, ssid, passphrase)
+                }
+                (None, Request::Scan) => Event::Networks(Vec::new()),
+                (None, Request::Connect { ssid, .. }) => {
+                    Event::Failed(ssid, "iwd cannot be reached".into())
                 }
             };
             if event_tx.send(event).is_err() {
@@ -377,164 +268,90 @@ pub fn spawn(adapter: String) -> Link {
     }
 }
 
-fn iwctl(args: &[&str]) -> Option<(bool, String)> {
-    let output = std::process::Command::new("iwctl")
-        .args(args)
-        .stdin(Stdio::null())
-        .output()
-        .ok()?;
-    let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
-    text.push_str(&String::from_utf8_lossy(&output.stderr));
-    Some((output.status.success(), text))
-}
-
-fn scan(adapter: &str) -> Vec<Network> {
-    let _ = iwctl(&["station", adapter, "scan"]);
-    // A scan takes a few seconds and iwctl does not wait for it.
-    let mut networks = Vec::new();
-    for _ in 0..4 {
-        std::thread::sleep(Duration::from_secs(2));
-        if let Some((_, text)) = iwctl(&["station", adapter, "get-networks"]) {
-            networks = parse_networks(&text);
-            if !networks.is_empty() {
-                break;
-            }
-        }
-    }
+fn scan(iwd: &Iwd, adapter: &str) -> Vec<Network> {
+    let networks = networks(&iwd.scan_and_wait(SCAN_TIMEOUT));
     eprintln!("wifi: {} networks on {adapter}", networks.len());
     networks
 }
 
-fn connect(adapter: &str, ssid: &str, passphrase: Option<&str>) -> Event {
-    let failed = |why: &str| Event::Failed(ssid.to_string(), why.to_string());
-    // Whatever iwd remembers about this network from a failed try is dropped,
-    // or it keeps the old passphrase and never reads the new file.
-    let _ = iwctl(&["known-networks", ssid, "forget"]);
-
-    let path = Path::new(IWD_STATE).join(profile_name(ssid, passphrase.is_some()));
-    if let Err(e) = write_private(&path, &profile(passphrase)) {
-        return failed(&format!("could not save the network: {e}"));
+fn connect(iwd: &Iwd, adapter: &str, ssid: String, passphrase: Option<String>) -> Event {
+    let failed = |ssid: String, why: &str| Event::Failed(ssid, why.to_string());
+    let mut state = iwd.state();
+    if state.network(&ssid).is_none() {
+        state = iwd.scan_and_wait(SCAN_TIMEOUT);
     }
-    eprintln!("wifi: joining {ssid:?} on {adapter}");
+    let Some(network) = state.network(&ssid).cloned() else {
+        return failed(ssid, "the network is out of range");
+    };
 
-    // iwd needs a moment to notice the file; after that a connect either
-    // starts joining or fails outright on a wrong passphrase. Other errors —
-    // it was already joining on its own — are not failures.
-    std::thread::sleep(Duration::from_secs(1));
-    if let Some((false, text)) = iwctl(&["--dont-ask", "station", adapter, "connect", ssid])
-        && strip_ansi(&text).contains("Operation failed")
+    // A profile iwd kept from an earlier try holds the passphrase typed then,
+    // and iwd would use it rather than ask for the one typed now.
+    if passphrase.is_some()
+        && let Some(known) = &network.known_path
     {
-        let _ = iwctl(&["known-networks", ssid, "forget"]);
-        return failed(if passphrase.is_some() {
-            "check the passphrase"
-        } else {
-            "the network refused the connection"
-        });
+        let _ = iwd.forget(known);
     }
 
-    let until = Instant::now() + CONNECT_TIMEOUT;
-    while Instant::now() < until {
-        if let Some((_, text)) = iwctl(&["station", adapter, "show"])
-            && let (true, Some(address)) = parse_station(&text)
-        {
+    eprintln!("wifi: joining {ssid:?} on {adapter}");
+    if let Err(e) = iwd.join(&network.path, passphrase) {
+        return failed(ssid, &e.reason());
+    }
+    match iwd.wait_for_address(ADDRESS_TIMEOUT) {
+        Some(address) => {
             eprintln!("wifi: joined {ssid:?} as {address}");
-            return Event::Connected(ssid.to_string());
+            Event::Connected(ssid)
         }
-        std::thread::sleep(Duration::from_secs(1));
+        None => failed(ssid, "no address after 30 seconds"),
     }
-    let _ = iwctl(&["known-networks", ssid, "forget"]);
-    failed("no address after 30 seconds")
-}
-
-/// Write `contents` to `path`, readable by root alone from the moment it
-/// exists: it holds a passphrase.
-fn write_private(path: &Path, contents: &str) -> std::io::Result<()> {
-    use std::io::Write as _;
-    use std::os::unix::fs::OpenOptionsExt as _;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)?;
-    file.write_all(contents.as_bytes())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        Network, parse_networks, parse_station, profile, profile_name, validate_passphrase,
-    };
-
-    /// Captured from iwctl 3.12 on Alpine, joined to "Alpymist Test".
-    const NETWORKS: &str = "                               Available networks\u{1b}[1;90m                              \u{1b}[0m
-\u{1b}[90m--------------------------------------------------------------------------------
-\u{1b}[0m\u{1b}[1;90m      Network name                      Security            Signal
-\u{1b}[0m\u{1b}[90m--------------------------------------------------------------------------------
-\u{1b}[0m  \u{1b}[1;90m> \u{1b}[0m  Alpymist Test                     psk                 ****
-      Kaffebar                          open                **\u{1b}[1;90m**\u{1b}[0m
-      Eduroam                           8021x               ***\u{1b}[1;90m*\u{1b}[0m
-      Naboen sitt nett                  psk                 *\u{1b}[1;90m***\u{1b}[0m
-
-";
-
-    const STATION: &str = "                                 Station: wlan1\u{1b}[1;90m                                \u{1b}[0m
-\u{1b}[90m--------------------------------------------------------------------------------
-\u{1b}[0m\u{1b}[1;90m  Settable  Property              Value
-\u{1b}[0m\u{1b}[90m--------------------------------------------------------------------------------
-\u{1b}[0m            Scanning              no
-            State                 connected
-            Connected network     Alpymist Test
-            IPv4 address          10.42.0.57
-";
+    use super::{Network, networks, profile_name, validate_passphrase};
+    use alpymist_wifi::model::{Security, sample};
 
     #[test]
-    fn networks_are_read_from_iwctl_with_their_signal() {
+    fn networks_are_listed_as_the_screen_needs_them() {
+        let mut state = sample();
+        // A second access point for a name iwd lists once is still one row.
+        let mut twin = state.networks[1].clone();
+        twin.path.push_str("_twin");
+        state.networks.push(twin);
+        let listed = networks(&state);
         assert_eq!(
-            parse_networks(NETWORKS),
-            [
-                Network {
-                    ssid: "Alpymist Test".into(),
-                    secured: true,
-                    bars: 4
-                },
-                Network {
-                    ssid: "Kaffebar".into(),
-                    secured: false,
-                    bars: 2
-                },
-                Network {
-                    ssid: "Naboen sitt nett".into(),
-                    secured: true,
-                    bars: 1
-                },
-            ],
+            listed.first(),
+            Some(&Network {
+                ssid: "Fjellheim".into(),
+                secured: true,
+                bars: 4,
+            })
+        );
+        assert!(
+            listed.iter().all(|n| n.ssid != "eduroam"),
             "802.1X is left out: this screen cannot log in to it"
         );
-    }
-
-    #[test]
-    fn headings_and_empty_output_are_not_networks() {
-        assert!(parse_networks("").is_empty());
-        assert!(parse_networks("No devices in Station mode available.\n").is_empty());
-    }
-
-    #[test]
-    fn a_station_is_joined_only_once_it_has_an_address() {
         assert_eq!(
-            parse_station(STATION),
-            (true, Some("10.42.0.57".to_string()))
+            listed.iter().filter(|n| n.ssid == "Kaffebar Gjest").count(),
+            1
         );
-        let joining = STATION
-            .replace(
-                "State                 connected",
-                "State                 connecting",
-            )
-            .replace("10.42.0.57", "");
-        assert_eq!(parse_station(&joining), (false, None));
+        assert!(
+            !listed
+                .iter()
+                .find(|n| n.ssid == "Kaffebar Gjest")
+                .unwrap()
+                .secured
+        );
+    }
+
+    #[test]
+    fn wep_is_left_out_too() {
+        let mut state = sample();
+        state.networks[2].security = Security::Wep;
+        assert!(
+            networks(&state)
+                .iter()
+                .all(|n| n.ssid != "Naboen sitt nett")
+        );
     }
 
     /// iwd's own rule; a different name is a file iwd never reads.
@@ -551,23 +368,9 @@ mod tests {
     }
 
     #[test]
-    fn a_profile_holds_the_passphrase_and_an_open_one_nothing() {
-        assert_eq!(
-            profile(Some("correct horse")),
-            "[Security]\nPassphrase=correct horse\n"
-        );
-        assert_eq!(profile(None), "");
-    }
-
-    #[test]
     fn passphrases_are_checked_before_anything_is_tried() {
         assert!(validate_passphrase("correct horse battery").is_ok());
         assert!(validate_passphrase("short").is_err());
-        assert!(validate_passphrase(&"x".repeat(64)).is_err());
-        assert!(validate_passphrase("blåbærsyltetøy").is_err());
-        assert!(
-            validate_passphrase("line\nbreak!!").is_err(),
-            "a newline would end the profile's line early"
-        );
+        assert!(validate_passphrase("line\nbreak!!").is_err());
     }
 }

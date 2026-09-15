@@ -27,6 +27,7 @@ alpymist-core = { path = "crates/alpymist-core" }
 alpymist-glesprobe = { path = "crates/alpymist-glesprobe" }
 alpymist-hwprobe = { path = "crates/alpymist-hwprobe" }
 alpymist-ui = { path = "crates/alpymist-ui" }
+alpymist-wifi = { path = "crates/alpymist-wifi", default-features = false }
 clap = { version = "4", features = ["derive"] }
 # DeniseUI: direct rendering to DRM/KMS or the framebuffer, no compositor.
 # "0.29" accepts 0.29.x, so patch releases arrive via `cargo update`.
