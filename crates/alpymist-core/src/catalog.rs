@@ -1,4 +1,4 @@
-//! The keyboard layouts and time zones the installer offers.
+//! The keyboard layouts and time zones the installer and Settings offer.
 //!
 //! Both lists are generated from Alpine's own `kbd-bkeymaps` and `tzdata` by
 //! `cargo xtask installer-data` and compiled in, so every entry is one that
@@ -74,6 +74,18 @@ fn records(tsv: &'static str) -> impl Iterator<Item = [&'static str; 3]> {
     })
 }
 
+/// The xkb variant for a console keymap from `kbd-bkeymaps`.
+///
+/// Those keymaps are generated from xkb and named `<layout>-<variant>`, so
+/// `no-mac` is layout `no`, variant `mac`; the plain `no` has no variant.
+#[must_use]
+pub fn xkb_variant<'a>(layout: &str, keymap: &'a str) -> &'a str {
+    keymap
+        .strip_prefix(layout)
+        .and_then(|rest| rest.strip_prefix('-'))
+        .unwrap_or("")
+}
+
 impl Keymap {
     /// The row text.
     #[must_use]
@@ -141,6 +153,7 @@ pub fn zone_index(zone: &str) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    use super::xkb_variant;
     use super::{DEFAULT_KEYMAP, DEFAULT_ZONE, keymap_index, keymaps, matches, zone_index, zones};
 
     #[test]
@@ -194,5 +207,14 @@ mod tests {
                 .iter()
                 .all(|z| !z.zone.is_empty() && !z.name.is_empty())
         );
+    }
+
+    #[test]
+    fn console_keymaps_map_onto_xkb_variants() {
+        assert_eq!(xkb_variant("no", "no"), "");
+        assert_eq!(xkb_variant("no", "no-mac"), "mac");
+        assert_eq!(xkb_variant("us", "us-altgr-intl"), "altgr-intl");
+        assert_eq!(xkb_variant("gb", "gb-colemak_dh"), "colemak_dh");
+        assert_eq!(xkb_variant("no", "nodeadkeys"), "");
     }
 }

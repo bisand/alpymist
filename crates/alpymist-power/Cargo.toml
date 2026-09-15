@@ -7,9 +7,26 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = ["popup"]
+# The popup and its drawing. Without it the crate is the battery, the power
+# modes, the configuration and the actions — what alpymist-settings uses,
+# with no Wayland or fonts behind it.
+popup = [
+    "dep:alpymist-widget",
+    "dep:denise",
+    "dep:denise-render",
+    "dep:denise-text",
+]
+
 [[bin]]
 name = "alpymist-power"
 path = "src/main.rs"
+required-features = ["popup"]
+
+[[example]]
+name = "snapshot"
+required-features = ["popup"]
 
 # Run as root through doas: a closed set of writes under /sys.
 [[bin]]
@@ -19,10 +36,10 @@ path = "src/bin/helper.rs"
 [dependencies]
 # The popup is a widget: its host, its one-click toggle, and the controls it
 # draws, in the menu's appearance.
-alpymist-widget = { workspace = true }
-denise = { workspace = true }
-denise-render = { workspace = true }
-denise-text = { workspace = true }
+alpymist-widget = { workspace = true, optional = true }
+denise = { workspace = true, optional = true }
+denise-render = { workspace = true, optional = true }
+denise-text = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }

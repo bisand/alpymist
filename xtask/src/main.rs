@@ -85,7 +85,7 @@ enum Command {
         #[arg(long, default_value = "/usr/share/zoneinfo")]
         zoneinfo: PathBuf,
         /// Directory to write keymaps.tsv and timezones.tsv into.
-        #[arg(long, default_value = "crates/alpymist-install/data")]
+        #[arg(long, default_value = "crates/alpymist-core/data")]
         out: PathBuf,
     },
 }

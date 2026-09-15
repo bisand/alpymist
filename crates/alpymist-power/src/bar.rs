@@ -170,11 +170,14 @@ pub fn summary(power: &Power, profile: Option<Profile>) -> String {
 /// The line Waybar reads.
 #[must_use]
 pub fn waybar(power: &Power, profile: Option<Profile>, show: &Bar) -> String {
-    alpymist_widget::waybar::line(
-        &text(power, profile, show),
-        &summary(power, profile),
-        class(power),
-    )
+    let class = class(power);
+    serde_json::json!({
+        "text": text(power, profile, show),
+        "tooltip": summary(power, profile),
+        "class": class,
+        "alt": class,
+    })
+    .to_string()
 }
 
 #[cfg(test)]

@@ -16,15 +16,16 @@ pub mod actions;
 pub mod bar;
 pub mod battery;
 pub mod config;
+#[cfg(feature = "popup")]
 pub mod popup;
 pub mod profile;
 pub mod system;
+#[cfg(feature = "popup")]
 pub mod view;
 pub mod watch;
 
-use std::path::Path;
-
 /// Read everything the popup and the bar show.
+#[cfg(feature = "popup")]
 #[must_use]
 pub fn read() -> popup::Reading {
     let knobs = profile::Knobs::now();
@@ -32,6 +33,6 @@ pub fn read() -> popup::Reading {
         power: battery::Power::now(),
         profile: knobs.current(),
         profiles: knobs.available(),
-        can_hibernate: system::can_hibernate(Path::new(profile::SYSFS)),
+        can_hibernate: system::can_hibernate(std::path::Path::new(profile::SYSFS)),
     }
 }

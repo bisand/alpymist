@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 mod capabilities;
+pub mod catalog;
 mod channel;
 mod tier;
 

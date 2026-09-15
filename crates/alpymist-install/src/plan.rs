@@ -214,17 +214,7 @@ const IWD_MAIN_CONF: &str =
 /// lost on every configuration reload.
 const HYPRLAND_KEYBOARD: &str = "/etc/alpymist/hyprland-keyboard.conf";
 
-/// The xkb variant for a console keymap from `kbd-bkeymaps`.
-///
-/// Those keymaps are generated from xkb and named `<layout>-<variant>`, so
-/// `no-mac` is layout `no`, variant `mac`; the plain `no` has no variant.
-#[must_use]
-pub fn xkb_variant<'a>(layout: &str, keymap: &'a str) -> &'a str {
-    keymap
-        .strip_prefix(layout)
-        .and_then(|rest| rest.strip_prefix('-'))
-        .unwrap_or("")
-}
+pub use alpymist_core::catalog::xkb_variant;
 
 /// The `n`th partition of a disk, as the kernel names it.
 ///
@@ -1046,17 +1036,6 @@ mod tests {
             hyprland.contains("source = /etc/alpymist/hyprland-keyboard.conf"),
             "hyprland.conf does not source the installer's keyboard file"
         );
-    }
-
-    #[test]
-    fn console_keymaps_map_onto_xkb_variants() {
-        use super::xkb_variant;
-        assert_eq!(xkb_variant("no", "no"), "");
-        assert_eq!(xkb_variant("no", "no-mac"), "mac");
-        assert_eq!(xkb_variant("us", "us-altgr-intl"), "altgr-intl");
-        assert_eq!(xkb_variant("gb", "gb-colemak_dh"), "colemak_dh");
-        // Not a variant of this layout at all: no guess.
-        assert_eq!(xkb_variant("no", "nodeadkeys"), "");
     }
 
     #[test]

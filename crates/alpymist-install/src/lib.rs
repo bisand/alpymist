@@ -14,7 +14,7 @@
 
 pub mod answers;
 pub mod app;
-pub mod catalog;
+pub use alpymist_core::catalog;
 pub mod disks;
 pub mod editing;
 pub mod execute;
