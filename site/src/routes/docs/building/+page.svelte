@@ -40,7 +40,7 @@
 	</p>
 	<Shell lines={['make check', 'make test', 'make lint']} />
 	<p>On any Linux machine you can ask the tier probe about the hardware in front of you:</p>
-	<Shell lines={['cargo run -p alpymistctl -- probe']} />
+	<Shell lines={['cargo run -p alpymist -- probe']} />
 	<p>
 		The installer opens in a window during development, so you can walk through it without building
 		an image. <code>ALPYMIST_DRY_RUN=1</code> makes the last step report what it would run instead

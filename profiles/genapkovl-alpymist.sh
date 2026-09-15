@@ -63,7 +63,7 @@ alpymist-shell
 eudev
 udev-init-scripts
 udev-init-scripts-openrc
-alpymistctl
+alpymist
 alpymist-install
 alpymist-install-openrc
 alpymist-splash
@@ -121,11 +121,11 @@ depend() {
 start() {
 	ebegin "Probing hardware capability"
 	mkdir -p /var/lib/alpymist
-	alpymistctl probe --format json > /var/lib/alpymist/tier.json
+	alpymist probe --format json > /var/lib/alpymist/tier.json
 	# Markers bracket the output so an automated boot test can find it in a
 	# serial log without depending on where in the boot it appeared.
 	echo "=== ALPYMIST-PROBE-BEGIN ==="
-	alpymistctl probe
+	alpymist probe
 	echo "=== ALPYMIST-PROBE-END ==="
 	eend 0
 }

@@ -228,7 +228,7 @@ impl About {
                 ("alpymist-menu", "0.0.1_git20260915121112-r7"),
                 ("alpymist-power", "0.0.1_git20260915121112-r1"),
                 ("alpymist-store", "0.0.1_git20260915121112-r1"),
-                ("alpymistctl", "0.0.1_git20260915121112-r1"),
+                ("alpymist", "0.0.1_git20260915121112-r1"),
                 ("squint", "0.1.0_git20260914-r2"),
             ]
             .into_iter()
@@ -335,7 +335,7 @@ mod tests {
         };
         write(
             "lib/apk/db/installed",
-            "P:alpymist-desktop\nV:0.0.1-r13\n\nP:alpymistctl\nV:0.0.1-r1\n",
+            "P:alpymist-desktop\nV:0.0.1-r13\n\nP:alpymist\nV:0.0.1-r1\n",
         );
         write("etc/apk/repositories", Channel::Stable.repository());
         write("etc/alpine-release", "3.24.1\n");
@@ -352,7 +352,7 @@ mod tests {
         assert_eq!(about.packages.len(), 2);
         let text = about.text();
         assert!(text.contains("Channel   stable\n"), "{text}");
-        assert!(text.contains("  alpymistctl       0.0.1-r1\n"), "{text}");
+        assert!(text.contains("  alpymist          0.0.1-r1\n"), "{text}");
     }
 
     #[test]

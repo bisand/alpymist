@@ -1,4 +1,4 @@
-//! `alpymistctl channel`: which Alpymist repository this system follows.
+//! `alpymist channel`: which Alpymist repository this system follows.
 //!
 //! Switching writes the repositories file and trusts or distrusts dev's key;
 //! then apk upgrades as it always does. Leaving dev passes `--available`,
@@ -88,7 +88,7 @@ fn read(path: &Path) -> Result<String> {
 /// Replace a file in one step, so apk never sees half of it.
 fn write(path: &Path, contents: &[u8]) -> Result<()> {
     let mut tmp = PathBuf::from(path);
-    tmp.as_mut_os_string().push(".alpymistctl");
+    tmp.as_mut_os_string().push(".alpymist");
     std::fs::write(&tmp, contents)
         .and_then(|()| std::fs::rename(&tmp, path))
         .map_err(|e| denied(&path.display().to_string(), &e))

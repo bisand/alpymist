@@ -44,7 +44,7 @@
 				]}
 			/>
 			<p>Ask the probe which tier the machine can run, then add that tier's desktop:</p>
-			<Shell lines={['doas apk add alpymistctl', 'alpymistctl probe']} />
+			<Shell lines={['doas apk add alpymist', 'alpymist probe']} />
 			<div class="table-scroll">
 				<table>
 					<thead><tr><th>Probe says</th><th>Install</th></tr></thead>

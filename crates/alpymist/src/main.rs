@@ -1,4 +1,7 @@
-//! `alpymistctl` — the single entry point for configuring an Alpymist system.
+//! `alpymist` — the single entry point for configuring an Alpymist system.
+//!
+//! Formerly `alpymistctl`, which the transitional package of that name links
+//! here for one release (ADR 0007).
 
 #![forbid(unsafe_code)]
 
@@ -9,7 +12,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(
-    name = "alpymistctl",
+    name = "alpymist",
     version,
     about = "Configure and inspect an Alpymist system"
 )]
@@ -50,7 +53,7 @@ fn main() -> std::process::ExitCode {
     match run(&cli) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("alpymistctl: {e}");
+            eprintln!("alpymist: {e}");
             std::process::ExitCode::FAILURE
         }
     }

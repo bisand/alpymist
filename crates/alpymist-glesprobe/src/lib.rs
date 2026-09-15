@@ -8,7 +8,7 @@
 //! project is confined to the [`ffi`] module below — a few dozen lines that can
 //! be audited in one sitting.
 //!
-//! libEGL is loaded *dynamically*. Nothing links against it, so `alpymistctl`
+//! libEGL is loaded *dynamically*. Nothing links against it, so `alpymist`
 //! still runs on a system with no Mesa installed; the probe just reports
 //! [`None`], and the tier logic treats that as "assume no acceleration".
 

@@ -1,5 +1,5 @@
 [package]
-name = "alpymistctl"
+name = "alpymist"
 description = "Alpymist system control CLI."
 version.workspace = true
 edition.workspace = true

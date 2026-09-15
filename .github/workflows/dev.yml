@@ -2,7 +2,7 @@ name: Dev
 
 # The dev channel: every push to main, built and published to
 # dev.pkgs.alpymist.org without an ISO or a release. Systems that ran
-# `alpymistctl channel dev` get it with apk upgrade.
+# `alpymist channel dev` get it with apk upgrade.
 #
 # Unlike stable, CI signs this index, with the dev key (ADR 0006). The key and
 # the push access to bisand/alpymist-packages-dev are secrets of the dev-channel

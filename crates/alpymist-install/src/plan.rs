@@ -199,7 +199,7 @@ const ALPINE_VERSION: &str = "v3.24";
 const REPOSITORIES: [&str; 2] = ["main", "community"];
 /// Alpymist's own packages, for the same release. Trusted through the key in
 /// `alpymist-keys`, which the desktop depends on; `cargo xtask publish` fills it.
-/// New systems follow stable; `alpymistctl channel` changes that.
+/// New systems follow stable; `alpymist channel` changes that.
 const ALPYMIST_REPOSITORY: &str = alpymist_core::Channel::Stable.repository();
 /// The login shell for the account the installer creates.
 const LOGIN_SHELL: &str = "/bin/zsh";

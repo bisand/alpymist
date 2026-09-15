@@ -1,0 +1,38 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="Alpymist's command line: settings, the release channel and the hardware probe"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+makedepends="cargo"
+# libEGL is loaded at runtime, not linked, so it is deliberately not a depend:
+# alpymist must work on a system with no Mesa and simply report less.
+subpackages=""
+options="!check"  # the test suite runs in CI, not in the package build
+source=""
+builddir="$srcdir"
+
+prepare() {
+	# The workspace is bind-mounted at /src by the builder container. Copy the
+	# whole tree rather than a list of members: cargo needs every workspace
+	# member's manifest to resolve, and a hand-maintained list silently breaks
+	# the build the next time a crate is added.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	cargo build --release --locked -p alpymist
+}
+
+package() {
+	install -Dm755 "$builddir"/target/release/alpymist \
+		"$pkgdir"/usr/bin/alpymist
+}

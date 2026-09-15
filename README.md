@@ -34,7 +34,7 @@ make iso     # build a bootable ISO in the Alpine builder container
 make smoke   # boot it in QEMU and assert it reports a desktop tier
 ```
 
-`make iso` builds `alpymistctl` into a signed apk, assembles an Alpine image
+`make iso` builds `alpymist` into a signed apk, assembles an Alpine image
 around it with `mkimage`, and drops the ISO in `out/`. `make smoke` boots that
 ISO under QEMU with a virtio-gpu, captures the serial console, and checks that
 the first-boot probe reported a tier and explained itself.
@@ -42,7 +42,7 @@ the first-boot probe reported a tier and explained itself.
 On any Linux machine you can also just run the probe directly:
 
 ```
-cargo run -p alpymistctl -- probe
+cargo run -p alpymist -- probe
 ```
 
 ## Repository layout

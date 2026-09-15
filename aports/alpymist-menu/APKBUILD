@@ -2,7 +2,7 @@
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-menu
 pkgver=0.0.1
-pkgrel=8
+pkgrel=9
 pkgdesc="Alpymist menu: a searchable launcher and system menu on a Wayland layer surface"
 url="https://github.com/bisand/alpymist"
 arch="all"
@@ -18,7 +18,7 @@ source=""
 builddir="$srcdir"
 
 prepare() {
-	# Same as alpymistctl: the workspace is bind-mounted at /src.
+	# Same as alpymist: the workspace is bind-mounted at /src.
 	tar -C /src -cf - \
 		--exclude=./target \
 		--exclude=./out \

@@ -20,7 +20,7 @@ impl Channel {
     /// Every channel, stable first.
     pub const ALL: [Self; 2] = [Self::Stable, Self::Dev];
 
-    /// Its name, as `alpymistctl channel` takes it.
+    /// Its name, as `alpymist channel` takes it.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
@@ -172,7 +172,7 @@ mod tests {
         );
     }
 
-    /// `alpymistctl channel dev` copies the key from where the package puts it.
+    /// `alpymist channel dev` copies the key from where the package puts it.
     #[test]
     fn alpymist_keys_ships_dev_key_outside_apks_keys() {
         let apkbuild = include_str!("../../../aports/alpymist-keys/APKBUILD");

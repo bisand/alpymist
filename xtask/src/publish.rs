@@ -501,8 +501,8 @@ fn landing_page(target: &Target) -> String {
             page.push_str(
                 "<p>Every push to main of <a href=\"https://github.com/bisand/alpymist\">Alpymist</a>, \
                  built and signed by CI with a key of its own. Expect breakage. On Alpymist:</p>\n\
-                 <pre>doas alpymistctl channel dev</pre>\n\
-                 <p>and back with <code>doas alpymistctl channel stable</code>, which also \
+                 <pre>doas alpymist channel dev</pre>\n\
+                 <p>and back with <code>doas alpymist channel stable</code>, which also \
                  stops trusting this key.</p>\n",
             );
         }

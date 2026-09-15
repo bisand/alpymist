@@ -38,9 +38,9 @@ Installed systems upgrade with `apk upgrade`; an ISO is only for installing
   main, signed by CI with the dev key.
 
 ```sh
-alpymistctl channel               # which one this system follows
-doas alpymistctl channel dev      # follow dev, trust its key, upgrade
-doas alpymistctl channel stable   # back, distrust it, downgrade to stable
+alpymist channel                  # which one this system follows
+doas alpymist channel dev         # follow dev, trust its key, upgrade
+doas alpymist channel stable      # back, distrust it, downgrade to stable
 ```
 
 Dev packages are versioned `<pkgver>_git<UTC time of their last commit>`, which
@@ -59,7 +59,7 @@ apk sorts after the pkgver and before the next one, so dev needs no bumps.
    `DEV_CHANNEL_SIGNING_KEY` (`~/.config/alpymist/keys/alpymist-dev-2026.rsa`)
    and `DEV_CHANNEL_DEPLOY_KEY` (the SSH private key).
 4. Publish stable once with `alpymist-keys` 2026-r1 and `alpymistctl`
-   0.0.1-r1, so stable systems have the dev key and the command to switch.
+   0.0.1-r1 (now `alpymist`), so stable systems have the dev key and the command to switch.
 
 Keep an offline copy of the dev signing key as well, and never put it in
 `/etc/apk/keys` on a machine that should follow only stable.

@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/alpymist",
     "crates/alpymist-about",
     "crates/alpymist-auth",
     "crates/alpymist-core",
@@ -16,7 +17,6 @@ members = [
     "crates/alpymist-widget",
     "crates/alpymist-wifi",
     "crates/alpymist-hwprobe",
-    "crates/alpymistctl",
     "xtask",
 ]
 

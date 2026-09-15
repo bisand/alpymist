@@ -12,7 +12,7 @@ name = "alpymist-about"
 path = "src/main.rs"
 
 [dependencies]
-# The channel, read from the repositories file as alpymistctl reads it.
+# The channel, read from the repositories file as `alpymist channel` reads it.
 alpymist-core = { workspace = true }
 # The mark, drawn from the same silhouette as the bar's and the splash's.
 alpymist-ui = { workspace = true }

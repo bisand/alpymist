@@ -10,8 +10,8 @@
 #
 # The dev channel's key is here too, but not where apk looks: CI signs dev's
 # index with it, and apk trusts every key in /etc/apk/keys for every
-# repository, so `alpymistctl channel dev` copies it there only for a system
-# that asks to follow dev, and `alpymistctl channel stable` removes it
+# repository, so `alpymist channel dev` copies it there only for a system
+# that asks to follow dev, and `alpymist channel stable` removes it
 # (ADR 0006).
 pkgname=alpymist-keys
 pkgver=2026

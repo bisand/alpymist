@@ -17,7 +17,7 @@ source="alpymist-splash.initd alpymist-splash-done.initd"
 builddir="$srcdir"
 
 prepare() {
-	# Same as alpymistctl: the workspace is bind-mounted at /src.
+	# Same as alpymist: the workspace is bind-mounted at /src.
 	tar -C /src -cf - \
 		--exclude=./target \
 		--exclude=./out \
