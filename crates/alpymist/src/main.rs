@@ -52,6 +52,7 @@ enum Command {
         /// The setting, such as `touchpad.natural-scroll`.
         id: String,
         /// Its new value: `on`, `off`, a number, or one of its choices.
+        #[arg(allow_hyphen_values = true)]
         value: String,
         /// Replace a generated file even if it was edited by hand.
         #[arg(long)]
