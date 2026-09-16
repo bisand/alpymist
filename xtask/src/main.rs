@@ -10,6 +10,7 @@ mod installer_data;
 mod publish;
 mod qemu;
 mod serial;
+mod version;
 
 use alpymist_core::Channel;
 use anyhow::{Context, Result, bail};
@@ -74,6 +75,24 @@ enum Command {
         #[arg(long)]
         push: bool,
     },
+    /// Set, or check, the version every first-party package is built with.
+    ///
+    /// Given a version, it writes that one everywhere and starts pkgrel again
+    /// at 0. Given none, it checks: Cargo.toml's workspace version and every
+    /// aports/*/APKBUILD pkgver have to agree, which is what CI runs
+    /// (ADR 0008).
+    Version {
+        /// Write this version everywhere, as `0.0.5`.
+        #[arg(value_name = "VERSION")]
+        set: Option<String>,
+        /// Also require the workspace version to be this release tag, with or
+        /// without its leading `v`. What a Release run checks before building.
+        #[arg(long, value_name = "TAG")]
+        expect: Option<String>,
+        /// The workspace to work on.
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+    },
     /// Regenerate the installer's keyboard layout and time zone lists.
     ///
     /// Run inside the Alpine builder with kbd-bkeymaps and tzdata installed.
@@ -131,6 +150,9 @@ fn main() -> Result<()> {
             };
             let key = key.unwrap_or_else(|| publish::default_key(channel));
             publish::publish(channel, &packages, &key, push)
+        }
+        Command::Version { set, expect, root } => {
+            version::version(&root, set.as_deref(), expect.as_deref())
         }
         Command::InstallerData {
             bkeymaps,

@@ -10,7 +10,11 @@ set -euo pipefail
 ARCH="${1:-$(uname -m)}"
 ALPINE_BRANCH="${ALPINE_BRANCH:-3.24-stable}"
 ALPINE_VERSION="${ALPINE_VERSION:-v3.24}"
-TAG="${TAG:-0.0.1}"
+# What the image is named after. A release run passes its tag; otherwise it is
+# the version every first-party package in it is built with, read off one of
+# them, since `cargo xtask version` makes them all the workspace's (ADR 0008).
+TAG="${TAG:-$(sed -n 's/^pkgver=//p' /src/aports/alpymist/APKBUILD)}"
+[ -n "$TAG" ] || { echo "no pkgver in aports/alpymist and no TAG given" >&2; exit 1; }
 MIRROR="${MIRROR:-https://dl-cdn.alpinelinux.org/alpine}"
 
 # With PREBUILT naming a directory of this architecture's packages, as the

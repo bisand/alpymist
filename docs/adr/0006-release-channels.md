@@ -32,11 +32,11 @@ without a new image, and to keep a channel that only moves at a release.
    also in the menu under Update → Release channel. New systems follow stable.
 4. **Dev versions itself.** `ci/build-packages.sh` with `CHANNEL=dev` appends
    `_git<UTC time of the last commit touching the package's sources>` to each
-   first-party pkgver. apk orders `0.0.1 < 0.0.1_git20260915120301 < 0.0.2`,
+   first-party pkgver. apk orders `0.0.4 < 0.0.4_git20260915120301 < 0.0.5`,
    so dev moves ahead with each push and no bump, and meets the next release
-   when it arrives. A package no commit touched keeps its version and its
-   published file. squint and `alpymist-keys` are versioned by hand on both
-   channels.
+   when it arrives. squint and `alpymist-keys` are versioned by hand on both
+   channels. ([ADR 0008](0008-versions-and-build-numbers.md) later made the
+   pkgver itself the release's, and the pkgrel the build's run number.)
 5. **Leaving dev downgrades.** Dev's versions sort above stable's, so
    `alpymistctl channel stable` upgrades with `--available`, which takes the
    repository's versions even when they are older.
@@ -64,8 +64,9 @@ is trusting GitHub Actions, and should know that.
 
 - A change reaches a dev machine within one build, with `doas apk upgrade -U`
   or the menu's Update.
-- Stable still needs a `pkgrel` or `pkgver` bump per changed package, and
-  `cargo xtask publish` still enforces it.
+- Stable needs a new version per build, which
+  [ADR 0008](0008-versions-and-build-numbers.md) now gives it automatically;
+  `cargo xtask publish` still enforces that it got one.
 - Dev rebuilds and re-downloads every Rust package whenever the workspace
   changes, because each one copies the whole workspace. They are small.
 - The `v3.24` in both addresses ties each channel to an Alpine release. Moving

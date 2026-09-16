@@ -44,7 +44,8 @@ doas alpymist channel stable      # back, distrust it, downgrade to stable
 ```
 
 Dev packages are versioned `<pkgver>_git<UTC time of their last commit>`, which
-apk sorts after the pkgver and before the next one, so dev needs no bumps.
+apk sorts after the pkgver and before the next one, so dev stays ahead of the
+release it follows and meets the next one when it arrives.
 
 ### Setting up the dev channel (once)
 
@@ -86,13 +87,41 @@ The key is read from `~/.config/alpymist/keys/alpymist-2026.rsa` (`--key` to
 override). Keep a copy offline; losing it means rotating the key through an
 `alpymist-keys` update signed by the old one.
 
-Installed systems only upgrade to a higher version, so a changed package
-needs a `pkgrel` or `pkgver` bump. CI rebuilds everything, and the builds are
-not reproducible yet, so `publish` keeps the published file for any version
-already out and lists the packages that are new. A change without a bump is
-not shipped. Each publish is a
-single force-pushed commit, keeping the site under Pages' size limit; to roll
-back, publish an older run.
+Installed systems only upgrade to a higher version, and the build number gives
+every run one (Versions, below), so a change is always shipped. CI rebuilds
+everything, and the builds are not reproducible yet, so `publish` keeps the
+published file for any version already out and lists the packages that are new
+— which, since the build number moves every run, is now all of them. Each
+publish is a single force-pushed commit, keeping the site under Pages' size
+limit; to roll back, publish an older run.
+
+## Versions
+
+Every first-party package is `<the workspace version>-r<the run number of the
+build>`: 0.0.4 built by Release run 8 is `0.0.4-r8` (ADR 0008). The version is
+written down once, in `Cargo.toml`'s `[workspace.package]`, and repeated as
+`pkgver` in each `aports/*/APKBUILD`, which `cargo xtask version` keeps in
+step. The `pkgrel` in those files is never edited: `ci/build-packages.sh` sets
+it from `BUILD`, which the workflows pass as `github.run_number`, and a local
+`make iso` leaves it at 0.
+
+```sh
+cargo xtask version                       # CI's check: they all have to agree
+cargo xtask version 0.0.5                 # write it everywhere, pkgrel back to 0
+cargo update --workspace                  # and into Cargo.lock
+```
+
+squint and `alpymist-keys` keep versions of their own: they are built from a
+pinned upstream commit and from a key file, not from this workspace.
+
+### Cutting a release
+
+1. `cargo xtask version <next>` and `cargo update --workspace`.
+2. Commit and merge to main. CI's version check passes when they agree.
+3. Publish a GitHub release tagged `v<next>`. Release refuses to build if the
+   tag and the workspace disagree, then builds the packages and the ISOs and
+   attaches the images.
+4. `cargo xtask publish --run <id> --push` to ship the packages to stable.
 
 Still planned:
 

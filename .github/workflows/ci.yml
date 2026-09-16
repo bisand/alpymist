@@ -22,5 +22,7 @@ jobs:
       # alpymist-menu reads keymaps through libxkbcommon.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev
       - run: cargo fmt --all --check
+      # Every APKBUILD's pkgver is the workspace version (ADR 0008).
+      - run: cargo run -q -p xtask -- version
       - run: cargo clippy --workspace --all-targets --features alpymist-ui/render -- -D warnings
       - run: cargo test --workspace --features alpymist-ui/render

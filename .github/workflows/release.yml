@@ -23,7 +23,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A release named v0.0.4 has to be built from a commit whose packages say
+  # 0.0.4, or the ISO attached to it is not the version on the tin (ADR 0008).
+  version:
+    name: Version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.96
+      - name: The tag and the workspace agree
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ -n "$TAG" ]; then
+            cargo run -q -p xtask -- version --expect "$TAG"
+          else
+            cargo run -q -p xtask -- version
+          fi
+
   packages:
+    needs: version
     uses: ./.github/workflows/packages.yml
     with:
       channel: stable
@@ -65,7 +84,9 @@ jobs:
       # of exactly the packages this release's run produced.
       - name: Build the ISO
         env:
-          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || '0.0.1' }}
+          # Empty for a run started by hand, which names the image after the
+          # version the workspace is at.
+          TAG: ${{ github.event.release.tag_name }}
         run: |
           mkdir -p out/iso && chmod 777 out/iso
           docker run --rm -v "$PWD":/src -v "$PWD/out/iso":/out -v "$PWD/out/prebuilt":/prebuilt:ro \

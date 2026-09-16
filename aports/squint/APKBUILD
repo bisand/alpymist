@@ -5,9 +5,12 @@
 # tier's default editor: a proof of concept, pinned to a commit of
 #   https://github.com/bisand/squint
 pkgname=squint
+# The commit's date, and a pkgrel bump for a second commit on the same day: a
+# _git with a full fourteen-digit time is how `cargo xtask publish` tells a dev
+# build from an upstream snapshot, and would be refused on stable.
 pkgver=0.1.0_git20260916
-pkgrel=0
-_commit=589138a91fc079adcdffcfa6c6d4175e49560a4f
+pkgrel=1
+_commit=ee2bdf18fcd9bab7ab5ad5a971b6f80673c6bc60
 pkgdesc="Text editor that opens files of any size instantly"
 url="https://github.com/bisand/squint"
 arch="aarch64 x86_64"
@@ -37,6 +40,6 @@ package() {
 }
 
 sha512sums="
-c193aa1187374ff798f67d1f774e2c532b5d7d2e9c62ca9a39b0a180397e1d1983354cca6ace3d869c024616abb1e0e0cd776c13592d82afde6489150597b36e  squint-589138a91fc079adcdffcfa6c6d4175e49560a4f.tar.gz
+4a4454b8a301e8c1e1474a9820c138c74520fc77abe582babbb0405397e40573f38c90ecef72bfaa5a6590b48a44cf6aa00ddb98a80cb8223d6e541881d3ea3c  squint-ee2bdf18fcd9bab7ab5ad5a971b6f80673c6bc60.tar.gz
 280fce6ff3b4b7a73443795fead1da57d4650b5659ac6830df5c5c0d055cec09eb0dd90166b8ba64339b1544475e5253e2d97defc886c387d281e95928f98e1a  squint.desktop
 "

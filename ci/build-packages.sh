@@ -7,16 +7,21 @@
 # nobody: what installed systems trust is the repository index, which
 # `cargo xtask publish` signs off CI with the release key (ADR 0002).
 #
-# Three variables change what it does:
+# Four variables change what it does:
 #
+#   BUILD          the number of the CI run building these packages, which
+#                  becomes every first-party package's pkgrel: 0.0.4 is built
+#                  as 0.0.4-r8 by run 8 and 0.0.4-r9 by run 9. Nobody bumps a
+#                  pkgrel by hand, and no two builds of one version collide
+#                  (ADR 0008). Unset, the committed pkgrel of 0 stands, which
+#                  is what a local build wants.
 #   CHANNEL        stable (the default) or dev. For dev, each first-party
 #                  package's pkgver gets _git and the UTC time of the last
-#                  commit that could change it: 0.0.1 becomes
-#                  0.0.1_git20260915120301. apk sorts that above 0.0.1 and
-#                  below 0.0.2, so dev moves on with every push to main without
-#                  a pkgrel bump, and onto the next release when there is one.
-#                  A package no commit has touched keeps its version, and its
-#                  published file (ADR 0006). Needs the git history at /src.
+#                  commit that could change it: 0.0.4 becomes
+#                  0.0.4_git20260915120301. apk sorts that above 0.0.4 and
+#                  below 0.0.5, so dev stays ahead of the release it follows
+#                  and meets the next one when it arrives (ADR 0006). Needs the
+#                  git history at /src.
 #   PACKAGE_CACHE  a directory kept between builds. squint is built from a
 #                  pinned upstream commit, so what it builds to depends only on
 #                  its aport and the builder: it is kept there and not built
@@ -39,9 +44,11 @@ KEYS=~/packages/keys
 CACHE="${PACKAGE_CACHE:-}"
 CACHED=" squint "
 CHANNEL="${CHANNEL:-stable}"
-# Built from pinned upstream commits or a key file: versioned by hand on every
-# channel.
-UNSTAMPED=" squint alpymist-keys "
+BUILD="${BUILD:-}"
+# Built from a pinned upstream commit or a key file, not from this workspace:
+# versioned by hand, on every channel, and given neither the dev stamp nor the
+# build number. xtask's version command holds the same list.
+INDEPENDENT=" squint alpymist-keys "
 
 export CARGO_HOME=/tmp/cargo
 
@@ -52,6 +59,15 @@ stable | dev) ;;
 	exit 1
 	;;
 esac
+
+if [ -n "$BUILD" ]; then
+	case "$BUILD" in
+	*[!0-9]*)
+		echo "BUILD is the number of the run building these, not $BUILD" >&2
+		exit 1
+		;;
+	esac
+fi
 
 # The UTC time of the last commit touching what a first-party package is built
 # from: its aport, and the workspace every one of them copies in.
@@ -98,12 +114,21 @@ else
 	for pkg in alpymist-keys alpymist alpymistctl alpymist-install alpymist-menu alpymist-about alpymist-wifi alpymist-auth alpymist-power alpymist-settings alpymist-store alpymist-greeter alpymist-splash alpymist-desktop squint; do
 		mkdir -p ~/ap/"$pkg"
 		cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
-		if [ "$CHANNEL" = dev ] && [[ "$UNSTAMPED" != *" $pkg "* ]]; then
-			when=$(stamp "$pkg")
-			[ -n "$when" ] || { echo "no commit touches $pkg; is the history there?" >&2; exit 1; }
-			sed -i "s/^pkgver=\([^_]*\)$/pkgver=\1_git$when/" ~/ap/"$pkg"/APKBUILD
-			grep -q "^pkgver=.*_git$when$" ~/ap/"$pkg"/APKBUILD \
-				|| { echo "could not stamp $pkg's pkgver" >&2; exit 1; }
+		if [[ "$INDEPENDENT" != *" $pkg "* ]]; then
+			if [ "$CHANNEL" = dev ]; then
+				when=$(stamp "$pkg")
+				[ -n "$when" ] || { echo "no commit touches $pkg; is the history there?" >&2; exit 1; }
+				sed -i "s/^pkgver=\([^_]*\)$/pkgver=\1_git$when/" ~/ap/"$pkg"/APKBUILD
+				grep -q "^pkgver=.*_git$when$" ~/ap/"$pkg"/APKBUILD \
+					|| { echo "could not stamp $pkg's pkgver" >&2; exit 1; }
+			fi
+			# The build number, so a rebuild of an unchanged version is still a
+			# new package to apk and reaches systems that have the old one.
+			if [ -n "$BUILD" ]; then
+				sed -i "s/^pkgrel=.*$/pkgrel=$BUILD/" ~/ap/"$pkg"/APKBUILD
+				grep -q "^pkgrel=$BUILD$" ~/ap/"$pkg"/APKBUILD \
+					|| { echo "could not number $pkg's build" >&2; exit 1; }
+			fi
 		fi
 		key=""
 		if [ -n "$CACHE" ] && [[ "$CACHED" == *" $pkg "* ]]; then

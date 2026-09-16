@@ -4,6 +4,11 @@ name: Packages
 # packages-<arch> and package-keys-<arch>. Not run on its own: Release calls it
 # for stable, with an ISO after it, and Dev for dev on every push to main.
 # Publishing is the caller's (ADR 0002, ADR 0006).
+#
+# Every package is built as <the workspace version>-r<this run's number>, so
+# nothing is versioned by hand and a rebuild never lands on a version already
+# published (ADR 0008). Reusable workflows share the caller's run context, so
+# the number is Release's or Dev's, each counting on its own.
 on:
   workflow_call:
     inputs:
@@ -56,6 +61,7 @@ jobs:
 
       - name: Build the packages
         env:
+          BUILD: ${{ github.run_number }}
           CHANNEL: ${{ inputs.channel }}
         run: |
           # The cache action restores as the runner, and the container builds
@@ -63,7 +69,7 @@ jobs:
           # the files an earlier run left behind.
           mkdir -p out cache && chmod 777 out cache && chmod -R u+rwX,go+rwX cache
           docker run --rm -v "$PWD":/src -v "$PWD/out":/out -v "$PWD/cache":/cache \
-            -e PACKAGE_CACHE=/cache -e CHANNEL \
+            -e PACKAGE_CACHE=/cache -e CHANNEL -e BUILD \
             alpymist-builder bash /src/ci/build-packages.sh /out/packages
 
       - uses: actions/upload-artifact@v7

@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-about
-pkgver=0.0.1
+pkgver=0.0.4
 pkgrel=0
 pkgdesc="About Alpymist: the version, channel and packages this system runs"
 url="https://github.com/bisand/alpymist"

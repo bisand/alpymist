@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-auth
-pkgver=0.0.1
+pkgver=0.0.4
 pkgrel=0
 pkgdesc="Alpymist's password prompt: polkit authentication in a Denise dialog"
 url="https://github.com/bisand/alpymist"

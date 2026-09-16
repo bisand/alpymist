@@ -43,7 +43,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-core",
  "alpymist-hwprobe",
@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-about"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-core",
  "alpymist-ui",
@@ -67,7 +67,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-auth"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-widget",
  "blocking",
@@ -83,7 +83,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-core"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "serde",
  "thiserror 2.0.20",
@@ -91,7 +91,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-glesprobe"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-core",
  "khronos-egl",
@@ -101,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-greeter"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-ui",
  "denise",
@@ -119,7 +119,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-hwprobe"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-core",
  "alpymist-glesprobe",
@@ -127,7 +127,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-install"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-core",
  "alpymist-hwprobe",
@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-menu"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "ab_glyph",
  "alpymist-theme",
@@ -162,7 +162,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-power"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-widget",
  "denise",
@@ -177,7 +177,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-settings"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-core",
  "alpymist-power",
@@ -189,7 +189,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-settings-app"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-about",
  "alpymist-core",
@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-splash"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-ui",
  "denise",
@@ -219,7 +219,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-store"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-auth",
  "alpymist-widget",
@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-theme"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "denise",
  "serde",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-ui"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "denise",
  "denise-drm",
@@ -258,7 +258,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-wallpaper"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-ui",
  "denise",
@@ -268,7 +268,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-widget"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-menu",
  "bytemuck",
@@ -281,7 +281,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-wifi"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-widget",
  "denise",
@@ -840,18 +840,18 @@ dependencies = [
 
 [[package]]
 name = "denise"
-version = "0.30.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a64b1e3fa112feb432c4731203842e1c2f73d25e8ad16a6c4447f15eaa5f872"
+checksum = "da20a9ca1e1680272c021d29f487e2b018ddc6e07f299d6a7f8dd9a4aff3d0da"
 dependencies = [
  "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "denise-drm"
-version = "0.30.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d6755c668156585783187f36a4b88974356c506e2bd64cc9be82f0a25930f87"
+checksum = "68f7e29ca1ef5a67d05af0ec07bc4a52ea68a07b5bc74dd9e092bc438b9ce2d2"
 dependencies = [
  "denise",
  "drm 0.15.0",
@@ -862,9 +862,9 @@ dependencies = [
 
 [[package]]
 name = "denise-evdev"
-version = "0.30.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "481967301945e5a3487fbf7906de6d87d4861df24e223ac5faf111398958e68f"
+checksum = "2f0d8fdd4f180200f01aac57021a107099f33627ffba7636c3f0c8de7e1980c2"
 dependencies = [
  "denise",
  "denise-layout",
@@ -875,9 +875,9 @@ dependencies = [
 
 [[package]]
 name = "denise-fbdev"
-version = "0.30.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6667fac6557f0096fb32e6cca14270175000c3e3984628ec9bbbc8c80bb7177d"
+checksum = "30eba58661b7beb88fe208a14573cc6f389b409885925027d9ff35cb6e9dc4d6"
 dependencies = [
  "bytemuck",
  "denise",
@@ -887,18 +887,18 @@ dependencies = [
 
 [[package]]
 name = "denise-layout"
-version = "0.30.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec2b5923005c89892f8a5f92705a8d83ace85fccdcf15b0360fa58a264d31159"
+checksum = "62ec4202cdf41a70da5c5fac771495948245432bc01645cd9556e96f7f7ea992"
 dependencies = [
  "denise",
 ]
 
 [[package]]
 name = "denise-macos"
-version = "0.30.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4359655b377eeedab735312d94fa2d81c9058d5abf43cdd99a8bcf5cf820110f"
+checksum = "e4bd7a79d6596da6e41f802986ff8e09a3ae15103c94a01290cf645afecd9ac3"
 dependencies = [
  "denise",
  "objc2 0.6.4",
@@ -913,18 +913,18 @@ dependencies = [
 
 [[package]]
 name = "denise-render"
-version = "0.30.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e2a05285bc9944060a9156266d7d5fbe6e6128b976df287ef4e1384169dc7c7"
+checksum = "dc9d0ba53b710d9a1ff8fbe5250ceafdc17df49e20c6e3bce42337908e17e47a"
 dependencies = [
  "denise",
 ]
 
 [[package]]
 name = "denise-text"
-version = "0.30.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d146ca74d71d1dc988f762dc8ba8ec2512db19a6e1ef6698e371ad9772d8218e"
+checksum = "52b6e11a4dd5cd6d93a8a065dbbeeb9a0c51ac658d8cecb739d887b7b46a4cb4"
 dependencies = [
  "ab_glyph",
  "denise",
@@ -933,9 +933,9 @@ dependencies = [
 
 [[package]]
 name = "denise-ui"
-version = "0.30.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6158433a1f41a9d5f14d6afed0091bc4b9d9a0b0fde11caa31946985b1048e1"
+checksum = "9659e1d266a49133cc2c4020f56a1291e2d20dfaef1bc57249e41dea23375829"
 dependencies = [
  "denise",
  "denise-render",
@@ -945,9 +945,9 @@ dependencies = [
 
 [[package]]
 name = "denise-winit"
-version = "0.30.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "896333a3cd532eb6b017e588f9f3fd9cd6d3d24881c2911df738436addb7feda"
+checksum = "ebafcb9ef2740b9c98bcd58d2a7e6b1148b1aa5e7f5d8a99aa209e079afec52a"
 dependencies = [
  "denise",
  "denise-macos",
@@ -3171,7 +3171,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.0.1"
+version = "0.0.4"
 dependencies = [
  "alpymist-core",
  "anyhow",

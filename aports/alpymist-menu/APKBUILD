@@ -1,8 +1,8 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-menu
-pkgver=0.0.1
-pkgrel=9
+pkgver=0.0.4
+pkgrel=0
 pkgdesc="Alpymist menu: a searchable launcher and system menu on a Wayland layer surface"
 url="https://github.com/bisand/alpymist"
 arch="all"
