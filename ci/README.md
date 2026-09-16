@@ -71,11 +71,14 @@ The repository at `https://pkgs.alpymist.org/v3.24/alpymist` is a GitHub
 Pages site (`bisand/alpymist-packages`). Installed systems have it in
 `/etc/apk/repositories` and trust it through `alpymist-keys`.
 
-Only the index is signed, with the release key, on a maintainer's machine
-(ADR 0002). CI never sees that key. apk takes a package whose hash is in a
-trusted index and refuses one whose hash is not, whatever key abuild signed
-the package with in CI. Dev is published by the same command, run by CI with
-`--channel dev --packages <dir> --commit <sha>`, which stable refuses.
+Only the index is signed, with the release key. Since 2026-09-16 that key is
+a secret of the `stable-channel` environment and CI signs with it, on every
+successful Release run of a published release; ADR 0002's addendum of that date
+records what the change costs. apk takes a package whose hash is in a trusted
+index and refuses one whose hash is not, whatever key abuild signed the package
+with in CI. Dev is published by the same command with
+`--channel dev --packages <dir> --commit <sha>`, which stable refuses: stable
+takes a Release run by `--run`, so what is signed is a run that finished.
 
 ```sh
 gh run list -w Release                    # pick a green run of main
@@ -122,7 +125,11 @@ a new squint is its `pkgver` and `sha512sums` in `aports/squint/APKBUILD`.
 3. Publish a GitHub release tagged `v<next>`. Release refuses to build if the
    tag and the workspace disagree, then builds the packages and the ISOs and
    attaches the images.
-4. `cargo xtask publish --run <id> --push` to ship the packages to stable.
+4. Nothing. Publish to stable follows a successful Release run on its own
+   (`publish-stable.yml`), signing the index with the release key from the
+   `stable-channel` environment. To publish by hand instead — the key off CI,
+   as ADR 0002 first had it — `cargo xtask publish --run <id> --push` still
+   does exactly that.
 
 Still planned:
 

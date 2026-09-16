@@ -67,3 +67,31 @@ with a key of its own, which only systems that opt in to dev trust. See
 Decision 3 is carried out by `alpymist`, formerly `alpymistctl`, and the
 `alpymist-settings` library behind it. See
 [ADR 0007](0007-settings.md).
+
+## Addendum, 2026-09-16: CI signs stable, and the offline key is retired
+
+The offline key is gone from this decision. `alpymist-2026` is a secret of the
+`stable-channel` GitHub environment, and `.github/workflows/publish-stable.yml`
+signs and publishes the index on every successful Release run of a published
+release. Nothing between a release and `pkgs.alpymist.org` is a person.
+
+**This gives up what the 2026-09-14 addendum above promised.** A compromised
+workflow can now sign an update that every Alpymist system accepts, and so can
+anything that can reach into a workflow: a dependency of the build, an action
+we call, or anyone who can push to main. The property that survives is
+narrower — a bad package still has to pass through a Release run of a tagged
+commit on main, so what is signed is what was on main and built in the open.
+What no longer holds is that signing needs a person and a machine.
+
+Why, anyway: releases had come to depend on one laptop being to hand, and a
+release that cannot be cut is its own kind of failure. The trade was made
+deliberately, with the alternative — an environment gated on a reviewer, which
+keeps a person in the loop without keeping the machine — considered and turned
+down.
+
+What still stands from the original decision: packages are signed apks, systems
+verify each one against a signed index, there is no `curl | sh`, and the dev
+key still reaches only systems that ask for it. If the key is ever to go back
+offline, the shape is here: remove the environment's secrets and publish with
+`cargo xtask publish --run <id> --push` again, which is unchanged and still
+works.

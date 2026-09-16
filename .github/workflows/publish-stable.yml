@@ -1,0 +1,82 @@
+name: Publish to stable
+
+# Signs the stable index with the release key and publishes it, so a release
+# ships without a maintainer's machine.
+#
+# This is what ADR 0002 spent its first four days forbidding. Its addendum of
+# 2026-09-16 records the reversal and what it costs: the release key is a
+# secret of the stable-channel environment now, so a workflow that can be
+# compromised can sign an update every Alpymist system will accept. Nothing
+# stands between a published release and pkgs.alpymist.org.
+#
+# A separate workflow rather than a job inside Release, because
+# `cargo xtask publish` refuses a run that has not concluded, and a job cannot
+# wait for the run it belongs to.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  contents: read
+
+# Each publish force-pushes the whole site, so they must not overlap. A publish
+# already running is left to finish rather than cancelled halfway.
+concurrency:
+  group: stable-channel
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to stable
+    # Only a Release that ran for a published release, and succeeded. Release
+    # is also run by hand to try a change before releasing it (its own comment
+    # says so); those runs build the same packages and must not reach stable.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'release'
+    runs-on: ubuntu-24.04
+    environment:
+      name: stable-channel
+      url: https://pkgs.alpymist.org/
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@1.96
+
+      - name: Build the builder container
+        run: docker build -q -t alpymist-builder builder
+
+      # The release key under the name apk knows it by, and an SSH deploy key
+      # that can push to bisand/alpymist-packages and nothing else, with
+      # GitHub's published host key so the push cannot be redirected.
+      - name: Keys
+        env:
+          STABLE_KEY: ${{ secrets.STABLE_CHANNEL_SIGNING_KEY }}
+          DEPLOY_KEY: ${{ secrets.STABLE_CHANNEL_DEPLOY_KEY }}
+        run: |
+          install -d -m 700 "$RUNNER_TEMP/keys"
+          printf '%s\n' "$STABLE_KEY" > "$RUNNER_TEMP/keys/alpymist-2026.rsa"
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/keys/deploy"
+          chmod 600 "$RUNNER_TEMP/keys/"*
+          echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$RUNNER_TEMP/keys/known_hosts"
+
+      # --run takes the packages from that run's artifacts, and checks it was a
+      # successful Release run of a commit on main before it signs anything.
+      - name: Sign and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIT_SSH_COMMAND: ssh -i ${{ runner.temp }}/keys/deploy -o IdentitiesOnly=yes -o UserKnownHostsFile=${{ runner.temp }}/keys/known_hosts
+          GIT_AUTHOR_NAME: Alpymist CI
+          GIT_AUTHOR_EMAIL: ci@alpymist.org
+          GIT_COMMITTER_NAME: Alpymist CI
+          GIT_COMMITTER_EMAIL: ci@alpymist.org
+        run: |
+          cargo run -q -p xtask -- publish --channel stable \
+            --run "${{ github.event.workflow_run.id }}" \
+            --key "$RUNNER_TEMP/keys/alpymist-2026.rsa" --push
+
+      - name: Forget the keys
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"

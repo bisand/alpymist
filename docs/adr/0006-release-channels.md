@@ -24,7 +24,7 @@ without a new image, and to keep a channel that only moves at a release.
    |---|---|---|
    | Repository | `https://pkgs.alpymist.org/v3.24/alpymist` | `https://dev.pkgs.alpymist.org/v3.24/alpymist` |
    | Built by | the Release workflow | the Dev workflow, on every push to main |
-   | Index signed by | a maintainer, offline key `alpymist-2026` | CI, key `alpymist-dev-2026` |
+   | Index signed by | CI, key `alpymist-2026` | CI, key `alpymist-dev-2026` |
    | Site | `bisand/alpymist-packages` | `bisand/alpymist-packages-dev` |
 
 3. **A channel is one line in `/etc/apk/repositories`.**
@@ -56,9 +56,15 @@ at the stable address would be trusted by all of them. So:
 - `cargo xtask publish` refuses to put stable in the hands of anything but a
   Release run, and refuses dev-versioned packages on stable.
 
-A compromised workflow can therefore ship code to systems that chose dev, and
-to no others. Stable keeps ADR 0002's guarantee unchanged. Anyone following dev
-is trusting GitHub Actions, and should know that.
+This kept dev's blast radius to systems that chose dev. It no longer does:
+since 2026-09-16 the release key is a secret of the `stable-channel`
+environment and CI signs stable too, so a compromised workflow reaches every
+Alpymist system, not only those following dev. The separation above still
+holds within itself — dev's key and deploy key cannot touch the stable site,
+and `cargo xtask publish` still refuses dev-versioned packages on stable — but
+it is no longer the boundary it was written to be. See ADR 0002's addendum of
+that date. Anyone following either channel is trusting GitHub Actions, and
+should know that.
 
 ## Consequences
 

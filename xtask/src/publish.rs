@@ -1,8 +1,12 @@
 //! Publishing packages to the Alpymist repository.
 //!
 //! CI builds the packages (the Release workflow); this signs and ships them.
-//! The split is ADR 0002's offline key: the release key never reaches CI, so a
-//! compromised workflow can produce a bad artifact but not a trusted update.
+//! Both halves run in CI now: the release key is a secret of the
+//! `stable-channel` environment, and `publish-stable.yml` runs this after a
+//! Release. ADR 0002's addendum of 2026-09-16 records that reversal — the key
+//! was deliberately off CI until then — and what was given up with it. Run by
+//! hand it behaves exactly as it always did, which is how the key goes back
+//! offline if that is ever wanted.
 //!
 //! What gets signed is only the repository index. apk accepts a package when
 //! its hash matches a trusted index, whatever key abuild signed the package
@@ -17,8 +21,9 @@
 //! The dev channel is the same, with a key and a site of its own
 //! (`dev.pkgs.alpymist.org`), and published by CI on every push to main
 //! (ADR 0006). Its key is trusted only by systems that ask to follow dev, and
-//! CI's credentials reach only its site, so a compromised workflow can reach
-//! those systems and no others.
+//! its credentials reach only its site — though now that CI holds stable's key
+//! too, that containment bounds dev's key, not what a compromised workflow can
+//! reach.
 
 use alpymist_core::Channel;
 use anyhow::{Context, Result, bail, ensure};
