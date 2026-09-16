@@ -44,12 +44,11 @@ alpymist-widget = { path = "crates/alpymist-widget" }
 alpymist-wifi = { path = "crates/alpymist-wifi", default-features = false }
 clap = { version = "4", features = ["derive"] }
 # DeniseUI: direct rendering to DRM/KMS or the framebuffer, no compositor.
-# "0.29" accepts 0.29.x, so patch releases arrive via `cargo update`.
+# "0.30" accepts 0.30.x, so patch releases arrive via `cargo update`.
 denise = "0.30"
 denise-ui = "0.30"
 denise-render = "0.30"
 denise-text = { version = "0.30", features = ["truetype"] }
-denise-arrange = "0.30"
 denise-drm = "0.30"
 denise-evdev = "0.30"
 denise-layout = "0.30"
