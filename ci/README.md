@@ -12,12 +12,16 @@ Five workflows:
   built when a GitHub release is published. Stable packages, then an ISO for
   each architecture from exactly those packages, with the x86_64 one booted in
   QEMU with KVM to assert the reported tier. The ISOs and their `.sha256` files
-  are attached to the release, which is where to download them. The packages
-  are an artifact, published by hand (below). "Run workflow" in the Actions
+  are attached to the release, which is where to download them. Publish to
+  stable then takes the packages from that run. "Run workflow" in the Actions
   tab runs the same builds without a release, keeping everything as
-  artifacts, to try a change before releasing it.
+  artifacts, to try a change before releasing it — those runs do not publish.
 - **Dev** (`.github/workflows/dev.yml`): dev packages on every push to `main`,
   signed and published to `dev.pkgs.alpymist.org` by CI. No ISO.
+- **Publish to stable** (`.github/workflows/publish-stable.yml`): signs and
+  publishes the stable index after a Release run that came from a published
+  release. Separate from Release because `cargo xtask publish` refuses a run
+  that has not concluded, and a job cannot wait for its own run.
 - **Site** (`.github/workflows/site.yml`): alpymist.org.
 
 squint is built from a pinned upstream release. It is kept in the Actions cache
@@ -64,6 +68,27 @@ release it follows and meets the next one when it arrives.
 
 Keep an offline copy of the dev signing key as well, and never put it in
 `/etc/apk/keys` on a machine that should follow only stable.
+
+## Setting up the stable channel's publishing
+
+Done once, on 2026-09-16. The same shape as dev, with the release key:
+
+1. An SSH key whose public half is a deploy key on `bisand/alpymist-packages`
+   with **write** access — a read-only one clones and then fails at the push,
+   after the index is already signed.
+2. A `stable-channel` environment in `bisand/alpymist` with
+   `STABLE_CHANNEL_SIGNING_KEY` (`alpymist-2026.rsa`) and
+   `STABLE_CHANNEL_DEPLOY_KEY` (the SSH private key).
+
+Upload the signing key by redirection, not `--body "$(cat …)"`: command
+substitution strips the trailing newline and `abuild-sign` needs the one after
+`-----END … KEY-----`. It fails at signing time, not at upload.
+
+```sh
+gh api -X PUT repos/bisand/alpymist/environments/stable-channel
+gh secret set STABLE_CHANNEL_SIGNING_KEY --env stable-channel \
+  --repo bisand/alpymist < ~/.config/alpymist/keys/alpymist-2026.rsa
+```
 
 ## Publishing stable
 
@@ -151,7 +176,7 @@ If `make smoke` hangs locally, boot the image by hand instead:
 qemu-system-aarch64 -M virt -cpu cortex-a72 \
   -bios /opt/homebrew/share/qemu/edk2-aarch64-code.fd \
   -device virtio-gpu-pci -m 2048 -smp 2 -display none -no-reboot -boot d \
-  -serial file:/tmp/boot.log -cdrom out/alpymist-0.0.1-aarch64.iso
+  -serial file:/tmp/boot.log -cdrom out/alpymist-*-aarch64.iso
 ```
 
 then read the probe report out of `/tmp/boot.log`. The Linux CI runners drive
