@@ -45,16 +45,16 @@ alpymist-wifi = { path = "crates/alpymist-wifi", default-features = false }
 clap = { version = "4", features = ["derive"] }
 # DeniseUI: direct rendering to DRM/KMS or the framebuffer, no compositor.
 # "0.29" accepts 0.29.x, so patch releases arrive via `cargo update`.
-denise = "0.29"
-denise-ui = "0.29.1"
-denise-render = "0.29"
-denise-text = { version = "0.29", features = ["truetype"] }
-denise-arrange = "0.29"
-denise-drm = "0.29"
-denise-evdev = "0.29"
-denise-layout = "0.29"
-denise-fbdev = "0.29"
-denise-winit = "0.29"
+denise = "0.30"
+denise-ui = "0.30"
+denise-render = "0.30"
+denise-text = { version = "0.30", features = ["truetype"] }
+denise-arrange = "0.30"
+denise-drm = "0.30"
+denise-evdev = "0.30"
+denise-layout = "0.30"
+denise-fbdev = "0.30"
+denise-winit = "0.30"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
