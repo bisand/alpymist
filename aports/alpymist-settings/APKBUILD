@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-settings
-pkgver=0.0.5
+pkgver=0.0.6
 pkgrel=0
 pkgdesc="Alpymist Settings: every setting in one window, searched by keyboard"
 url="https://github.com/bisand/alpymist"
