@@ -23,7 +23,7 @@
 #                  and meets the next one when it arrives (ADR 0006). Needs the
 #                  git history at /src.
 #   PACKAGE_CACHE  a directory kept between builds. squint is built from a
-#                  pinned upstream commit, so what it builds to depends only on
+#                  pinned upstream release, so what it builds to depends only on
 #                  its aport and the builder: it is kept there and not built
 #                  again until one of those changes.
 #   PREBUILT       a directory of this architecture's packages, already built
@@ -45,7 +45,7 @@ CACHE="${PACKAGE_CACHE:-}"
 CACHED=" squint "
 CHANNEL="${CHANNEL:-stable}"
 BUILD="${BUILD:-}"
-# Built from a pinned upstream commit or a key file, not from this workspace:
+# Built from a pinned upstream release or a key file, not from this workspace:
 # versioned by hand, on every channel, and given neither the dev stamp nor the
 # build number. xtask's version command holds the same list.
 INDEPENDENT=" squint alpymist-keys "
@@ -143,8 +143,15 @@ else
 			fi
 		fi
 		echo "    $pkg"
-		# Local sources, so the checksum is computed here rather than committed.
-		( cd ~/ap/"$pkg" && abuild checksum >/dev/null && abuild -r >/dev/null )
+		# Our own packages build from the workspace copied in above, so their
+		# checksums describe files that were just written and are computed here
+		# rather than committed. squint is fetched from upstream, and its
+		# committed sha512 is the pin: `abuild checksum` would delete that block
+		# and write whatever was downloaded, so it is not run over it. abuild
+		# checks the sums itself while fetching, and stops if they disagree.
+		( cd ~/ap/"$pkg" \
+			&& { [ "$pkg" = squint ] || abuild checksum >/dev/null; } \
+			&& abuild -r >/dev/null )
 		if [ -n "$key" ]; then
 			# Whoever restored the cache may not be who builds here.
 			rm -rf "${CACHE:?}/$pkg" || {

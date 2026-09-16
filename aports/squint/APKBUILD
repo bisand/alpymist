@@ -2,15 +2,15 @@
 # Maintainer: André Biseth <andre@biseth.net>
 #
 # squint, the text editor for files too big for text editors, as the Full
-# tier's default editor: a proof of concept, pinned to a commit of
+# tier's default editor: a proof of concept, pinned to a release of
 #   https://github.com/bisand/squint
 pkgname=squint
-# The commit's date, and a pkgrel bump for a second commit on the same day: a
-# _git with a full fourteen-digit time is how `cargo xtask publish` tells a dev
-# build from an upstream snapshot, and would be refused on stable.
-pkgver=0.1.0_git20260916
-pkgrel=1
-_commit=ee2bdf18fcd9bab7ab5ad5a971b6f80673c6bc60
+# squint's own version, from the release this is built from. It keeps its
+# numbering here (ADR 0008): nothing in this workspace decides it, so neither
+# the release version nor the build number is stamped onto it. Moving to a new
+# squint is this line and its sha512 below.
+pkgver=0.1.8
+pkgrel=0
 pkgdesc="Text editor that opens files of any size instantly"
 url="https://github.com/bisand/squint"
 arch="aarch64 x86_64"
@@ -23,10 +23,26 @@ depends="font-fira-code-nerd"
 # net: cargo fetches the crates
 options="!check net"
 source="
-	https://github.com/bisand/squint/archive/$_commit/squint-$_commit.tar.gz
+	$url/archive/v$pkgver/$pkgname-$pkgver.tar.gz
 	squint.desktop
 	"
-builddir="$srcdir/squint-$_commit"
+builddir="$srcdir/$pkgname-$pkgver"
+
+# squint's release workflow stamps the version into desktop/Cargo.toml before
+# it builds, so the repository keeps 0.1.0 and only the released binaries carry
+# the release's number. Without the same step here, squint would report 0.1.0
+# from a package called 0.1.8. The lock file is stamped with it so --locked
+# still holds; squint-core is a path dependency with no version to match, so
+# only squint's own two entries move.
+prepare() {
+	default_prepare
+	local f
+	for f in desktop/Cargo.toml Cargo.lock; do
+		sed -i '/^name = "squint"$/{n;s/^version = .*/version = "'"$pkgver"'"/;}' "$f"
+		grep -A1 '^name = "squint"$' "$f" | grep -q "^version = \"$pkgver\"$" \
+			|| die "could not stamp $pkgver into $f"
+	done
+}
 
 build() {
 	cargo build --release --locked -p squint
@@ -39,7 +55,10 @@ package() {
 	install -Dm644 LICENSE -t "$pkgdir"/usr/share/licenses/$pkgname/
 }
 
+# The pin. build-packages.sh leaves these alone rather than running
+# `abuild checksum` over them, so a tarball that is not the one this was
+# written against fails the build.
 sha512sums="
-4a4454b8a301e8c1e1474a9820c138c74520fc77abe582babbb0405397e40573f38c90ecef72bfaa5a6590b48a44cf6aa00ddb98a80cb8223d6e541881d3ea3c  squint-ee2bdf18fcd9bab7ab5ad5a971b6f80673c6bc60.tar.gz
+bccea238d028667abd833a6462a54bd951e65d98406266b7717ab03ce69ac4f5dd6d802cf6f62561725572ae2a697f99055f1ab68ecfbe66fce1c9b6489a1c9d  squint-0.1.8.tar.gz
 280fce6ff3b4b7a73443795fead1da57d4650b5659ac6830df5c5c0d055cec09eb0dd90166b8ba64339b1544475e5253e2d97defc886c387d281e95928f98e1a  squint.desktop
 "

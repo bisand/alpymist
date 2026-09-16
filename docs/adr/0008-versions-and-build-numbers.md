@@ -46,14 +46,14 @@ caught the clash and refused the whole release.
    commit that says 0.0.4, or the Release workflow stops before building.
 
 4. **squint and `alpymist-keys` keep their own versions.** They are built from
-   a pinned upstream commit and from a key file, not from this workspace, so
+   a pinned upstream release and from a key file, not from this workspace, so
    neither the dev stamp nor the build number touches them — squint because its
    build is cached across runs on exactly its own inputs, `alpymist-keys`
    because its version is the key year. `ci/build-packages.sh` and
-   `cargo xtask version` hold the same two names. squint's `_git` carries the
-   commit's date and no more: a full fourteen-digit time is how
-   `cargo xtask publish` tells a dev build from an upstream snapshot, so a
-   second commit on the same day is a `pkgrel` bump.
+   `cargo xtask version` hold the same two names. squint's `pkgver` is the
+   version of the squint release it is built from, and its committed `sha512`
+   is the pin: `build-packages.sh` does not run `abuild checksum` over it,
+   which would replace the pin with whatever the download happened to be.
 
 ## Consequences
 

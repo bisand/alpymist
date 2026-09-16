@@ -44,7 +44,7 @@ jobs:
       - name: Build the builder container
         run: docker build -t alpymist-builder builder
 
-      # squint is built from a pinned upstream commit. build-packages.sh keeps
+      # squint is built from a pinned upstream release. build-packages.sh keeps
       # it here, under a key of its aport and the builder, and builds it again
       # only when that changes. The month is in the cache's name so it is
       # rebuilt at least that often against Alpine's libraries as they are
