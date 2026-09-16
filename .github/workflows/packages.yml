@@ -58,7 +58,10 @@ jobs:
         env:
           CHANNEL: ${{ inputs.channel }}
         run: |
-          mkdir -p out cache && chmod 777 out cache
+          # The cache action restores as the runner, and the container builds
+          # as its own user: without this, replacing a kept package fails on
+          # the files an earlier run left behind.
+          mkdir -p out cache && chmod 777 out cache && chmod -R u+rwX,go+rwX cache
           docker run --rm -v "$PWD":/src -v "$PWD/out":/out -v "$PWD/cache":/cache \
             -e PACKAGE_CACHE=/cache -e CHANNEL \
             alpymist-builder bash /src/ci/build-packages.sh /out/packages

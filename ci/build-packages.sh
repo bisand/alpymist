@@ -121,7 +121,11 @@ else
 		# Local sources, so the checksum is computed here rather than committed.
 		( cd ~/ap/"$pkg" && abuild checksum >/dev/null && abuild -r >/dev/null )
 		if [ -n "$key" ]; then
-			rm -rf "${CACHE:?}/$pkg"
+			# Whoever restored the cache may not be who builds here.
+			rm -rf "${CACHE:?}/$pkg" || {
+				echo "cannot replace $pkg in $CACHE: it belongs to someone else" >&2
+				exit 1
+			}
 			mkdir -p "$CACHE/$pkg"
 			( cd ~/ap/"$pkg" && abuild listpkg ) | while read -r apk; do
 				cp "$REPO/$apk" "$CACHE/$pkg"/
