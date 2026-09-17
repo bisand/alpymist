@@ -29,8 +29,21 @@ pub struct About {
     pub computer: Option<String>,
     /// Memory, in words: `3.8 GiB`.
     pub memory: Option<String>,
-    /// Every installed Alpymist package, by name, with its version.
-    pub packages: Vec<(String, String)>,
+    /// Every installed Alpymist package.
+    pub packages: Vec<Package>,
+}
+
+/// An installed package, as apk's database has it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Package {
+    /// The name: `alpymist-power-openrc`.
+    pub name: String,
+    /// The version: `0.0.6-r10`.
+    pub version: String,
+    /// The aport it was built from, apk's `o:`: a subpackage's origin is the
+    /// package it was built beside, and everything else is its own origin.
+    /// Absent — nothing but abuild leaves it out — the name stands in.
+    pub origin: String,
 }
 
 /// How a version was built.
@@ -113,8 +126,8 @@ impl About {
             .unwrap_or_default();
         let version = packages
             .iter()
-            .find(|(name, _)| name == DESKTOP)
-            .map(|(_, v)| v.clone());
+            .find(|p| p.name == DESKTOP)
+            .map(|p| p.version.clone());
         let computer = {
             let vendor = line("sys/class/dmi/id/sys_vendor");
             let product = line("sys/class/dmi/id/product_name");
@@ -199,21 +212,29 @@ impl About {
         ]
     }
 
-    /// The packages worth a line in the box: each one, less subpackages at
-    /// their parent's version (`alpymist-power-openrc` beside
-    /// `alpymist-power`, the desktop's tiers beside `alpymist-desktop`), which
-    /// would make the box taller than a small screen and say nothing new.
+    /// The packages worth a line in the box: each one, less subpackages
+    /// installed at the version of the package they were built beside
+    /// (`alpymist-power-openrc` beside `alpymist-power`, the desktop's tiers
+    /// beside `alpymist-desktop`), which would make the box taller than a
+    /// small screen and say nothing new.
+    ///
+    /// Which is a subpackage is apk's `o:` and not the name, because since
+    /// ADR 0008 every first-party package shares one version and one build
+    /// number: by name and version alone, `alpymist-menu` looks like a
+    /// subpackage of `alpymist`. `o:` also catches `alpymist-shell`, built
+    /// beside `alpymist-desktop` under a name that shares no prefix with it.
     #[must_use]
-    pub fn shown_packages(&self) -> Vec<&(String, String)> {
+    pub fn shown_packages(&self) -> Vec<&Package> {
         self.packages
             .iter()
-            .filter(|(name, version)| {
-                !self.packages.iter().any(|(parent, v)| {
-                    v == version
-                        && name.len() > parent.len()
-                        && name.starts_with(parent.as_str())
-                        && name.as_bytes()[parent.len()] == b'-'
-                })
+            .filter(|p| {
+                p.origin == p.name
+                    // A subpackage left behind at a version of its own, by a
+                    // half-applied upgrade, says something and stays.
+                    || !self
+                        .packages
+                        .iter()
+                        .any(|parent| parent.name == p.origin && parent.version == p.version)
             })
             .collect()
     }
@@ -233,17 +254,19 @@ impl About {
             let wide = self
                 .packages
                 .iter()
-                .map(|(n, _)| n.len())
+                .map(|p| p.name.len())
                 .max()
                 .unwrap_or(0);
-            for (name, version) in &self.packages {
-                let _ = writeln!(out, "  {name:wide$}  {version}");
+            for p in &self.packages {
+                let _ = writeln!(out, "  {:wide$}  {}", p.name, p.version);
             }
         }
         out
     }
 
-    /// A system to draw and test with.
+    /// A system to draw and test with. Every first-party package is at one
+    /// version and one build number, which is what a system looks like since
+    /// ADR 0008 and the case `shown_packages` has to get right.
     #[must_use]
     pub fn sample() -> Self {
         let v = "0.0.1_git20260915121112-r13";
@@ -256,27 +279,33 @@ impl About {
             computer: Some("QEMU Virtual Machine".into()),
             memory: Some("3.8 GiB".into()),
             packages: [
-                ("alpymist-auth", "0.0.1_git20260915121112-r0"),
-                ("alpymist-desktop", v),
-                ("alpymist-desktop-full", v),
-                ("alpymist-keys", "2026-r1"),
-                ("alpymist-menu", "0.0.1_git20260915121112-r7"),
-                ("alpymist-power", "0.0.1_git20260915121112-r1"),
-                ("alpymist-store", "0.0.1_git20260915121112-r1"),
-                ("alpymist", "0.0.1_git20260915121112-r1"),
-                ("squint", "0.1.0_git20260914-r2"),
+                ("alpymist", v, "alpymist"),
+                ("alpymist-auth", v, "alpymist-auth"),
+                ("alpymist-desktop", v, "alpymist-desktop"),
+                ("alpymist-desktop-full", v, "alpymist-desktop"),
+                ("alpymist-keys", "2026-r1", "alpymist-keys"),
+                ("alpymist-menu", v, "alpymist-menu"),
+                ("alpymist-power", v, "alpymist-power"),
+                ("alpymist-shell", v, "alpymist-desktop"),
+                ("alpymist-store", v, "alpymist-store"),
+                ("squint", "0.1.0_git20260914-r2", "squint"),
             ]
             .into_iter()
-            .map(|(n, v)| (n.to_owned(), v.to_owned()))
+            .map(|(name, version, origin)| Package {
+                name: name.to_owned(),
+                version: version.to_owned(),
+                origin: origin.to_owned(),
+            })
             .collect(),
         }
     }
 }
 
 /// Installed Alpymist packages, sorted by name, from apk's database: records
-/// separated by blank lines, `P:` the name and `V:` the version.
-fn alpymist_packages(db: &str) -> Vec<(String, String)> {
-    let mut out: Vec<(String, String)> = db
+/// separated by blank lines, `P:` the name, `V:` the version and `o:` the
+/// aport it was built from.
+fn alpymist_packages(db: &str) -> Vec<Package> {
+    let mut out: Vec<Package> = db
         .split("\n\n")
         .filter_map(|record| {
             let field = |key: &str| record.lines().find_map(|l| l.strip_prefix(key));
@@ -285,7 +314,11 @@ fn alpymist_packages(db: &str) -> Vec<(String, String)> {
             if !ours {
                 return None;
             }
-            Some((name.to_owned(), field("V:")?.to_owned()))
+            Some(Package {
+                name: name.to_owned(),
+                version: field("V:")?.to_owned(),
+                origin: field("o:").unwrap_or(name).to_owned(),
+            })
         })
         .collect();
     out.sort();
@@ -308,7 +341,7 @@ fn memory(meminfo: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{About, Build, alpymist_packages, memory};
+    use super::{About, Build, Package, alpymist_packages, memory};
     use alpymist_core::Channel;
 
     #[test]
@@ -356,16 +389,24 @@ mod tests {
 
     #[test]
     fn only_alpymist_packages_are_listed() {
-        let db = "C:Q1a=\nP:musl\nV:1.2.5-r10\n\n\
-                  C:Q1b=\nP:alpymist-menu\nV:0.0.1-r7\nA:aarch64\n\n\
+        let db = "C:Q1a=\nP:musl\nV:1.2.5-r10\no:musl\n\n\
+                  C:Q1b=\nP:alpymist-menu\nV:0.0.1-r7\nA:aarch64\no:alpymist-menu\n\n\
                   C:Q1c=\nP:squint\nV:0.1.0_git20260914-r2\n\n\
-                  C:Q1d=\nP:alpymist-desktop\nV:0.0.1-r13\n";
+                  C:Q1d=\nP:alpymist-shell\nV:0.0.1-r13\no:alpymist-desktop\n";
+        let named = |name: &str, version: &str, origin: &str| Package {
+            name: name.to_owned(),
+            version: version.to_owned(),
+            origin: origin.to_owned(),
+        };
         assert_eq!(
             alpymist_packages(db),
             [
-                ("alpymist-desktop".to_owned(), "0.0.1-r13".to_owned()),
-                ("alpymist-menu".to_owned(), "0.0.1-r7".to_owned()),
-                ("squint".to_owned(), "0.1.0_git20260914-r2".to_owned()),
+                named("alpymist-menu", "0.0.1-r7", "alpymist-menu"),
+                // Built beside alpymist-desktop under a name that says nothing
+                // about it.
+                named("alpymist-shell", "0.0.1-r13", "alpymist-desktop"),
+                // No `o:`, so it is its own origin.
+                named("squint", "0.1.0_git20260914-r2", "squint"),
             ]
         );
     }
@@ -389,7 +430,8 @@ mod tests {
         };
         write(
             "lib/apk/db/installed",
-            "P:alpymist-desktop\nV:0.0.1-r13\n\nP:alpymist\nV:0.0.1-r1\n",
+            "P:alpymist-desktop\nV:0.0.1-r13\no:alpymist-desktop\n\n\
+             P:alpymist\nV:0.0.1-r1\no:alpymist\n",
         );
         write("etc/apk/repositories", Channel::Stable.repository());
         write("etc/alpine-release", "3.24.1\n");
@@ -412,19 +454,47 @@ mod tests {
     #[test]
     fn subpackages_at_their_parents_version_are_left_out_of_the_box() {
         let mut about = About::sample();
-        about
-            .packages
-            .push(("alpymist-power-openrc".into(), "0.0.1-r0".into()));
+        about.packages.push(Package {
+            name: "alpymist-power-openrc".into(),
+            version: "0.0.1-r0".into(),
+            origin: "alpymist-power".into(),
+        });
         let shown: Vec<&str> = about
             .shown_packages()
             .iter()
-            .map(|(n, _)| n.as_str())
+            .map(|p| p.name.as_str())
             .collect();
         assert!(!shown.contains(&"alpymist-desktop-full"));
+        // Built beside the desktop under an unrelated name: still a
+        // subpackage, and the name alone would never have said so.
+        assert!(!shown.contains(&"alpymist-shell"));
         assert!(shown.contains(&"alpymist-desktop"));
         // At another version it says something, so it stays.
         assert!(shown.contains(&"alpymist-power-openrc"));
         assert!(about.text().contains("alpymist-desktop-full"));
+    }
+
+    #[test]
+    fn one_version_for_every_package_does_not_empty_the_box() {
+        // Since ADR 0008 a system carries one version and one build number
+        // across every first-party package, so each of these is a prefix of
+        // the next at the very same version. None of them is a subpackage.
+        let about = About::sample();
+        let shown: Vec<&str> = about
+            .shown_packages()
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect();
+        for name in [
+            "alpymist",
+            "alpymist-auth",
+            "alpymist-desktop",
+            "alpymist-menu",
+            "alpymist-power",
+            "alpymist-store",
+        ] {
+            assert!(shown.contains(&name), "{name} is missing from {shown:?}");
+        }
     }
 
     #[test]

@@ -206,11 +206,11 @@ pub fn paint(
             ink.dim,
         );
     }
-    for (name, version) in about.shown_packages() {
+    for package in about.shown_packages() {
         let line = Rect::new(left, y, right - left, layout.package_row);
-        let x = draw::right_label(&mut pen, engine, st.small, line, version, ink.text);
+        let x = draw::right_label(&mut pen, engine, st.small, line, &package.version, ink.text);
         let line = Rect::new(left, y, x - u / 2 - left, layout.package_row);
-        draw::label(&mut pen, engine, st.small, line, name, ink.dim);
+        draw::label(&mut pen, engine, st.small, line, &package.name, ink.dim);
         y += layout.package_row;
     }
 

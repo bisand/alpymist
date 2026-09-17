@@ -37,12 +37,12 @@ fn main() {
     let mut stable = About::sample();
     stable.version = Some("0.0.1-r13".into());
     stable.channel = Some(alpymist_core::Channel::Stable);
-    for (_, v) in &mut stable.packages {
-        if let Some((base, rest)) = v.split_once("_git")
+    for p in &mut stable.packages {
+        if let Some((base, rest)) = p.version.split_once("_git")
             && let Some((_, release)) = rest.rsplit_once('-')
             && !base.starts_with("0.1")
         {
-            *v = format!("{base}-{release}");
+            p.version = format!("{base}-{release}");
         }
     }
     let mut d = Dialog::new(stable);

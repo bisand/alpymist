@@ -896,8 +896,12 @@ impl View {
     fn build_about(&mut self, parent: NodeId, mut y: i32, width: i32) -> i32 {
         let s = self.scale;
         let rows = self.about.rows();
-        let packages: Vec<(String, String)> =
-            self.about.shown_packages().into_iter().cloned().collect();
+        let packages: Vec<(String, String)> = self
+            .about
+            .shown_packages()
+            .into_iter()
+            .map(|p| (p.name.clone(), p.version.clone()))
+            .collect();
         let line = 26 * s;
         let text = self.style(self.text, 15);
         let small = self.style(self.text, 13);
