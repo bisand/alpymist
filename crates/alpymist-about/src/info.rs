@@ -36,17 +36,21 @@ pub struct About {
 /// How a version was built.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Build {
-    /// A released package: `0.0.1-r13`.
+    /// A released package: `0.0.6-r10`.
     Release {
-        /// The version without its package release: `0.0.1`.
+        /// The version without its build number: `0.0.6`.
         version: String,
+        /// The build number: the CI run that built it, `10` (ADR 0008).
+        build: String,
     },
-    /// A dev build from main: `0.0.1_git20260915121112-r13`.
+    /// A dev build from main: `0.0.6_git20260916203112-r10`.
     Dev {
-        /// The release it comes after: `0.0.1`.
+        /// The release it comes after: `0.0.6`.
         after: String,
+        /// The build number, as for a release.
+        build: String,
         /// When the commit it was built from was made, in UTC:
-        /// `2026-09-15 12:11`.
+        /// `2026-09-16 20:31`.
         committed: String,
     },
 }
@@ -55,7 +59,7 @@ impl Build {
     /// Read an apk version. `None` when it is neither shape.
     #[must_use]
     pub fn of(version: &str) -> Option<Self> {
-        let (base, _release) = version.rsplit_once("-r")?;
+        let (base, build) = version.rsplit_once("-r")?;
         if let Some((after, stamp)) = base.split_once("_git") {
             let digits = stamp.as_bytes();
             if digits.len() != 14 || !digits.iter().all(u8::is_ascii_digit) {
@@ -64,6 +68,7 @@ impl Build {
             let at = |a: usize, b: usize| &stamp[a..b];
             return Some(Self::Dev {
                 after: after.to_owned(),
+                build: build.to_owned(),
                 committed: format!(
                     "{}-{}-{} {}:{}",
                     at(0, 4),
@@ -76,7 +81,20 @@ impl Build {
         }
         (!base.is_empty() && !base.contains('_')).then(|| Self::Release {
             version: base.to_owned(),
+            build: build.to_owned(),
         })
+    }
+
+    /// Read out for a person: the release this belongs to and the build it
+    /// came from. A dev build says so in words rather than as the fourteen
+    /// digits apk carries, which is what `0.0.6_git20260916203112-r10` is
+    /// under the stamp.
+    #[must_use]
+    pub fn described(&self) -> String {
+        match self {
+            Self::Release { version, build } => format!("{version}, build {build}"),
+            Self::Dev { after, build, .. } => format!("{after}, dev build {build}"),
+        }
     }
 }
 
@@ -124,7 +142,7 @@ impl About {
     #[must_use]
     pub fn title(&self) -> String {
         match self.version.as_deref().and_then(Build::of) {
-            Some(Build::Release { version }) => format!("Alpymist {version}"),
+            Some(Build::Release { version, .. }) => format!("Alpymist {version}"),
             Some(Build::Dev { after, .. }) => format!("Alpymist {after}, dev"),
             None => "Alpymist".into(),
         }
@@ -146,12 +164,29 @@ impl About {
         }
     }
 
+    /// The Version row: the release and the build it came from, spelled out
+    /// by [`Build::described`]. The exact string apk holds is a line of the
+    /// Packages list either way, and all of `text()`, so a bug report still
+    /// carries it.
+    #[must_use]
+    pub fn version_row(&self) -> String {
+        match (
+            self.version.as_deref(),
+            self.version.as_deref().and_then(Build::of),
+        ) {
+            (_, Some(build)) => build.described(),
+            // A version of neither shape is shown as it is rather than hidden.
+            (Some(v), None) => v.to_owned(),
+            (None, None) => "unknown".to_owned(),
+        }
+    }
+
     /// Label and value rows about the system.
     #[must_use]
     pub fn rows(&self) -> Vec<(&'static str, String)> {
         let unknown = || "unknown".to_owned();
         vec![
-            ("Version", self.version.clone().unwrap_or_else(unknown)),
+            ("Version", self.version_row()),
             (
                 "Channel",
                 self.channel.map_or_else(unknown, |c| c.name().to_owned()),
@@ -282,6 +317,7 @@ mod tests {
             Build::of("0.0.1_git20260915121112-r13"),
             Some(Build::Dev {
                 after: "0.0.1".into(),
+                build: "13".into(),
                 committed: "2026-09-15 12:11".into()
             })
         );
@@ -292,12 +328,30 @@ mod tests {
         assert_eq!(
             Build::of("0.0.1-r13"),
             Some(Build::Release {
-                version: "0.0.1".into()
+                version: "0.0.1".into(),
+                build: "13".into()
             })
         );
         // An upstream snapshot is neither.
         assert_eq!(Build::of("0.1.0_git20260914-r2"), None);
         assert_eq!(Build::of("garbage"), None);
+    }
+
+    #[test]
+    fn the_version_row_never_shows_the_dev_stamps_digits() {
+        let row = |v: &str| {
+            About {
+                version: Some(v.to_owned()),
+                ..About::default()
+            }
+            .version_row()
+        };
+        assert_eq!(row("0.0.6_git20260916203112-r10"), "0.0.6, dev build 10");
+        assert_eq!(row("0.0.6-r10"), "0.0.6, build 10");
+        // Neither shape, so it is passed through rather than lost.
+        assert_eq!(row("2026-r1"), "2026, build 1");
+        assert_eq!(row("garbage"), "garbage");
+        assert_eq!(About::default().version_row(), "unknown");
     }
 
     #[test]
