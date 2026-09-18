@@ -10,6 +10,7 @@ members = [
     "crates/alpymist-install",
     "crates/alpymist-menu",
     "crates/alpymist-power",
+    "crates/alpymist-saver-mountains",
     "crates/alpymist-screensaver",
     "crates/alpymist-settings",
     "crates/alpymist-settings-app",
@@ -38,6 +39,7 @@ alpymist-core = { path = "crates/alpymist-core" }
 alpymist-glesprobe = { path = "crates/alpymist-glesprobe" }
 alpymist-hwprobe = { path = "crates/alpymist-hwprobe" }
 alpymist-power = { path = "crates/alpymist-power", default-features = false }
+alpymist-saver-mountains = { path = "crates/alpymist-saver-mountains" }
 alpymist-screensaver = { path = "crates/alpymist-screensaver", default-features = false }
 alpymist-settings = { path = "crates/alpymist-settings" }
 alpymist-theme = { path = "crates/alpymist-theme" }

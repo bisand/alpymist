@@ -1,31 +1,34 @@
-//! `alpymist-screensaver` — the mountains, when nobody is there.
+//! `alpymist-screensaver` — which screensaver runs, and when.
 //!
 //! ```text
-//! alpymist-screensaver         show the mountains (run again to take them away)
-//! alpymist-screensaver stop    take them away, if they are up
+//! alpymist-screensaver         run the chosen screensaver (or a random one)
+//! alpymist-screensaver list    every screensaver installed
+//! alpymist-screensaver stop    take away whichever one is up
 //! alpymist-screensaver idle    watch for idleness, and start over if watching
 //! ```
 //!
-//! Nothing here decides *when* to appear. `idle` keeps a `swayidle` running
-//! with the account's settings, and it is swayidle that runs the first of these
-//! when the seat has been still long enough. See [`alpymist_screensaver::idle`].
+//! This draws nothing itself. A screensaver is a program with a definition file
+//! beside it (see `alpymist_screensaver::definition`); this finds them, decides
+//! which to run, and runs it. `idle` keeps a `swayidle` running that starts this
+//! when the seat has been still long enough.
 
 #![forbid(unsafe_code)]
 
 use alpymist_screensaver::config::Config;
-use alpymist_screensaver::idle;
-use std::process::ExitCode;
-
-/// The name the running screensaver listens under, so a second run reaches it.
-const NAME: &str = "alpymist-screensaver";
+use alpymist_screensaver::definition::{Definition, discover};
+use alpymist_screensaver::paint;
+use alpymist_screensaver::picture::Show;
+use alpymist_screensaver::{Values, idle};
+use std::process::{Command, ExitCode};
 
 const USAGE: &str = "\
-usage: alpymist-screensaver [stop | idle]
+usage: alpymist-screensaver [list | stop | idle]
 
-With no command, covers the screen with the Alpymist mountains until a key is
-pressed or the pointer moves.
-  stop   take the screensaver away, if one is up
-  idle   watch for idleness and show it in its own time; running this again
+With no command, runs the screensaver chosen in Settings — or one at random,
+which is the default — until a key is pressed or the pointer moves.
+  list   every screensaver installed, and what each is called
+  stop   take away whichever screensaver is up, if any
+  idle   watch for idleness and run one in its own time; running this again
          reads the settings afresh and starts the watch over";
 
 fn main() -> ExitCode {
@@ -39,8 +42,12 @@ fn main() -> ExitCode {
             println!("alpymist-screensaver {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
+        Some("list") => {
+            list();
+            ExitCode::SUCCESS
+        }
         Some("stop") => {
-            stop();
+            paint::stop();
             ExitCode::SUCCESS
         }
         Some("idle") => report(idle::watch()),
@@ -48,7 +55,7 @@ fn main() -> ExitCode {
             eprintln!("alpymist-screensaver: unknown command {other}\n\n{USAGE}");
             ExitCode::from(2)
         }
-        None => report(show()),
+        None => report(run()),
     }
 }
 
@@ -62,39 +69,68 @@ fn report(result: Result<(), String>) -> ExitCode {
     }
 }
 
-/// Take away a screensaver that is up. Nothing to do is not a failure: the
-/// resume command runs whether or not the timeout before it ever fired.
-fn stop() {
-    if let Some(path) = alpymist_widget::instance::socket_path(NAME) {
-        // Connecting is what closes it; there is nothing to say afterwards.
-        std::os::unix::net::UnixStream::connect(path).ok();
+/// Every screensaver installed, and what it is called.
+fn list() {
+    let installed = discover();
+    if installed.is_empty() {
+        println!("no screensavers are installed");
+        return;
+    }
+    for def in &installed {
+        println!("{:<16} {}", def.id, def.name);
     }
 }
 
-/// Cover the screen until somebody comes back.
-#[cfg(target_os = "linux")]
-fn show() -> Result<(), String> {
-    use alpymist_screensaver::saver::{Saver, backdrop};
-    use alpymist_widget::host;
-
+/// Run the chosen screensaver.
+///
+/// The screensaver replaces this process rather than being started beside it,
+/// so what swayidle started and what `alpymist-screensaver stop` takes away are
+/// one process, and nothing is left behind holding the socket.
+fn run() -> Result<(), String> {
     let config = Config::load().unwrap_or_else(|e| {
         eprintln!("alpymist-screensaver: {e}");
         Config::default()
     });
-    alpymist_widget::instance::toggle(NAME, |listener| {
-        let mut options = host::Options::new(NAME);
-        options.placement = host::Placement::FullScreen;
-        // Under the first frame, and under the edges of a screen the blocks do
-        // not quite divide.
-        options.backdrop = backdrop();
-        let (_sender, events) = host::events::<()>();
-        host::run(Saver::new(config.block), &options, events, listener)
-    })
+    let installed = discover();
+    let Some(def) = config.show.resolve(&installed) else {
+        return Err(missing(&config.show, &installed));
+    };
+    // The values are not read here: the screensaver reads its own, so one added
+    // later needs nothing from this program but its name.
+    let program = def.exec.clone();
+    let error = Command::new(&program).exec_replacing();
+    Err(format!("{program}: {error}"))
 }
 
-/// There is no layer shell off Linux; the logic and the tests still build.
-#[cfg(not(target_os = "linux"))]
-fn show() -> Result<(), String> {
-    let _ = Config::load();
-    Err("the screensaver needs a Wayland compositor".to_owned())
+/// Why there is nothing to run, in terms of what to do about it.
+fn missing(show: &Show, installed: &[Definition]) -> String {
+    match show {
+        _ if installed.is_empty() => {
+            "no screensavers are installed; there is nothing to show".to_owned()
+        }
+        Show::Random => "no screensavers are installed; there is nothing to show".to_owned(),
+        Show::One(id) => format!(
+            "no screensaver called `{id}` is installed; `alpymist-screensaver list` \
+             shows those that are"
+        ),
+    }
+}
+
+/// Replace this process with the command, and return why if that failed.
+trait Replace {
+    fn exec_replacing(&mut self) -> std::io::Error;
+}
+
+impl Replace for Command {
+    fn exec_replacing(&mut self) -> std::io::Error {
+        use std::os::unix::process::CommandExt as _;
+        // `exec` only ever returns an error: on success this process is gone.
+        self.exec()
+    }
+}
+
+/// Kept so the library's value reading is exercised by the binary's own build.
+#[allow(dead_code)]
+fn values_of(def: &Definition) -> Values {
+    Values::read(def)
 }

@@ -3,18 +3,23 @@
 pkgname=alpymist-screensaver
 pkgver=0.0.7
 pkgrel=0
-pkgdesc="Alpymist screensaver: the mountains when nobody is there, and the idle watch that shows them"
+pkgdesc="Alpymist screensavers: the idle watch, and the launcher that runs whichever one is chosen"
 url="https://github.com/bisand/alpymist"
 arch="all"
 license="MIT OR Apache-2.0"
-# A wlr-layer-shell surface over wl_shm, drawn by Denise on the CPU like the
-# menu: no GPU stack, and libxkbcommon for the keymap that tells the host a key
-# was pressed.
+# The launcher draws nothing itself, but it carries the library every
+# screensaver is built on — a wlr-layer-shell surface over wl_shm, drawn by
+# Denise on the CPU like the menu — so it needs the same keymap library.
 makedepends="cargo libxkbcommon-dev"
-# swayidle is what speaks ext-idle-notify-v1 and runs these at each timeout;
+# swayidle is what speaks ext-idle-notify-v1 and runs this at each timeout;
 # wlopm is what turns the screen off, through wlr-output-power-management,
 # which Hyprland and labwc both implement. Neither is optional: without them
 # the watch starts nothing and the screen never goes off.
+#
+# No screensaver is named here. They are packages of their own, found by the
+# files they install in /usr/share/alpymist/screensavers, and which of them you
+# have is not this package's business — alpymist-desktop-wayland asks for the
+# one Alpymist ships.
 depends="swayidle wlopm"
 options="!check"  # the test suite runs in CI, not in the package build
 source=""

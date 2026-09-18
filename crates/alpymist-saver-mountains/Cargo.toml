@@ -1,0 +1,28 @@
+[package]
+name = "alpymist-saver-mountains"
+description = "The mountains screensaver: the ranges from the Alpymist wallpaper, with the mist moving through them."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "alpymist-saver-mountains"
+path = "src/main.rs"
+
+[dependencies]
+# What every screensaver is built on: the surface, the magnification, the frame
+# pacing, and reading the settings this one's definition file declares.
+alpymist-screensaver = { workspace = true, features = ["saver"] }
+# The scene is composed and painted by the same code as the wallpaper, the
+# splash and the installer: one range of mountains for the whole system.
+alpymist-ui = { workspace = true, features = ["render"] }
+denise = { workspace = true }
+denise-render = { workspace = true }
+
+[dev-dependencies]
+png = "0.17"
+
+[lints]
+workspace = true

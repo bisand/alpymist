@@ -211,7 +211,7 @@ mod tests {
             after: 0,
             blank_after: 0,
             lock: false,
-            block: 4,
+            ..Config::default()
         };
         assert!(arguments(&quiet).is_empty());
     }
@@ -222,7 +222,7 @@ mod tests {
             after: 3,
             blank_after: 0,
             lock: false,
-            block: 4,
+            ..Config::default()
         };
         let line = line(&c);
         assert!(line.contains("timeout 180"));
@@ -235,7 +235,7 @@ mod tests {
             after: 0,
             blank_after: 10,
             lock: false,
-            block: 4,
+            ..Config::default()
         };
         let line = line(&c);
         assert!(line.contains("timeout 600"));
@@ -249,7 +249,7 @@ mod tests {
             after: 5,
             blank_after: 10,
             lock: true,
-            block: 4,
+            ..Config::default()
         };
         let line = line(&c);
         assert!(line.contains("before-sleep swaylock"), "{line}");
@@ -262,7 +262,7 @@ mod tests {
             after: 10,
             blank_after: 2,
             lock: false,
-            block: 4,
+            ..Config::default()
         };
         let line = line(&upside_down);
         assert!(
@@ -277,14 +277,19 @@ mod tests {
     }
 
     #[test]
-    fn a_day_of_stillness_does_not_overflow_into_no_time_at_all() {
+    fn the_longest_stillness_offered_does_not_overflow_into_no_time_at_all() {
         let long = Config {
             after: crate::config::MAX_MINUTES,
             blank_after: crate::config::MAX_MINUTES,
             lock: false,
-            block: 4,
+            ..Config::default()
         };
-        assert!(line(&long).contains("timeout 28800"));
+        let seconds = crate::config::MAX_MINUTES * 60;
+        assert!(
+            line(&long).contains(&format!("timeout {seconds}")),
+            "{}",
+            line(&long)
+        );
     }
 
     #[test]

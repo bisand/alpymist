@@ -1,0 +1,47 @@
+# The mountains screensaver, as Settings and the launcher read it.
+#
+# Anything that ships a file like this, and the program it names, becomes a
+# screensaver Alpymist offers — no rebuild, and nothing in Alpymist has to know
+# it exists. Settings renders its page from the settings declared here, and the
+# program reads the same file to know what they default to, so the page and the
+# program cannot disagree.
+
+name = "Mountains"
+description = "The ranges from the desktop wallpaper, with the mist moving through them."
+exec = "alpymist-saver-mountains"
+icon = "󰔎"
+
+[[setting]]
+key = "block"
+title = "How chunky the picture is"
+description = "Physical pixels to one drawn pixel. One is no pixelation at all."
+keywords = ["pixels", "pixelated", "resolution", "blocks"]
+kind = "number"
+min = 1
+max = 16
+step = 1
+unit = "px"
+default = 6
+
+[[setting]]
+key = "mist"
+title = "How much mist"
+description = "Thicker mist hides more of the ranges behind it."
+keywords = ["fog", "haze", "cloud"]
+kind = "number"
+min = 0
+max = 200
+step = 10
+unit = "%"
+default = 100
+
+[[setting]]
+key = "drift"
+title = "How fast the mist moves"
+description = "Columns of the drawn picture it crosses in a minute."
+keywords = ["speed", "wind", "slow", "fast"]
+kind = "number"
+min = 0
+max = 60
+step = 1
+default = 14

@@ -171,6 +171,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpymist-saver-mountains"
+version = "0.0.7"
+dependencies = [
+ "alpymist-screensaver",
+ "alpymist-ui",
+ "denise",
+ "denise-render",
+ "png",
+]
+
+[[package]]
 name = "alpymist-screensaver"
 version = "0.0.7"
 dependencies = [
@@ -178,7 +189,6 @@ dependencies = [
  "alpymist-widget",
  "denise",
  "denise-render",
- "png",
  "serde",
  "toml",
 ]
