@@ -86,6 +86,12 @@ pub enum Kind {
     Switch,
     /// One of a list.
     Choice(Vec<Choice>),
+    /// Something to do rather than something to be: a button, whose `set` runs
+    /// it and whose `get` has nothing to say. `alpymist set <id>` does it too.
+    Action {
+        /// What the button says.
+        label: &'static str,
+    },
     /// A whole number in a range.
     Number {
         /// The smallest.
@@ -199,6 +205,9 @@ impl Setting {
     pub fn parse(&self, text: &str) -> Result<Value, String> {
         let text = text.trim();
         match &self.kind {
+            // Anything at all: an action is done, not set, and `alpymist set
+            // <id>` with no value is how it is asked for.
+            Kind::Action { .. } => Ok(Value::Text(text.to_owned())),
             Kind::Switch => match text.to_ascii_lowercase().as_str() {
                 "true" | "on" | "yes" | "1" => Ok(Value::Bool(true)),
                 "false" | "off" | "no" | "0" => Ok(Value::Bool(false)),
@@ -248,6 +257,7 @@ impl Setting {
     #[must_use]
     pub fn describe(&self, value: &Value) -> String {
         match (&self.kind, value) {
+            (Kind::Action { label }, _) => (*label).to_owned(),
             (Kind::Switch, Value::Bool(true)) => "On".into(),
             (Kind::Switch, Value::Bool(false)) => "Off".into(),
             (Kind::Number { unit: "", .. }, Value::Number(n)) => n.to_string(),

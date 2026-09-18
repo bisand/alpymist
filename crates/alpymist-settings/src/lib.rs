@@ -96,7 +96,7 @@ impl Settings {
     /// The areas, in order.
     #[must_use]
     pub fn areas(&self) -> &'static [Area] {
-        areas::AREAS
+        areas::areas()
     }
 
     /// Every setting, in order.
@@ -114,7 +114,7 @@ impl Settings {
     /// The area with `id`.
     #[must_use]
     pub fn area(&self, id: &str) -> Option<&'static Area> {
-        areas::AREAS.iter().find(|a| a.id == id)
+        areas::areas().iter().find(|a| a.id == id)
     }
 
     /// The settings in an area.

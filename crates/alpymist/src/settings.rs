@@ -8,6 +8,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn kind_json(kind: &Kind) -> serde_json::Value {
     match kind {
+        Kind::Action { label } => json!({ "type": "action", "label": label }),
         Kind::Switch => json!({ "type": "switch" }),
         Kind::Number {
             min,
@@ -96,6 +97,7 @@ pub fn list(settings: &Settings, env: &Env, filter: Option<&str>, as_json: bool)
             println!("  system setting: changing it asks for an administrator's password");
         }
         match &s.kind {
+            Kind::Action { label } => println!("  does: {label}"),
             Kind::Switch => println!("  values: on, off"),
             Kind::Number {
                 min,
@@ -135,8 +137,31 @@ pub fn get(settings: &Settings, env: &Env, id: &str, as_json: bool) -> Result<()
     Ok(())
 }
 
+/// Do a setting that is a thing to do rather than a thing to be.
+///
+/// `alpymist set <id>` with no value. That is not a reset: it is how an action
+/// — a screensaver's preview — is asked for, and anything else says it needs a
+/// value rather than quietly undoing what was there.
+///
+/// # Errors
+/// An unknown id, or a setting that takes a value.
+pub fn act(settings: &Settings, env: &Env, id: &str, force: bool, live: bool) -> Result<()> {
+    let setting = settings
+        .all()
+        .iter()
+        .find(|s| s.id == id)
+        .ok_or_else(|| Error::Unknown(id.to_owned()))?;
+    if !matches!(setting.kind, Kind::Action { .. }) {
+        return Err(format!("{id} needs a value; `alpymist show {id}` says which it takes").into());
+    }
+    change(settings, env, id, None, force, live)
+}
+
 /// Set, or reset with `value` of `None`. A system setting goes through
 /// pkexec; the running session is told from this process, as the person.
+///
+/// # Errors
+/// An unknown id, a value it does not take, or the change could not be made.
 pub fn change(
     settings: &Settings,
     env: &Env,

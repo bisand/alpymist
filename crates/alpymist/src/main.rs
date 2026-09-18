@@ -52,8 +52,12 @@ enum Command {
         /// The setting, such as `touchpad.natural-scroll`.
         id: String,
         /// Its new value: `on`, `off`, a number, or one of its choices.
+        ///
+        /// Left out for a setting that is a thing to do rather than a thing to
+        /// be — `alpymist set screensaver-mountains.preview` — which has no
+        /// value to give it.
         #[arg(allow_hyphen_values = true)]
-        value: String,
+        value: Option<String>,
         /// Replace a generated file even if it was edited by hand.
         #[arg(long)]
         force: bool,
@@ -142,7 +146,10 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
             value,
             force,
             no_live,
-        } => settings::change(&all, &env, id, Some(value), *force, !no_live),
+        } => match value {
+            Some(value) => settings::change(&all, &env, id, Some(value), *force, !no_live),
+            None => settings::act(&all, &env, id, *force, !no_live),
+        },
         Command::Reset { id, force, no_live } => {
             settings::change(&all, &env, id, None, *force, !no_live)
         }

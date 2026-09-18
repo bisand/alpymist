@@ -10,8 +10,13 @@ pub mod wifi;
 
 use crate::env::Env;
 use crate::model::{Area, Setting, Value};
+use std::sync::OnceLock;
 
-/// The areas, in the order the app lists them.
+/// The areas written here, in the order the app lists them.
+///
+/// Not the whole list: every screensaver installed has an area of its own, read
+/// from the file it ships rather than written anywhere in Alpymist. [`areas`]
+/// is the two together.
 pub const AREAS: &[Area] = &[
     Area {
         id: "appearance",
@@ -71,6 +76,28 @@ pub const AREAS: &[Area] = &[
     },
 ];
 
+/// Every area: those written here, and one for each screensaver installed.
+///
+/// Found once and kept: the screensavers' come from reading a directory, and
+/// doing that again for every caller would be both slower and no less
+/// permanent, since an `Area` holds `&'static str`.
+pub fn areas() -> &'static [Area] {
+    static ALL: OnceLock<&'static [Area]> = OnceLock::new();
+    ALL.get_or_init(|| {
+        let mut all: Vec<Area> = AREAS.to_vec();
+        // After Updates and About would be odd; the screensavers belong beside
+        // the screensaver settings that choose between them.
+        let at = all
+            .iter()
+            .position(|a| a.id == "screensaver")
+            .map_or(all.len(), |i| i + 1);
+        for (offset, area) in screensaver::areas().iter().enumerate() {
+            all.insert(at + offset, area.clone());
+        }
+        Box::leak(all.into_boxed_slice())
+    })
+}
+
 /// Every setting, in each area's order.
 pub fn all() -> Vec<Setting> {
     [
@@ -93,7 +120,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "keyboard" | "touchpad" | "mouse" => input::get(env, s),
         "wifi" => wifi::get(env),
         "power" => power::get(env, s),
-        "screensaver" => screensaver::get(env, s),
+        a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
         "updates" => updates::get(env),
         other => Err(format!("no area `{other}`")),
     }
@@ -113,7 +140,7 @@ pub fn set(
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
         "wifi" => none(wifi::set(env, value)),
         "power" => none(power::set(env, s, value)),
-        "screensaver" => none(screensaver::set(env, s, value)),
+        a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
         "updates" => none(updates::set(env, value)),
         other => Err(format!("no area `{other}`")),
     }

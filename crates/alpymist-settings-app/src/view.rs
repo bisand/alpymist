@@ -48,6 +48,9 @@ pub enum Msg {
     OpenSelect,
     /// An entry in the open choice list was chosen.
     Chose(usize),
+    /// A setting that is a thing to do rather than a thing to be: its button
+    /// was pressed, and the row it belongs to says which.
+    Do(usize),
     /// A button beyond settings.
     Action(Action),
     /// Enter in the search field.
@@ -464,6 +467,16 @@ impl View {
                 }
             }
             Msg::Submit => self.focus_page(),
+            Msg::Do(index) => {
+                if let Some(setting) = self.settings.all().get(index) {
+                    // Nothing to read back off a button: what it is worth is
+                    // that it was pressed.
+                    effects.push(Effect::Set {
+                        id: setting.id,
+                        value: Value::Text(String::new()),
+                    });
+                }
+            }
             Msg::Action(a) => effects.push(Effect::Action(a)),
             Msg::OpenSelect => {
                 let focused = self.ui.focused();
@@ -522,7 +535,9 @@ impl View {
                     let n = Value::Number(sl.value().round() as i64);
                     (!sl.dragging()).then_some(n)
                 }),
-                Kind::Choice(_) => None,
+                // A button holds nothing to read back, and a choice answers
+                // through its own list rather than here.
+                Kind::Action { .. } | Kind::Choice(_) => None,
             };
             // While a slider is dragged, only its number follows.
             if let Kind::Number { .. } = setting.kind
@@ -778,6 +793,7 @@ impl View {
             Kind::Switch => TOGGLE_W,
             Kind::Number { .. } => SLIDER_W + VALUE_W,
             Kind::Choice(_) => SELECT_W,
+            Kind::Action { .. } => BUTTON_W,
         } * s;
         let text_w = width - control_w - 3 * PAD * s;
 
@@ -861,6 +877,18 @@ impl View {
                     Rect::new(right - VALUE_W * s, middle - 12 * s, VALUE_W * s, 24 * s),
                 );
                 (control, label)
+            }
+            Kind::Action { label } => {
+                let button = Button::new(*label, Msg::Do(index))
+                    .with_role(Role::Neutral)
+                    .with_style(self.style(self.text, 15));
+                let r = Rect::new(
+                    right - BUTTON_W * s,
+                    middle - CONTROL_H * s / 2,
+                    BUTTON_W * s,
+                    CONTROL_H * s,
+                );
+                (self.ui.add(card, button, r), None)
             }
             Kind::Choice(choices) => {
                 let selected = shown
@@ -997,6 +1025,8 @@ impl View {
                     l.set_text(setting.describe(value));
                 }
             }
+            // A button says the same thing however often it is pressed.
+            Kind::Action { .. } => {}
             Kind::Choice(choices) => {
                 let i = value
                     .as_text()
