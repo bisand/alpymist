@@ -36,6 +36,13 @@ and stays `0`. See [ADR 0008](docs/adr/0008-versions-and-build-numbers.md).
 neither the dev stamp nor the build number touches them. Adding a package like
 that means editing both.
 
+**A new aport is not built until it is named.** `cargo xtask version` finds it
+by listing `aports/`, so its `pkgver` is kept honest from the day it exists —
+but `ci/build-packages.sh` builds the packages in the order its `for pkg in …`
+list gives, and a package missing from that list is simply never built, with no
+error anywhere. Add it there, before anything that depends on it, and add it to
+whatever `depends` should pull it in.
+
 **squint's `sha512sums` is a real pin.** It is the one aport fetched from
 upstream. `ci/build-packages.sh` deliberately does *not* run `abuild checksum`
 over it — that subcommand deletes the block and regenerates it from whatever

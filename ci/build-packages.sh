@@ -111,7 +111,7 @@ if [ -n "${PREBUILT:-}" ]; then
 	reindex
 else
 	copied=false
-	for pkg in alpymist-keys alpymist alpymistctl alpymist-install alpymist-menu alpymist-about alpymist-wifi alpymist-auth alpymist-power alpymist-settings alpymist-store alpymist-greeter alpymist-splash alpymist-desktop squint; do
+	for pkg in alpymist-keys alpymist alpymistctl alpymist-install alpymist-menu alpymist-about alpymist-wifi alpymist-auth alpymist-power alpymist-settings alpymist-screensaver alpymist-store alpymist-greeter alpymist-splash alpymist-desktop squint; do
 		mkdir -p ~/ap/"$pkg"
 		cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
 		if [[ "$INDEPENDENT" != *" $pkg "* ]]; then

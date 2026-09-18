@@ -99,6 +99,12 @@ pub enum Placement {
     UnderBar,
     /// In the middle of the output: a dialog.
     Centre,
+    /// The whole output: a screensaver.
+    ///
+    /// [`Widget::layout`] is still called, so the widget knows the scale, but
+    /// what it returns is ignored — the panel is the surface the compositor
+    /// gave, and the widget paints into a frame that size.
+    FullScreen,
 }
 
 impl Options {
@@ -207,18 +213,24 @@ pub fn run<W: Widget>(
     layer.set_size(0, 0);
     layer.commit();
 
-    let probe = layer_shell.create_layer_surface(
-        &qh,
-        compositor.create_surface(&qh),
-        Layer::Background,
-        Some(format!("{}-probe", options.namespace)),
-        None,
-    );
-    probe.set_anchor(Anchor::all());
-    probe.set_exclusive_zone(0);
-    probe.set_keyboard_interactivity(KeyboardInteractivity::None);
-    probe.set_size(0, 0);
-    probe.commit();
+    // What the bar leaves is only of interest to something placed under it; a
+    // full-screen widget covers the bar as well, and the extra surface would be
+    // one more round trip before the first frame.
+    let probe = (options.placement != Placement::FullScreen).then(|| {
+        let probe = layer_shell.create_layer_surface(
+            &qh,
+            compositor.create_surface(&qh),
+            Layer::Background,
+            Some(format!("{}-probe", options.namespace)),
+            None,
+        );
+        probe.set_anchor(Anchor::all());
+        probe.set_exclusive_zone(0);
+        probe.set_keyboard_interactivity(KeyboardInteractivity::None);
+        probe.set_size(0, 0);
+        probe.commit();
+        probe
+    });
     conn.flush().ok();
 
     let pool = SlotPool::new(size.width as usize * size.height as usize * 4, &shm)
@@ -256,7 +268,7 @@ pub fn run<W: Widget>(
         shm,
         pool,
         layer,
-        probe: Some(probe),
+        probe,
         cursor_shapes: CursorShapeManager::bind(&globals, &qh).ok(),
         cursor: None,
         loop_handle: event_loop.handle(),
@@ -304,6 +316,9 @@ impl<W: Widget> Host<W> {
     /// The panel's top left corner on the surface, in physical pixels: in
     /// the top right corner of the space the bar leaves.
     fn origin(&self) -> Point {
+        if self.placement == Placement::FullScreen {
+            return Point::new(0, 0);
+        }
         let (Some((sw, sh)), free) = (self.screen, self.free) else {
             return Point::new(0, 0);
         };
@@ -323,6 +338,13 @@ impl<W: Widget> Host<W> {
         // too, and the panel would sit a bar's height low, which is harmless.
         let y = logical(sh.saturating_sub(fh)) + self.margin;
         Point::new(x * s, y * s)
+    }
+
+    /// The whole surface, in physical pixels.
+    fn surface(&self) -> denise::geom::Size {
+        let (w, h) = self.screen.unwrap_or((1, 1));
+        let s = self.scale.max(1);
+        denise::geom::Size::new((w * s).max(1), (h * s).max(1))
     }
 
     /// The panel's rectangle on the surface, in physical pixels.
@@ -355,6 +377,9 @@ impl<W: Widget> Host<W> {
             return;
         }
         self.size = self.widget.layout(self.scale);
+        if self.placement == Placement::FullScreen {
+            self.size = self.surface();
+        }
         if self.frame_pending {
             self.dirty = true;
             return;
@@ -393,8 +418,13 @@ impl<W: Widget> Host<W> {
         };
         // Everything outside the panel is transparent, or the backdrop; a
         // slot may come back holding an older frame, so the whole buffer is
-        // cleared.
-        if self.backdrop == 0 {
+        // cleared. A full-screen widget has nothing outside its panel and
+        // paints every visible pixel itself, and clearing first would be a
+        // second pass over the whole screen for nothing — which on the
+        // machines this targets is most of the cost of a frame.
+        if self.placement == Placement::FullScreen {
+            // Nothing: the widget covers it.
+        } else if self.backdrop == 0 {
             canvas.fill(0);
         } else {
             let shade = self.backdrop.to_ne_bytes();
@@ -467,7 +497,7 @@ impl<W: Widget> Host<W> {
         }
         self.ticking = true;
         let armed = self.loop_handle.insert_source(
-            Timer::from_duration(std::time::Duration::from_millis(40)),
+            Timer::from_duration(self.widget.frame_interval()),
             |_, (), host: &mut Host<W>| {
                 if host.exit || !host.widget.animating() {
                     host.ticking = false;
@@ -475,7 +505,7 @@ impl<W: Widget> Host<W> {
                 }
                 let outcome = host.widget.tick();
                 host.apply(outcome);
-                TimeoutAction::ToDuration(std::time::Duration::from_millis(40))
+                TimeoutAction::ToDuration(host.widget.frame_interval())
             },
         );
         if armed.is_err() {

@@ -13,6 +13,8 @@ alpymist-core = { workspace = true }
 # power.toml, the power modes and the charge limit, without the popup.
 alpymist-power = { workspace = true }
 alpymist-theme = { workspace = true }
+# screensaver.toml and the idle watch's reload, without the picture.
+alpymist-screensaver = { workspace = true }
 # iwd, without the popup.
 alpymist-wifi = { workspace = true }
 serde_json = { workspace = true }

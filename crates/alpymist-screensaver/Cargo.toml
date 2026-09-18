@@ -1,0 +1,46 @@
+[package]
+name = "alpymist-screensaver"
+description = "The Alpymist screensaver: the mountains at a fraction of the resolution, and the idle watch that shows them."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["saver"]
+# The picture and the surface it goes on. Without it the crate is the settings
+# file and the idle watch's argument list — what alpymist-settings needs, with
+# no Wayland, no Denise and no fonts behind it.
+saver = [
+    "dep:alpymist-ui",
+    "dep:alpymist-widget",
+    "dep:denise",
+    "dep:denise-render",
+]
+
+[[bin]]
+name = "alpymist-screensaver"
+path = "src/main.rs"
+required-features = ["saver"]
+
+[[example]]
+name = "snapshot"
+required-features = ["saver"]
+
+[dependencies]
+# The scene is composed and painted by the same code as the wallpaper, the
+# splash and the installer: one range of mountains for the whole system.
+alpymist-ui = { workspace = true, features = ["render"], optional = true }
+# The layer surface, its one-at-a-time socket, and the input that dismisses it.
+alpymist-widget = { workspace = true, optional = true }
+denise = { workspace = true, optional = true }
+denise-render = { workspace = true, optional = true }
+serde = { workspace = true }
+toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
+
+[dev-dependencies]
+png = "0.17"
+
+[lints]
+workspace = true

@@ -9,6 +9,10 @@ dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP >/dev/nul
 swaybg -m fill -i /usr/share/backgrounds/alpymist/alpymist.png >/dev/null 2>&1 &
 waybar -c ~/.config/waybar/labwc.jsonc -s ~/.config/waybar/style.css >/dev/null 2>&1 &
 mako >/dev/null 2>&1 &
+# The screensaver and the screen turning off, on the timings in Setup >
+# Screensaver. This starts the watch; running it again — as Settings does after
+# a change — restarts it with the new times rather than starting a second one.
+alpymist-screensaver idle >/dev/null 2>&1 &
 # Flathub, for this account: Flatpak installs per user, since without elogind
 # polkit never counts the session as active and would ask every install for a
 # password nobody is there to type. The file ships with the desktop, so this

@@ -1,0 +1,40 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-screensaver
+pkgver=0.0.6
+pkgrel=0
+pkgdesc="Alpymist screensaver: the mountains when nobody is there, and the idle watch that shows them"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+# A wlr-layer-shell surface over wl_shm, drawn by Denise on the CPU like the
+# menu: no GPU stack, and libxkbcommon for the keymap that tells the host a key
+# was pressed.
+makedepends="cargo libxkbcommon-dev"
+# swayidle is what speaks ext-idle-notify-v1 and runs these at each timeout;
+# wlopm is what turns the screen off, through wlr-output-power-management,
+# which Hyprland and labwc both implement. Neither is optional: without them
+# the watch starts nothing and the screen never goes off.
+depends="swayidle wlopm"
+options="!check"  # the test suite runs in CI, not in the package build
+source=""
+builddir="$srcdir"
+
+prepare() {
+	# Same as alpymist: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	cargo build --release --locked -p alpymist-screensaver
+}
+
+package() {
+	install -Dm755 "$builddir"/target/release/alpymist-screensaver \
+		"$pkgdir"/usr/bin/alpymist-screensaver
+}

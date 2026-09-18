@@ -193,6 +193,15 @@ pub trait Widget: 'static {
         false
     }
 
+    /// How long between frames while animating.
+    ///
+    /// The default is the frame a spinner wants. Something that moves slowly
+    /// should ask for longer: every frame is a wakeup, and a wakeup on a
+    /// battery costs the same whether anything moved in it or not.
+    fn frame_interval(&self) -> core::time::Duration {
+        core::time::Duration::from_millis(40)
+    }
+
     /// A frame passed while animating.
     fn tick(&mut self) -> Outcome {
         Outcome::Redraw
