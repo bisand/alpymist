@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-screensaver
-pkgver=0.0.6
+pkgver=0.0.7
 pkgrel=0
 pkgdesc="Alpymist screensaver: the mountains when nobody is there, and the idle watch that shows them"
 url="https://github.com/bisand/alpymist"

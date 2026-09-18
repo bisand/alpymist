@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist
-pkgver=0.0.6
+pkgver=0.0.7
 pkgrel=0
 pkgdesc="Alpymist's command line: settings, the release channel and the hardware probe"
 url="https://github.com/bisand/alpymist"

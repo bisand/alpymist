@@ -6,7 +6,7 @@
 # to alpymist on upgrade and anything still calling alpymistctl keeps working.
 # It goes after one release.
 pkgname=alpymistctl
-pkgver=0.0.6
+pkgver=0.0.7
 pkgrel=0
 pkgdesc="Transitional: alpymistctl is now alpymist"
 url="https://github.com/bisand/alpymist"
