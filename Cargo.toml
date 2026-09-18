@@ -10,6 +10,7 @@ members = [
     "crates/alpymist-install",
     "crates/alpymist-menu",
     "crates/alpymist-power",
+    "crates/alpymist-screensaver",
     "crates/alpymist-settings",
     "crates/alpymist-settings-app",
     "crates/alpymist-splash",
@@ -37,6 +38,7 @@ alpymist-core = { path = "crates/alpymist-core" }
 alpymist-glesprobe = { path = "crates/alpymist-glesprobe" }
 alpymist-hwprobe = { path = "crates/alpymist-hwprobe" }
 alpymist-power = { path = "crates/alpymist-power", default-features = false }
+alpymist-screensaver = { path = "crates/alpymist-screensaver", default-features = false }
 alpymist-settings = { path = "crates/alpymist-settings" }
 alpymist-theme = { path = "crates/alpymist-theme" }
 alpymist-ui = { path = "crates/alpymist-ui" }
@@ -44,16 +46,16 @@ alpymist-widget = { path = "crates/alpymist-widget" }
 alpymist-wifi = { path = "crates/alpymist-wifi", default-features = false }
 clap = { version = "4", features = ["derive"] }
 # DeniseUI: direct rendering to DRM/KMS or the framebuffer, no compositor.
-# "0.30" accepts 0.30.x, so patch releases arrive via `cargo update`.
-denise = "0.30"
-denise-ui = "0.30"
-denise-render = "0.30"
-denise-text = { version = "0.30", features = ["truetype"] }
-denise-drm = "0.30"
-denise-evdev = "0.30"
-denise-layout = "0.30"
-denise-fbdev = "0.30"
-denise-winit = "0.30"
+# "0.31" accepts 0.31.x, so patch releases arrive via `cargo update`.
+denise = "0.31"
+denise-ui = "0.31"
+denise-render = "0.31"
+denise-text = { version = "0.31", features = ["truetype"] }
+denise-drm = "0.31"
+denise-evdev = "0.31"
+denise-layout = "0.31"
+denise-fbdev = "0.31"
+denise-winit = "0.31"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
