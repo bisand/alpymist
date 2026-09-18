@@ -7,11 +7,11 @@
 //! rectangle and the clickable one never drift apart.
 
 use crate::{Appearance, Colour};
-use alpymist_menu::font::LazyFont;
+
 use denise::Color;
 use denise::geom::{Point, Rect, Size};
 use denise::painter::Pen;
-use denise_text::{FontId, TextEngine, TextStyle};
+use denise_text::{FontId, TextEngine, TextStyle, TrueTypeSource};
 
 /// The warning colour the menu uses for its notices.
 pub const WARN: Color = Color::rgb(0xE8, 0xB0, 0x6A);
@@ -42,7 +42,7 @@ impl Fonts {
         let mut add =
             |engine: &mut TextEngine, path: &str, required: bool| match std::fs::read(path)
                 .map_err(|e| e.to_string())
-                .and_then(|bytes| LazyFont::from_vec(path, bytes))
+                .and_then(|bytes| TrueTypeSource::from_vec(path, bytes))
             {
                 Ok(source) => Some(engine.add_font(Box::new(source))),
                 Err(e) => {

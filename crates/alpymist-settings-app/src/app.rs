@@ -2,7 +2,7 @@
 //! settings library, one at a time on a worker thread.
 
 use alpymist_about::info::About;
-use alpymist_menu::font::LazyFont;
+
 use alpymist_settings::{Env, Error, Settings, Value};
 use alpymist_settings_app::view::{Action, Effect, Fonts, View};
 use alpymist_widget::Outcome;
@@ -10,7 +10,7 @@ use alpymist_widget::host::{self, Sender};
 use alpymist_widget::instance;
 use alpymist_widget::window::{self, App, Cursor, Key, Mods};
 use denise::{ElementState, Frame, InputEvent, KeyCode, Modifiers, Point, PointerButton, Size};
-use denise_text::GlyphSource;
+use denise_text::{GlyphSource, TrueTypeSource};
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -180,7 +180,7 @@ fn fonts() -> Fonts {
     let theme = alpymist_theme::load().file;
     let load = |path: &str| -> Option<Box<dyn GlyphSource>> {
         let bytes = std::fs::read(path).ok()?;
-        LazyFont::from_vec(path, bytes)
+        TrueTypeSource::from_vec(path, bytes)
             .ok()
             .map(|f| Box::new(f) as Box<dyn GlyphSource>)
     };

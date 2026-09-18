@@ -11,14 +11,14 @@
 //! its own resolution rather than stretched by the compositor.
 
 use crate::config::{Appearance, Colour};
-use crate::font::LazyFont;
+
 use crate::menu::Menu;
 use crate::tree::Action;
 use denise::geom::{Point, Rect, Size};
 use denise::painter::Pen;
 use denise::{Color, Frame};
 use denise_render::Canvas;
-use denise_text::{FontId, TextEngine, TextStyle};
+use denise_text::{FontId, TextEngine, TextStyle, TrueTypeSource};
 
 /// The fonts, loaded once.
 pub struct Fonts {
@@ -39,7 +39,7 @@ impl Fonts {
         let built_in = TextStyle::built_in(0).font;
         let mut add = |engine: &mut TextEngine, path: &str| match std::fs::read(path)
             .map_err(|e| e.to_string())
-            .and_then(|bytes| LazyFont::from_vec(path, bytes))
+            .and_then(|bytes| TrueTypeSource::from_vec(path, bytes))
         {
             Ok(source) => engine.add_font(Box::new(source)),
             Err(e) => {

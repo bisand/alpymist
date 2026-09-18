@@ -8,8 +8,6 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-# Fonts parsed lazily; see src/font.rs for why not Denise's fontdue source.
-ab_glyph = { version = "0.2", default-features = false, features = ["std"] }
 # The colours and fonts every hand-drawn Alpymist window starts from.
 alpymist-theme = { workspace = true }
 denise = { workspace = true }

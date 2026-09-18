@@ -17,7 +17,6 @@
 pub mod apps;
 pub mod config;
 pub mod exec;
-pub mod font;
 pub mod fuzzy;
 pub mod history;
 pub mod menu;
