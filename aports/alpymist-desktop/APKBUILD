@@ -71,7 +71,8 @@ subpackages="
 	$pkgname-legacy:_legacy
 	"
 options="!check"  # the test suite runs in CI, not in the package build
-install="$pkgname-full.post-install $pkgname-full.post-upgrade"
+install="$pkgname-full.post-install $pkgname-full.post-upgrade
+	$pkgname-lite.post-upgrade"
 source=""
 builddir="$srcdir"
 

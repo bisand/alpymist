@@ -141,6 +141,13 @@ fn stop(child: Option<Child>) {
 /// `alpymist-screensaver idle` is safe to run from a login file and from
 /// Settings alike.
 ///
+/// What this does not do is notice a `swayidle` that died on its own. The way
+/// that happens is the compositor going away, which takes the session and this
+/// with it; a compositor restarted in place would leave a watch with nothing
+/// under it until the next `alpymist-screensaver idle`, which Settings runs on
+/// any change. Watching for it would mean a thread waiting on the child beside
+/// the thread waiting on the socket, and that has not been worth it yet.
+///
 /// # Errors
 /// When there is no runtime directory to listen in, which means there is no
 /// session either.

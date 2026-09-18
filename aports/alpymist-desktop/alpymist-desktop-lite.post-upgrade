@@ -1,0 +1,14 @@
+#!/bin/sh
+# The screensaver and the screen turning off are started from labwc's autostart,
+# which belongs to the account and is not changed here. Accounts made before
+# this release have no such line, so their screen would go on burning: say so,
+# and say the line, rather than leaving it silently absent.
+for home in /root /home/*; do
+	auto="$home/.config/labwc/autostart"
+	if [ -f "$auto" ] && ! grep -q 'alpymist-screensaver idle' "$auto"; then
+		echo "  * $auto does not start the screensaver or turn the screen off."
+		echo "    Add this line beside the other programs it starts:"
+		echo "        alpymist-screensaver idle >/dev/null 2>&1 &"
+	fi
+done
+exit 0

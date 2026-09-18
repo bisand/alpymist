@@ -18,6 +18,19 @@ for home in /root /home/*; do
 		echo "    Change its \$terminal line to: \$terminal = foot"
 	fi
 done
+# The screensaver and the screen turning off are started from hyprland.conf,
+# which belongs to the account and is not changed here. Accounts made before
+# this release have no such line, so their screen would go on burning: say so,
+# and say the line, rather than leaving it silently absent.
+for home in /root /home/*; do
+	hypr="$home/.config/hypr/hyprland.conf"
+	if [ -f "$hypr" ] && ! grep -q 'alpymist-screensaver idle' "$hypr"; then
+		echo "  * $hypr does not start the screensaver or turn the screen off."
+		echo "    Add this line beside the other exec-once lines:"
+		echo "        exec-once = alpymist-screensaver idle"
+	fi
+done
+
 # Hyprland sources ~/.config/alpymist/hypr/settings.conf and refuses a missing
 # one. `alpymist session hyprland` writes it at login; for accounts already
 # logged in, whose Hyprland reloads when this package's files change, write it
