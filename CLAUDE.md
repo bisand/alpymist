@@ -43,6 +43,15 @@ list gives, and a package missing from that list is simply never built, with no
 error anywhere. Add it there, before anything that depends on it, and add it to
 whatever `depends` should pull it in.
 
+**A screensaver is a package, not a branch in a match.** Adding one means a
+binary and a `/usr/share/alpymist/screensavers/<id>.toml` beside it declaring
+its settings — nothing in `alpymist-screensaver` or `alpymist-settings` names
+any screensaver, and adding a name to either is the wrong fix for anything.
+`crates/alpymist-saver-mountains` is the worked example, and its
+`tests/definition.rs` is what stops a declared setting and the program that
+reads it drifting apart. See [ADR 0009](docs/adr/0009-screensaver-and-idle.md)
+and its addendum.
+
 **squint's `sha512sums` is a real pin.** It is the one aport fetched from
 upstream. `ci/build-packages.sh` deliberately does *not* run `abuild checksum`
 over it — that subcommand deletes the block and regenerates it from whatever

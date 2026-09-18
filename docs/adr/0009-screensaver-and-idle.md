@@ -116,3 +116,95 @@ why the picture is an overture to it rather than an alternative.
   would show, and `ext-session-lock-v1` is where it would go. Nothing here
   forecloses that; it is a separate decision, and this one does not pretend to
   have made it.
+
+---
+
+## Addendum, 2026-09-18 — a screensaver is a program, not a picture in ours
+
+**Status:** accepted · amends §3 above and the shape of §1.
+
+### What changed
+
+The decision above described one screensaver, built into
+`alpymist-screensaver`, with the account's chunkiness in the same file as the
+idle policy. Asked for more screensavers, the obvious next step was a second
+module and an enum variant. That was declined, and deliberately:
+
+> I think of screensavers as individual programs, so then they should also
+> provide a settings page that individually can be configured. The settings
+> page could be definitions that each screensaver defines that makes the
+> settings page render it from that definition.
+
+So a screensaver is now a **program plus a file that describes it**:
+
+```
+/usr/bin/alpymist-saver-mountains
+/usr/share/alpymist/screensavers/mountains.toml
+```
+
+The file says what it is called, what to run, and every setting it takes —
+each with a kind, a range, a default and a sentence of its own. Settings reads
+that directory, renders a page per screensaver from the declarations, and
+writes the values to `~/.config/alpymist/screensavers/<id>.toml`. The program
+reads that same pair. **Nothing in Alpymist knows what a "mountain" is.**
+Installing a package that ships those two files adds a page and an entry in the
+`Screensaver` list; removing it takes both away.
+
+`alpymist-screensaver` keeps the idle watch and becomes a launcher: it resolves
+`show` — a name, or `random` — against what is installed and `exec`s it, so
+what swayidle started and what `alpymist-screensaver stop` takes away are one
+process.
+
+### What this costs, and what was kept
+
+The obvious cost of separate programs is that each opens its own Wayland
+surface and does its own scaling, and the care in §3 above would have to be
+repeated in every one. That is not how this is built. `alpymist-screensaver` is
+a **library** as well as a launcher: a screensaver implements `Painting` — draw
+a small picture, say how small — and `paint::start` provides the layer surface,
+the block magnification, the frame pacing, the input that dismisses it and the
+socket `stop` reaches. A whole screensaver is a `main` of a dozen lines and its
+picture. The 8% of a core measured above is a property of the shared host, so
+every screensaver gets it.
+
+What it buys is that a third party can add one without Alpymist being rebuilt,
+and that a screensaver's settings live with the screensaver rather than in a
+registry somebody has to remember to extend.
+
+### Two things that follow
+
+- **`Kind::Action`.** Settings gained a control that is a thing to do rather
+  than a thing to be: a button, whose `set` runs it. Every screensaver's page
+  gets one — *See it now* — whether or not it declares anything else, because
+  looking at a screensaver is the one thing everybody wants from its page and
+  a timeout of five minutes is a poor way to do it. `alpymist set
+  screensaver-mountains.preview` does the same from a terminal.
+- **Settings' registry is no longer entirely static.** An `Area` and a
+  `Setting` hold `&'static str` because every one of them used to be written in
+  the source. The screensavers' are read from files, once per process, and kept
+  for as long as it runs. That is a deliberate small leak, bounded by the number
+  of screensavers installed, and it is the reason `Settings::areas()` can still
+  hand back `&'static [Area]` to everything that already expected one.
+
+### What this does not reach
+
+The menu's settings fragment is generated when `alpymist-settings` is packaged
+(`alpymist menu-fragment`, ADR 0007 §6), in a container where no screensaver is
+installed — so the menu offers the `Screensaver` page and its four policy
+settings, and not the per-screensaver pages. Nothing wrong is written; the list
+is simply the static half. Settings itself reads the directory every time it
+starts and is complete. Closing the gap would mean either generating the
+fragment on install, which a screensaver added later would still miss, or
+having every screensaver ship a menu fragment as well as a definition — a
+second file saying what the first already says. Neither is worth it for a
+search result, and this is written down so the next person does not assume it
+was overlooked.
+
+### What 0.0.7 shipped, and what happens to it
+
+0.0.7 wrote `block` into `screensaver.toml`. That key now belongs to the
+mountains, in their own file. The policy file still *accepts* `block` and
+ignores it: `deny_unknown_fields` would otherwise refuse the whole file, and a
+refused file means a laptop whose screen stops turning off — over a key that no
+longer matters. The default is the same either way, so nobody who never changed
+it can tell.
