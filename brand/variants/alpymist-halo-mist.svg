@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Alpymist halo and mist logo</title>
+  <defs>
+    <linearGradient id="halo" x1=".35" y1="0" x2=".65" y2="1"><stop stop-color="#3a4c63"/><stop offset=".55" stop-color="#24344a"/><stop offset="1" stop-color="#172337"/></linearGradient>
+    <linearGradient id="fog" x1=".12" y1="0" x2=".7" y2="1"><stop stop-color="#afc2d6"/><stop offset=".5" stop-color="#8ba3bd"/><stop offset="1" stop-color="#52677f"/></linearGradient>
+    <clipPath id="disc"><circle cx="256" cy="256" r="240"/></clipPath>
+  </defs>
+  <g clip-path="url(#disc)">
+    <path fill="url(#halo)" fill-rule="evenodd" d="M256 16a240 240 0 1 1 0 480 240 240 0 0 1 0-480ZM30 338 186 126l123 167 1-31 57-54 107 148 86 152H-60Z"/>
+    <path fill="url(#halo)" d="M310 262c16 28 53 54 73 64-16-4-58-21-74-33Z"/>
+    <path fill="url(#fog)" d="M45 355 145 224C149 262 184 282 205 290 234 304 388 329 443 376A228 228 0 0 1 45 355Z"/>
+  </g>
+</svg>

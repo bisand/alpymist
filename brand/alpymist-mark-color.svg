@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Alpymist mark for dark surfaces</title>
+  <defs><linearGradient id="halo" x1=".35" y1="0" x2=".65" y2="1"><stop stop-color="#3a4c63"/><stop offset=".55" stop-color="#24344a"/><stop offset="1" stop-color="#172337"/></linearGradient><linearGradient id="fog" x1=".12" y1="0" x2=".7" y2="1"><stop stop-color="#afc2d6"/><stop offset=".5" stop-color="#8ba3bd"/><stop offset="1" stop-color="#52677f"/></linearGradient></defs><path fill="url(#halo)" fill-rule="evenodd" d="M256 16a240 240 0 1 1 0 480 240 240 0 0 1 0-480ZM30 338 186 126 309 293 310 262 367 208 474 356A240 240 0 0 1 30 338Z"/><path fill="url(#halo)" d="M310 262c16 28 53 54 73 64-16-4-58-21-74-33Z"/><path fill="url(#fog)" d="M45 355 145 224C149 262 184 282 205 290 234 304 388 329 443 376A228 228 0 0 1 45 355Z"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 -20 536 357" role="img" aria-labelledby="title">
+  <title id="title">Alpymist open ridge logo</title>
+  <defs>
+    <linearGradient id="g0" gradientUnits="userSpaceOnUse" x1="240" y1="311" x2="232" y2="53"><stop stop-color="#223144"/><stop offset="1" stop-color="#374960"/></linearGradient>
+    <linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="267" y1="294" x2="270" y2="188"><stop stop-color="#3b4d63"/><stop offset="1" stop-color="#6a7e96"/></linearGradient>
+  </defs>
+  <path fill="url(#g0)" d="M215 0 227 13 312 179 367 112 489 301 496 313 494 317 452 317 360 177 343 199 332 205C311 197.7 290 190.3 269 183C229.6 165.2 217.2 132 198 89L104 223 68 279 239 280C220 268.5 209 252.3 199 235C188.3 213.8 185.2 195.9 185 178C181.5 167 187 155.2 188 145C198.5 175.7 221.8 193.6 251 210C286.9 225.2 318.6 239 344 258C360.9 276.6 379.2 293.7 389 316L0 316 7 301Z"/>
+  <path fill="url(#g1)" d="M188 145C198.5 175.7 221.8 193.6 251 210C286.9 225.2 318.6 239 344 258C360.9 276.6 379.2 293.7 389 316C370.2 295.7 330.8 302.8 300 299C274.8 290.8 248.4 300.5 240 281L239 279C220 268.5 209 252.3 199 235C188.3 213.8 185.2 195.9 185 178C181.5 167 187 155.2 188 145Z"/>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 -20 527 360" role="img" aria-labelledby="title">
+  <title id="title">Alpymist layered ridge logo</title>
+  <defs>
+    <linearGradient id="g0" gradientUnits="userSpaceOnUse" x1="288" y1="195" x2="330" y2="72"><stop stop-color="#24354b"/><stop offset="1" stop-color="#465970"/></linearGradient>
+    <linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="190" y1="321" x2="177" y2="168"><stop stop-color="#182535"/><stop offset="1" stop-color="#293b50"/></linearGradient>
+    <linearGradient id="g2" gradientUnits="userSpaceOnUse" x1="169" y1="200" x2="234" y2="146"><stop stop-color="#36485f"/><stop offset="1" stop-color="#576b83"/></linearGradient>
+  </defs>
+  <path fill="url(#g0)" d="M216 0 321 181 371 118 470 274 487 306 473 289C439.1 246.9 388.4 231.8 341 210C307.9 192.9 296.2 159 271 143C231.5 123.5 191.2 116.7 176 81L177 56Z"/>
+  <path fill="url(#g1)" d="M159 67 159 88 162 100C172.1 130.5 192.8 146 225 160C254.1 170.9 270.5 194.5 282 223C318.7 266.3 392.5 269.2 437 317L437 320 0 319 0 312Z"/>
+  <path fill="url(#g2)" d="M104 154 159 67 159 88 162 100C172.1 130.5 192.8 146 225 160C254.1 170.9 270.5 194.5 282 223C318.7 266.3 392.5 269.2 437 317C399.9 275.6 350.8 275.4 310 258C275.2 253.7 268.5 213.8 245 199C228 177.2 187.8 166.7 175 137L104 154Z"/>
+</svg>
