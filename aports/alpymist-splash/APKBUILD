@@ -11,7 +11,7 @@ makedepends="cargo"
 # The font is a runtime suggestion: without it the splash falls back to
 # Denise's built-in bitmap and still reads correctly.
 depends="font-fira-ttf"
-subpackages="$pkgname-openrc"
+subpackages="$pkgname-openrc $pkgname-boot:boot:noarch"
 options="!check"  # the test suite runs in CI, not in the package build
 source="alpymist-splash.initd alpymist-splash-done.initd"
 builddir="$srcdir"
@@ -31,6 +31,13 @@ build() {
 	# something that runs this early in boot.
 	cargo build --release --locked \
 		-p alpymist-splash --no-default-features --features drm
+	# The boot menus' backgrounds, drawn by the same code as the splash they
+	# hand over to, so the machine shows one continuous picture from the
+	# bootloader onwards. Two sizes: syslinux draws at a fixed 640x480 VESA
+	# mode, GRUB stretches to the panel.
+	cargo build --release --locked -p alpymist-wallpaper
+	./target/release/alpymist-wallpaper --boot menu-640.png 640 480
+	./target/release/alpymist-wallpaper --boot menu-1280.png 1280 800
 }
 
 package() {
@@ -40,6 +47,20 @@ package() {
 		"$pkgdir"/etc/init.d/alpymist-splash
 	install -Dm755 "$srcdir"/alpymist-splash-done.initd \
 		"$pkgdir"/etc/init.d/alpymist-splash-done
+}
+
+boot() {
+	pkgdesc="Alpymist boot menu backgrounds"
+	depends=""
+	# Deliberately depended on by nothing. It exists so the image build can
+	# take the art out of a signed package with `apk fetch`, rather than
+	# carrying a PNG in the repository that could drift from the code that
+	# draws it; see profiles/mkimg.alpymist.sh. Installing it on a machine
+	# would only waste the space.
+	install -Dm644 "$builddir"/menu-640.png \
+		"$subpkgdir"/usr/share/alpymist/boot/menu-640.png
+	install -Dm644 "$builddir"/menu-1280.png \
+		"$subpkgdir"/usr/share/alpymist/boot/menu-1280.png
 }
 
 # Filled in by `abuild checksum` at build time; see alpymist-install.
