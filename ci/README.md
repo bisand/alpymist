@@ -31,6 +31,33 @@ The ISO jobs build no packages at all: they index and sign the ones the
 package jobs made. What is left of an image's time is mostly squashing the
 kernel's firmware.
 
+## Boot menus
+
+Both boot menus on the ISO are branded, and neither can be exercised on a
+development machine — only in CI or under QEMU.
+
+`profiles/mkimg.alpymist.sh` replaces `mkimg.base.sh`'s `syslinux_gen_config`
+and `grub_gen_config`. It does that from inside `profile_alpymist`, not at the
+top of the file: `mkimage.sh` sources every `mkimg.*.sh` in turn and "alpymist"
+sorts before "base", so a top-level definition is overwritten a moment later.
+
+- **BIOS** is `vesamenu.c32` with a 640x480 background, which is the VESA mode
+  every machine this targets has. `build_syslinux` is replaced too, because
+  Alpine's only unpacks the text-mode modules.
+- **UEFI** is GRUB with `gfxterm` and the same picture stretched from a
+  1280x800 source. It is wrapped in `if loadfont ...; then`, exactly as the
+  distributions' own `grub.cfg`s are: a `gfxterm` with no font is a black
+  screen, and falling back to the plain console menu is the difference between
+  plain and unusable. `grub_mod` gains `png font gfxterm`, and the font comes
+  out of Alpine's `grub` package.
+
+The pictures themselves are drawn by `alpymist-wallpaper --boot` during the
+`alpymist-splash` build and carried by its `alpymist-splash-boot` subpackage,
+which nothing installs — the image build takes them out of it with `apk fetch`.
+That is so the menu, the splash it hands over to and the desktop behind it are
+all the same picture from the same code, rather than a PNG in the repository
+that could drift.
+
 ## Channels
 
 Installed systems upgrade with `apk upgrade`; an ISO is only for installing
