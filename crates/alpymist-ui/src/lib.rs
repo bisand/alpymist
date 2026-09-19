@@ -13,6 +13,7 @@
 #![forbid(unsafe_code)]
 
 pub mod backdrop;
+pub mod badge;
 pub mod chrome;
 pub mod convert;
 #[cfg(feature = "drm")]

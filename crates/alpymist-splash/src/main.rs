@@ -22,7 +22,7 @@
 mod handover;
 mod scene;
 
-use alpymist_ui::render::{colour, paint_backdrop};
+use alpymist_ui::render::{colour, paint_backdrop, paint_badge};
 use alpymist_ui::typeface::{self, Typeface};
 use denise::geom::Point;
 use denise::painter::Pen;
@@ -55,6 +55,8 @@ impl Splash {
         // heights, and a cell is eight pixels tall.
         let wordmark_px = u16::try_from(layout.wordmark_scale * 8).unwrap_or(96);
         let tagline_px = u16::try_from(layout.tagline_scale * 8).unwrap_or(16);
+
+        paint_badge(canvas, layout.badge_at, layout.badge_size, &palette);
 
         let mut pen = Pen::new(canvas);
         self.face.draw(

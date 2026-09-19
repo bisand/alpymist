@@ -2,6 +2,7 @@
 //!
 //! `alpymist-wallpaper OUT.png [WIDTH HEIGHT]`
 //! `alpymist-wallpaper --mark OUT.png [SIZE]`
+//! `alpymist-wallpaper --boot OUT.png [WIDTH HEIGHT]`
 //!
 //! Run while building the desktop package, so the desktop background is the
 //! same misty mountains as the boot splash and the installer — drawn by the
@@ -11,9 +12,9 @@
 #![forbid(unsafe_code)]
 
 use alpymist_ui::backdrop::Backdrop;
-use alpymist_ui::logo::MARK;
+use alpymist_ui::badge;
 use alpymist_ui::palette::Palette;
-use alpymist_ui::render::paint_backdrop;
+use alpymist_ui::render::{paint_backdrop, paint_badge};
 use denise::PixelFormat;
 use denise::geom::Size;
 use denise_render::Canvas;
@@ -37,6 +38,7 @@ fn main() -> ExitCode {
             eprintln!("alpymist-wallpaper: {why}");
             eprintln!("usage: alpymist-wallpaper OUT.png [WIDTH HEIGHT]");
             eprintln!("       alpymist-wallpaper --mark OUT.png [SIZE]");
+            eprintln!("       alpymist-wallpaper --boot OUT.png [WIDTH HEIGHT]");
             ExitCode::FAILURE
         }
     }
@@ -46,6 +48,12 @@ fn run(args: &[String]) -> Result<String, String> {
     if let Some(rest) = args.split_first().filter(|(f, _)| *f == "--mark") {
         let (out, size) = parse_mark(rest.1)?;
         write_mark(&out, size)?;
+        return Ok(out);
+    }
+    if let Some(rest) = args.split_first().filter(|(f, _)| *f == "--boot") {
+        let (out, width, height) = parse(rest.1)?;
+        let pixels = render_boot(width, height)?;
+        write_png(&out, &pixels, width, height)?;
         return Ok(out);
     }
     let (out, width, height) = parse(args)?;
@@ -70,15 +78,18 @@ fn parse_mark(args: &[String]) -> Result<(String, u32), String> {
     }
 }
 
-/// Write the Alpymist mark as a transparent PNG in the accent colour.
+/// Write the Alpymist badge as a transparent PNG in the accent colour.
 ///
-/// Transparent rather than on a panel, so the bar's own background shows
-/// through and the mark inherits whatever the bar is coloured.
+/// The badge rather than the bare mark: at the size a bar draws an icon the
+/// ridgeline alone is a few dark pixels, and the disc is what gives it an
+/// edge. Transparent rather than on a panel, so the bar's own background
+/// shows through the peaks and the mark inherits whatever the bar is
+/// coloured.
 fn write_mark(path: &str, size: u32) -> Result<(), String> {
     let ink = Palette::alpymist().accent;
-    let mask = MARK.mask(size);
-    // The mark is wider than it is tall; the mask says by how much.
-    let height = u32::try_from(mask.len() / size.max(1) as usize).unwrap_or(1);
+    let mask = badge::mask(size);
+    // The badge is square.
+    let height = size;
     let mut rgba = Vec::with_capacity(mask.len() * 4);
     for alpha in &mask {
         rgba.extend_from_slice(&[ink.r, ink.g, ink.b, *alpha]);
@@ -124,6 +135,39 @@ fn render(width: u32, height: u32) -> Result<Vec<u32>, String> {
     )
     .ok_or("could not create a canvas of that size")?;
     paint_backdrop(&mut canvas, &backdrop);
+    Ok(pixels)
+}
+
+/// Where the badge sits on the boot background, as a fraction of the height.
+///
+/// High enough that a boot menu drawn under it has the lower two-thirds to
+/// itself: syslinux and GRUB both start their entries near the middle, and a
+/// mark they overlap is worse than no mark.
+const BOOT_BADGE_TOP: u32 = 8;
+/// The badge's side on the boot background, as a fraction of the height.
+const BOOT_BADGE_SIZE: u32 = 4;
+
+/// Paint the boot menu's background: the backdrop, with the badge above the
+/// space the menu will use.
+fn render_boot(width: u32, height: u32) -> Result<Vec<u32>, String> {
+    let len = usize::try_from(u64::from(width) * u64::from(height))
+        .map_err(|_| "image too large for this machine".to_string())?;
+    let mut pixels = vec![0u32; len];
+    let palette = Palette::alpymist();
+    let backdrop = Backdrop::compose(width, height, &palette, SCENE_SEED);
+    let mut canvas = Canvas::from_pixels(
+        &mut pixels,
+        Size::new(width, height),
+        width,
+        PixelFormat::Argb8888,
+    )
+    .ok_or("could not create a canvas of that size")?;
+    paint_backdrop(&mut canvas, &backdrop);
+
+    let size = i32::try_from(height / BOOT_BADGE_SIZE).unwrap_or(i32::MAX);
+    let left = (i32::try_from(width).unwrap_or(i32::MAX) - size) / 2;
+    let top = i32::try_from(height / BOOT_BADGE_TOP).unwrap_or(0);
+    paint_badge(&mut canvas, (left, top), size, &palette);
     Ok(pixels)
 }
 

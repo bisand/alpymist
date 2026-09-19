@@ -6,7 +6,7 @@
 //! the splash still draws something sane on the sizes we care about.
 
 use alpymist_splash_scene::{Scene, TAGLINE, WORDMARK};
-use alpymist_ui::render::{colour, paint_backdrop};
+use alpymist_ui::render::{colour, paint_backdrop, paint_badge};
 use alpymist_ui::typeface;
 use denise::PixelFormat;
 use denise::geom::{Point, Size};
@@ -37,6 +37,13 @@ fn main() {
 
     let scene = Scene::new(width, height);
     paint_backdrop(&mut canvas, &scene.backdrop);
+
+    paint_badge(
+        &mut canvas,
+        scene.layout.badge_at,
+        scene.layout.badge_size,
+        &scene.palette,
+    );
 
     let mut face = typeface::load();
     eprintln!("{}", face.status.describe());

@@ -22,6 +22,10 @@ pub const TAGLINE: &str = "a cold, quiet Alpine desktop";
 /// Where each piece of the splash sits, for a given screen size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Layout {
+    /// Top-left of the badge, which is square.
+    pub badge_at: (i32, i32),
+    /// The badge's side, in pixels.
+    pub badge_size: i32,
     /// Scale factor for the wordmark's bitmap glyphs.
     pub wordmark_scale: i32,
     /// Top-left of the wordmark.
@@ -67,7 +71,17 @@ impl Layout {
         let wm_y = (h / 2) - (h / 8) - (CELL_HEIGHT * wordmark_scale / 2);
         let gap = CELL_HEIGHT * wordmark_scale / 2;
 
+        // The badge stands above the wordmark, sized from the screen rather
+        // than from the text, so it stays a mark and not an illustration. On
+        // a short screen it gives way rather than pushing the block off the
+        // top: what must survive is the wordmark.
+        let badge_size = (h / 5).clamp(32, 320);
+        let badge_size = badge_size.min((wm_y - gap).max(0));
+        let badge_at = ((w - badge_size) / 2, wm_y - gap - badge_size);
+
         Self {
+            badge_at,
+            badge_size,
             wordmark_scale,
             wordmark_at: ((w - wm_w) / 2, wm_y),
             tagline_scale,
@@ -115,6 +129,42 @@ impl Scene {
 mod tests {
     use super::{Layout, Scene, TAGLINE, WORDMARK, text_width};
     use alpymist_ui::convert::px;
+
+    #[test]
+    fn the_badge_stands_above_the_wordmark_and_stays_on_screen() {
+        for (w, h) in [
+            (320, 240),
+            (640, 480),
+            (1024, 768),
+            (1366, 768),
+            (1920, 1080),
+        ] {
+            let l = Layout::for_screen(w, h);
+            assert!(l.badge_size >= 0, "{w}x{h}: negative badge");
+            assert!(l.badge_at.1 >= 0, "{w}x{h}: badge starts above the screen");
+            assert!(
+                l.badge_at.1 + l.badge_size <= l.wordmark_at.1,
+                "{w}x{h}: badge overlaps the wordmark"
+            );
+            assert!(
+                l.badge_at.0 >= 0 && l.badge_at.0 + l.badge_size <= px(w),
+                "{w}x{h}: badge overflows sideways"
+            );
+        }
+    }
+
+    #[test]
+    fn the_badge_is_centred_on_the_same_axis_as_the_text() {
+        let (w, h) = (1366, 768);
+        let l = Layout::for_screen(w, h);
+        let badge_mid = l.badge_at.0 + l.badge_size / 2;
+        let word_mid = l.wordmark_at.0 + text_width(WORDMARK, l.wordmark_scale) / 2;
+        assert!(
+            (badge_mid - word_mid).abs() <= 1,
+            "off by {}",
+            badge_mid - word_mid
+        );
+    }
 
     #[test]
     fn the_wordmark_fits_within_the_screen_at_every_size_we_care_about() {
