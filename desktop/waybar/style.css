@@ -19,13 +19,15 @@ window#waybar {
 .modules-left { margin-left: 6px; }
 .modules-right { margin-right: 10px; }
 
+/* The badge is square, unlike the bare ridgeline it replaced; a size that is
+   not square would squash the disc into an ellipse. */
 #custom-alpymist {
   background-image: url("/usr/share/alpymist/mark.png");
   background-repeat: no-repeat;
   background-position: center;
-  background-size: 18px 12px;
+  background-size: 14px 14px;
   min-width: 16px;
-  padding: 0 10px 0 8px;
+  padding: 0 9px;
 }
 
 #workspaces button {

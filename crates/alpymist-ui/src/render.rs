@@ -5,8 +5,10 @@
 //! apart is what lets the scene be tested without a graphics stack.
 
 use crate::backdrop::{Backdrop, Layer};
+use crate::badge;
 use crate::chrome::Chrome;
 use crate::convert::px;
+use crate::logo::UNIT;
 use crate::palette::{Palette, Rgb};
 use denise::color::Color;
 use denise::geom::Point;
@@ -18,6 +20,13 @@ use denise_ui::cursor::{ARROW, Cursor};
 
 /// The rasteriser takes polygon vertices in 8.8 fixed point.
 const FX_SHIFT: u32 = 8;
+
+/// The most vertices Denise fills in one polygon.
+///
+/// Past it the shape is dropped rather than drawn wrongly, which is a silent
+/// failure — so every outline [`paint_badge`] hands over has to fit, and
+/// `badge`'s own tests hold it to that.
+const MAX_VERTICES: usize = 32;
 
 /// Convert a pixel coordinate to the rasteriser's 8.8 fixed point.
 ///
@@ -33,6 +42,54 @@ pub fn to_fixed(v: i32) -> i32 {
 #[must_use]
 pub fn colour(c: Rgb) -> Color {
     Color::rgb(c.r, c.g, c.b)
+}
+
+/// Paint the [`badge`] with its top-left corner at `at`, `size` pixels across.
+///
+/// Opaque, in four flat fills rather than the master's gradients: this is
+/// drawn over the backdrop's own mountains, and a badge that let them show
+/// through its peaks would read as a hole rather than as a mark. The colours
+/// are the palette's, so the badge sits in the same light as everything else
+/// on the screen.
+///
+/// Positions are computed in the rasteriser's fixed point rather than rounded
+/// to whole pixels first, so the disc stays a circle at splash sizes.
+pub fn paint_badge<P: Painter + ?Sized>(
+    painter: &mut P,
+    at: (i32, i32),
+    size: i32,
+    palette: &Palette,
+) {
+    if size <= 0 {
+        return;
+    }
+    let place = |p: &(i32, i32)| -> (i32, i32) {
+        let scale = |v: i32| -> i32 {
+            let fx = (i64::from(v) * i64::from(size) * i64::from(1 << FX_SHIFT)) / i64::from(UNIT);
+            i32::try_from(fx).unwrap_or(i32::MAX)
+        };
+        (
+            to_fixed(at.0).saturating_add(scale(p.0)),
+            to_fixed(at.1).saturating_add(scale(p.1)),
+        )
+    };
+    // The disc, and the sliver of it that separates the two peaks.
+    let face = palette.sky_low.mix(palette.sky_high, 30);
+    let mist = palette.mist.mix(palette.sky_low, 28);
+
+    let ring: Vec<_> = badge::disc(MAX_VERTICES).iter().map(place).collect();
+    painter.fill_polygon_fx(&ring, Paint::new(colour(face)));
+
+    // A whole disc's worth of segments, of which the peaks' closing arc takes
+    // only its share -- which is what leaves room for the ridgeline itself.
+    let peaks: Vec<_> = badge::peaks(64).iter().map(place).collect();
+    painter.fill_polygon_fx(&peaks, Paint::new(colour(palette.sky_high)));
+
+    let ribbon: Vec<_> = badge::RIBBON.iter().map(place).collect();
+    painter.fill_polygon_fx(&ribbon, Paint::new(colour(face)));
+
+    let bank: Vec<_> = badge::MIST.iter().map(place).collect();
+    painter.fill_polygon_fx(&bank, Paint::new(colour(mist)));
 }
 
 /// Paint the whole scene, back to front.
