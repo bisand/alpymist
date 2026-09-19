@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { markPath } from '$lib/mark';
+	import { markPath, mistPath } from '$lib/mark';
 
 	let { size = 28, title = '' }: { size?: number; title?: string } = $props();
 </script>
@@ -12,7 +12,7 @@
 	aria-hidden={title ? undefined : 'true'}
 >
 	{#if title}<title>{title}</title>{/if}
-	<path d={markPath()} fill="currentColor" />
+	<path d={markPath() + mistPath()} fill="currentColor" fill-rule="evenodd" />
 </svg>
 
 <style>

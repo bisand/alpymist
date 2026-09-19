@@ -23,21 +23,16 @@ pub struct Silhouette {
     pub points: &'static [(u32, u32)],
 }
 
-/// The Alpymist mark: a high peak left of centre, a lower one to its right,
-/// and the saddle between them — the shape the bar shows and the backdrop
-/// echoes.
+/// The Alpymist mark: a high peak left of centre, a lower companion to its
+/// right, and a broad saddle between them. The deliberately spare outline is
+/// the small-size form of the logo; larger brand assets add the mist sweep.
 pub const MARK: Silhouette = Silhouette {
     points: &[
         (0, 0),
-        (80, 90),
-        (300, 760),
-        (390, 1000),
-        (470, 800),
-        (560, 560),
-        (610, 640),
-        (700, 860),
-        (760, 720),
-        (900, 220),
+        (323, 779),
+        (448, 1000),
+        (686, 362),
+        (793, 587),
         (1000, 0),
     ],
 };

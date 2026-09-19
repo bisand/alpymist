@@ -1,5 +1,6 @@
-// The Alpymist mark, point for point as `MARK` in crates/alpymist-ui/src/logo.rs:
-// a high peak left of centre, a lower one to its right, and the saddle between.
+// The Alpymist small-size mark, point for point as `MARK` in
+// crates/alpymist-ui/src/logo.rs: a high peak left of centre, a lower companion
+// to its right, and a broad saddle between. Larger brand assets add the mist.
 // x runs 0-1000 across; y is elevation, 0 at the ground and 1000 at the summit.
 
 export const UNIT = 1000;
@@ -9,15 +10,10 @@ export const ASPECT = 62;
 
 export const MARK: ReadonlyArray<readonly [number, number]> = [
 	[0, 0],
-	[80, 90],
-	[300, 760],
-	[390, 1000],
-	[470, 800],
-	[560, 560],
-	[610, 640],
-	[700, 860],
-	[760, 720],
-	[900, 220],
+	[323, 779],
+	[448, 1000],
+	[686, 362],
+	[793, 587],
 	[1000, 0]
 ];
 
@@ -40,5 +36,15 @@ export function markPath(): string {
 		MARK.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${(tall - (y * tall) / UNIT).toFixed(1)}`).join(
 			''
 		) + 'Z'
+	);
+}
+
+/** A broad negative-space ribbon used in the full-size web mark. */
+export function mistPath(): string {
+	return (
+		'M322.7 137.3C295.5 197.7 325 247.6 406.8 287.1' +
+		'C504.5 332.9 531.8 432.8 615.9 476.4C715.9 528.5 854.5 536.8 984.1 620' +
+		'H938.6C829.5 559.7 709.1 545.1 604.5 497.2C506.8 451.5 479.5 351.6 388.6 307.9' +
+		'C302.3 266.3 261.4 206 290.9 137.3Z'
 	);
 }
