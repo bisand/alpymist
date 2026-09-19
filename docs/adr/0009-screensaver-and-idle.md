@@ -208,3 +208,76 @@ ignores it: `deny_unknown_fields` would otherwise refuse the whole file, and a
 refused file means a laptop whose screen stops turning off — over a key that no
 longer matters. The default is the same either way, so nobody who never changed
 it can tell.
+
+---
+
+## Addendum, 2026-09-18 (later) — a screensaver's settings are not a page
+
+**Status:** accepted · amends the addendum above.
+
+### What changed
+
+The addendum above gave every screensaver an `Area` of its own, and Settings
+listed those areas down its side like any other. With one screensaver
+installed that read as a second Screensaver entry; the objection was that it
+should not be there at all:
+
+> I would like the screensaver settings to only be available from the
+> screensaver menu item only, and not a separate setting. If we install a new
+> screensaver and then select that screensaver, we should have a button that
+> would open a dialog where we can set those settings for the selected
+> screensaver.
+
+So the areas stay and the pages go. `Settings::areas()` is still every area
+including the screensavers', because that is what resolves `alpymist set
+screensaver-mountains.block` and what `alpymist list` prints; `Settings::pages()`
+is the side list, and it is exactly the areas written in the source. The
+Screensaver page gains one button under its four policy settings — *Mountains
+settings…*, named after whichever is chosen — and the button opens those
+settings in a modal dialog over the page, built from the same `build_row` as
+every other setting so a declared switch, number or choice looks the same
+wherever it is drawn.
+
+Three consequences worth writing down:
+
+- **`random` has no one screensaver, so its dialog has all of them**, a
+  heading each. A different one each time means every installed screensaver is
+  in the rotation, so every installed screensaver's settings are what that
+  choice is made of. There is no third state where the button does nothing.
+- **`alpymist-settings screensaver-mountains.block` still lands on that
+  control.** It opens the Screensaver page with that screensaver's dialog over
+  it. An id that names nothing installed is still "no setting or area", as it
+  was.
+- **Search still finds them**, and edits them in place among the results, the
+  same as every other setting. The dialog is where they are *kept*, not a lock
+  on them: a search that found a setting it then refused to change would be
+  worse than either.
+
+The cost is that the dialog is a scene over the page and its rows live in the
+same list as the page's, so rebuilding the page — a resize, a search — means
+taking the dialog down and putting it back. That is done in `build`, in one
+place, rather than left for each caller to remember.
+
+### The second screensaver, and what it needed
+
+`alpymist-saver-starfield` ships alongside the mountains: the view from a ship
+under way, with an asteroid field every minute or so and a hole through it that
+the ship steers for. It is the proof the first addendum wanted — nothing in
+`alpymist-screensaver` or `alpymist-settings` names it, and installing or
+removing the package is the whole of adding or taking away the screensaver.
+
+It needed one thing the shared host did not have. §3 above fixed the frame at
+eight a second, which is right for mist and wrong for anything travelling in a
+straight line: at eight frames a star crossing the screen is a dotted line, and
+the judder *is* what you see. So `Painting` gained `interval_ms`, defaulting to
+the same eight a second, and the host re-reads it between frames. The ceiling
+is thirty: past that the magnification alone — a screen's worth of memory
+copied per frame — is most of a core on the machines this exists for.
+
+Rather than choose for everybody, the starfield declares it as a setting and
+says in the description what it costs, so the person paying for the frames in
+battery is the one deciding how many there are. The rocks go the other way:
+they are drawn from a grid of square cells blown up whole, and they are not
+turned to follow the ship's roll, because a chunky grid rotated off the
+screen's grid stops looking like a sprite and starts looking like a mistake.
+Smooth movement and coarse rocks are two settings, not one.
