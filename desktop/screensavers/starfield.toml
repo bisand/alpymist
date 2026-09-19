@@ -1,0 +1,79 @@
+# The starfield screensaver, as Settings and the launcher read it.
+#
+# Anything that ships a file like this, and the program it names, becomes a
+# screensaver Alpymist offers — no rebuild, and nothing in Alpymist has to know
+# it exists. Settings renders its page from the settings declared here, and the
+# program reads the same file to know what they default to, so the page and the
+# program cannot disagree.
+
+name = "Starfield"
+description = "The view from a ship under way, and the asteroid fields it steers around."
+exec = "alpymist-saver-starfield"
+icon = "󰄰"
+
+[[setting]]
+key = "block"
+title = "How chunky the picture is"
+description = "Physical pixels to one drawn pixel. One is no pixelation at all."
+keywords = ["pixels", "pixelated", "resolution", "blocks"]
+kind = "number"
+min = 1
+max = 16
+step = 1
+unit = "px"
+default = 4
+
+[[setting]]
+key = "fps"
+title = "How smoothly it moves"
+description = "Frames a second. Stars travel in straight lines, so fewer frames read as judder rather than as slowness — and every frame costs a little battery."
+keywords = ["smooth", "frames", "fps", "battery", "judder"]
+kind = "number"
+min = 8
+max = 30
+step = 1
+unit = "fps"
+default = 20
+
+[[setting]]
+key = "speed"
+title = "How fast the ship goes"
+description = "As a percentage of its usual cruise."
+keywords = ["fast", "slow", "warp", "travel"]
+kind = "number"
+min = 25
+max = 300
+step = 25
+unit = "%"
+default = 100
+
+[[setting]]
+key = "stars"
+title = "How many stars"
+description = "As a percentage of what a screen this size suggests."
+keywords = ["density", "sky", "sparse", "crowded"]
+kind = "number"
+min = 20
+max = 300
+step = 10
+unit = "%"
+default = 100
+
+[[setting]]
+key = "rocks"
+title = "Asteroid fields"
+description = "Every minute or so, a field of rocks with a gap through it that the ship steers for."
+keywords = ["asteroids", "rocks", "obstacles", "danger"]
+kind = "switch"
+default = true
+
+[[setting]]
+key = "grain"
+title = "How chunky the rocks are"
+description = "Cells across a rock. Fewer is coarser: the rocks are drawn as square blocks however smoothly they move."
+keywords = ["retro", "pixelated", "blocks", "sprite"]
+kind = "number"
+min = 6
+max = 24
+step = 2
+default = 12

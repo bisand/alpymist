@@ -23,6 +23,22 @@
 
 use denise::geom::Size;
 
+/// How often a picture is redrawn when it does not say, in milliseconds.
+///
+/// Eight frames a second. A picture of weather needs nothing faster than the
+/// eye drifting over it, and each frame that is not drawn is a frame's worth of
+/// battery: on the 1366x768 panel of an Atom laptop, every frame a second costs
+/// about two per cent of a core.
+pub const FRAME: u64 = 125;
+
+/// The most frames a second a picture may ask for.
+///
+/// Thirty. Past that the magnification alone — a screen's worth of memory
+/// copied per frame — is most of a core on the machines Alpymist exists for,
+/// and a screensaver that keeps a core busy drains the battery it was there to
+/// idle through.
+pub const FASTEST: u64 = 30;
+
 /// A screensaver's picture: a small one, drawn again for each frame.
 pub trait Painting {
     /// The reduced size this is drawn at, in drawn pixels.
@@ -36,6 +52,38 @@ pub trait Painting {
     /// Row-major, `small().width * small().height` of them, opaque `Argb8888`.
     /// Anything transparent would show the desktop through the screensaver.
     fn frame(&mut self, elapsed: u64) -> &[u32];
+
+    /// How long between frames, in milliseconds.
+    ///
+    /// [`FRAME`] unless a picture says otherwise, which is drifting mist's
+    /// answer and most pictures'. Something the eye follows rather than drifts
+    /// over — anything travelling in a straight line, where the judder of a
+    /// slow frame is the whole of what you see — should ask for less, and pay
+    /// for it: every frame is a wakeup, and a wakeup on a battery costs the
+    /// same whether much moved in it or not.
+    ///
+    /// Clamped to at most [`FASTEST`] frames a second by [`interval`], so a
+    /// picture asking for a hundred gets thirty rather than the machine's
+    /// whole afternoon.
+    fn interval_ms(&self) -> u64 {
+        FRAME
+    }
+}
+
+/// The gap between frames a picture asking for `fps` frames a second gets.
+///
+/// Zero, or anything absurd, is the default rather than an error: a screensaver
+/// is what a machine shows when nobody is at it, and refusing to draw over a
+/// mistyped number is the one failure nobody would be there to see.
+#[must_use]
+pub fn interval(fps: i64) -> u64 {
+    let Ok(fps) = u64::try_from(fps) else {
+        return FRAME;
+    };
+    if fps == 0 {
+        return FRAME;
+    }
+    1000 / fps.min(FASTEST)
 }
 
 /// Composes a picture for a screen of a given size.

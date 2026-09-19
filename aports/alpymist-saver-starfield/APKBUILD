@@ -1,0 +1,47 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+#
+# A screensaver is a program and a file saying what it is. This is the second
+# of them, and it is here to prove the first was not a special case: nothing in
+# alpymist-screensaver or alpymist-settings names it, and installing or
+# removing this package is the whole of adding or taking away a screensaver.
+pkgname=alpymist-saver-starfield
+pkgver=0.0.7
+pkgrel=0
+pkgdesc="Alpymist screensaver: the view from a ship under way, and the asteroid fields it steers around"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+# A wlr-layer-shell surface over wl_shm, drawn by Denise on the CPU like the
+# menu: no GPU stack, and libxkbcommon for the keymap that tells the shared
+# host a key was pressed.
+makedepends="cargo libxkbcommon-dev"
+# Nothing at run time. It is linked against the screensaver library rather than
+# calling out to it, and it can be run by hand with nothing else installed —
+# though on a desktop it is alpymist-screensaver that decides when.
+options="!check"  # the test suite runs in CI, not in the package build
+source=""
+builddir="$srcdir"
+
+prepare() {
+	# Same as alpymist: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	cargo build --release --locked -p alpymist-saver-starfield
+}
+
+package() {
+	install -Dm755 "$builddir"/target/release/alpymist-saver-starfield \
+		"$pkgdir"/usr/bin/alpymist-saver-starfield
+	# What Settings renders its page from, and what the program reads its own
+	# defaults from. One file, so the two cannot disagree.
+	install -Dm644 "$builddir"/desktop/screensavers/starfield.toml \
+		"$pkgdir"/usr/share/alpymist/screensavers/starfield.toml
+}

@@ -182,6 +182,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpymist-saver-starfield"
+version = "0.0.7"
+dependencies = [
+ "alpymist-screensaver",
+ "alpymist-ui",
+ "denise",
+ "png",
+]
+
+[[package]]
 name = "alpymist-screensaver"
 version = "0.0.7"
 dependencies = [

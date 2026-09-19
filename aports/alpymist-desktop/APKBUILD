@@ -159,16 +159,17 @@ _wayland() {
 	# alpymist-about says which Alpymist is running, and alpymist-settings is
 	# where settings are changed. alpymist-screensaver decides when an idle
 	# machine shows a screensaver and when its screen goes off, and brings
-	# swayidle and wlopm with it; alpymist-saver-mountains is the screensaver
-	# Alpymist ships, and is named separately because it is a package like any
-	# other — take it away and the rest still works, add another and it is
-	# offered beside it.
+	# swayidle and wlopm with it; alpymist-saver-mountains and
+	# alpymist-saver-starfield are the screensavers Alpymist ships, and are
+	# named separately because they are packages like any other — take one
+	# away and the rest still works, add another and it is offered beside them.
 	depends="
 		$pkgname=$pkgver-r$pkgrel
 		alpymist-about
 		alpymist-settings
 		alpymist-power
 		alpymist-saver-mountains
+		alpymist-saver-starfield
 		alpymist-screensaver
 		alpymist-store
 		alpymist-wifi

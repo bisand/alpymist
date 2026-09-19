@@ -1,0 +1,28 @@
+[package]
+name = "alpymist-saver-starfield"
+description = "The starfield screensaver: the view from a ship under way, and the asteroid fields it steers around."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "alpymist-saver-starfield"
+path = "src/main.rs"
+
+[dependencies]
+# What every screensaver is built on: the surface, the magnification, the frame
+# pacing, and reading the settings this one's definition file declares.
+alpymist-screensaver = { workspace = true, features = ["saver"] }
+# For the palette alone. The space behind the stars is the same colour as the
+# top of the mountains' sky, so one screensaver following the other — or the
+# lock screen following either — shows no seam.
+alpymist-ui = { workspace = true }
+denise = { workspace = true }
+
+[dev-dependencies]
+png = "0.17"
+
+[lints]
+workspace = true

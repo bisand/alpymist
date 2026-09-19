@@ -11,21 +11,13 @@
 //! definition the thing running when nothing else is, and one that keeps a core
 //! busy drains the battery it was supposed to be idling through.
 
-use crate::paint::{Compose, Painting};
+use crate::paint::{Compose, FRAME, Painting};
 use crate::scene::expand;
 use alpymist_ui::palette::Palette;
 use alpymist_widget::{Key, Outcome, Widget};
 use denise::Frame;
 use denise::geom::{Point, Size};
 use std::time::Instant;
-
-/// How often the picture is redrawn, in milliseconds.
-///
-/// Eight frames a second. Nothing a screensaver draws needs to move faster than
-/// the eye drifting over it, and each frame that is not drawn is a frame's worth
-/// of battery: on the 1366x768 panel of an Atom laptop, every frame a second
-/// costs about two per cent of a core.
-pub const FRAME: u64 = 125;
 
 /// The screensaver: whatever the program handed over, on the screen.
 pub struct Saver {
@@ -130,8 +122,17 @@ impl Widget for Saver {
         true
     }
 
+    /// What the picture asks for, once there is one to ask.
+    ///
+    /// Re-read between frames by the host, so the first frame — drawn before
+    /// anything has been composed — pacing at the default costs one frame of
+    /// waiting and nothing else.
     fn frame_interval(&self) -> std::time::Duration {
-        std::time::Duration::from_millis(FRAME)
+        let ms = self
+            .picture
+            .as_ref()
+            .map_or(FRAME, |(_, picture)| picture.interval_ms().max(1));
+        std::time::Duration::from_millis(ms)
     }
 }
 
@@ -147,7 +148,7 @@ pub fn backdrop() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::Saver;
-    use crate::paint::Painting;
+    use crate::paint::{FRAME, Painting};
     use alpymist_widget::{Key, Outcome, Widget};
     use denise::geom::{Point, Size};
 
@@ -202,11 +203,58 @@ mod tests {
         assert_eq!(saver.pointer(Some(Point::new(401, 300))), Outcome::Close);
     }
 
+    /// A picture that wants every frame it can have.
+    struct Quick(Flat);
+
+    impl Painting for Quick {
+        fn small(&self) -> Size {
+            self.0.small()
+        }
+        fn block(&self) -> u32 {
+            self.0.block()
+        }
+        fn frame(&mut self, elapsed: u64) -> &[u32] {
+            self.0.frame(elapsed)
+        }
+        fn interval_ms(&self) -> u64 {
+            33
+        }
+    }
+
+    #[test]
+    fn a_picture_that_asks_for_more_frames_gets_them_once_it_exists() {
+        let mut saver = Saver::new(Box::new(|output: Size| {
+            let small = Size::new(output.width.max(1), output.height.max(1));
+            Box::new(Quick(Flat {
+                small,
+                block: 1,
+                pixels: vec![0xFF00_0000; small.width as usize * small.height as usize],
+            }))
+        }));
+        assert_eq!(
+            saver.frame_interval().as_millis(),
+            u128::from(FRAME),
+            "nothing composed yet, so nothing has asked"
+        );
+        let mut pixels = vec![0u32; 16 * 16];
+        let mut frame = denise::Frame::new(
+            &mut pixels,
+            Size::new(16, 16),
+            16,
+            denise::PixelFormat::Argb8888,
+            denise::BufferAge::Undefined,
+        )
+        .expect("a frame");
+        saver.paint(&mut frame);
+        drop(frame);
+        assert_eq!(saver.frame_interval().as_millis(), 33);
+    }
+
     #[test]
     fn it_keeps_animating_and_asks_for_the_frames_it_wants() {
         let saver = saver();
         assert!(saver.animating());
-        assert_eq!(saver.frame_interval().as_millis(), u128::from(super::FRAME));
+        assert_eq!(saver.frame_interval().as_millis(), u128::from(FRAME));
     }
 
     #[test]
