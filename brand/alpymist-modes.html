@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Alpymist logo modes</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 1600px; height: 900px; font-family: system-ui, sans-serif; }
+    body { display: grid; grid-template-columns: 1fr 1fr; }
+    section { position: relative; display: grid; place-items: center; padding: 92px; }
+    .light { background: #eaf0f6; color: #0b121e; }
+    .dark { background: #0b121e; color: #afc2d6; }
+    img { width: min(100%, 620px); height: auto; }
+    p { position: absolute; left: 48px; bottom: 42px; margin: 0; font-size: 18px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+  </style>
+  <section class="light"><img src="alpymist-mark-color-light.svg" alt="Alpymist logo for light mode" /><p>Light mode</p></section>
+  <section class="dark"><img src="alpymist-mark-color-dark.svg" alt="Alpymist logo for the default dark mode" /><p>Default dark mode</p></section>
+</html>

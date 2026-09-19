@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 -20 496 325" role="img" aria-labelledby="title">
+  <title id="title">Alpymist blue mist logo</title>
+  <defs>
+    <linearGradient id="g0" gradientUnits="userSpaceOnUse" x1="165" y1="279" x2="158" y2="77"><stop stop-color="#507b9e"/><stop offset="1" stop-color="#6597bc"/></linearGradient>
+    <linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="439" y1="245" x2="298" y2="144"><stop stop-color="#182638"/><stop offset="1" stop-color="#304359"/></linearGradient>
+    <linearGradient id="g2" gradientUnits="userSpaceOnUse" x1="267" y1="261" x2="280" y2="186"><stop stop-color="#879eb7"/><stop offset="1" stop-color="#96adc7"/></linearGradient>
+  </defs>
+  <path fill="url(#g1)" d="M332 97 456 281 455 285 437 285C427.7 268.5 413.5 252.8 400 240C382.1 225.7 360.9 213.3 334 205C310 197.5 286.8 191.6 262 186Z"/>
+  <path fill="url(#g0)" d="M189 1 277 152C268.7 162.4 263.3 175 252 182C242.1 179.1 233.8 175 228 171C198 155.7 195.8 122 183 124C186.4 153.7 204.4 177 228 194C246.8 207.5 271.3 217.3 298 229C324.8 241.7 352 261.5 365 285L365 285 2 285 0 280Z"/>
+  <path fill="url(#g2)" d="M183 124C186.4 153.7 204.4 177 228 194C246.8 207.5 271.3 217.3 298 229C324.8 241.7 352 261.5 365 285C338.2 278.4 321.5 273.7 298 254C275 242 248.7 233 228 218C200.2 196 183.4 162.8 183 124Z"/>
+</svg>
