@@ -53,11 +53,21 @@ fn main() {
     std::fs::create_dir_all(&dir).expect("create output directory");
     let size = Size::new(920 * scale, 660 * scale);
 
-    let scenes: [(&str, Scheme, &str, &str); 6] = [
+    // A screensaver's own area opens the Screensaver page with that
+    // screensaver's dialog over it, which is the only place it is drawn — so
+    // point XDG_DATA_HOME at a directory of definition files to see one.
+    let scenes: [(&str, Scheme, &str, &str); 8] = [
         ("touchpad", Scheme::Dark, "touchpad", ""),
         ("keyboard", Scheme::Dark, "keyboard.layout", ""),
         ("search", Scheme::Dark, "", "scroll"),
         ("power", Scheme::Dark, "power", ""),
+        ("screensaver", Scheme::Dark, "screensaver", ""),
+        (
+            "screensaver-dialog",
+            Scheme::Dark,
+            "screensaver-mountains",
+            "",
+        ),
         ("about", Scheme::Dark, "about", ""),
         ("appearance-light", Scheme::Light, "appearance", ""),
     ];

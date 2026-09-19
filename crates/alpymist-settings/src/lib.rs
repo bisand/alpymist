@@ -93,10 +93,40 @@ impl Settings {
         }
     }
 
-    /// The areas, in order.
+    /// Every area, in order: the pages, and one for each screensaver installed.
+    ///
+    /// What resolves a setting's id, and what the command line lists. The app's
+    /// side list is [`Settings::pages`], which is this without the
+    /// screensavers'.
     #[must_use]
     pub fn areas(&self) -> &'static [Area] {
         areas::areas()
+    }
+
+    /// The areas the app lists down its side, in order.
+    #[must_use]
+    pub fn pages(&self) -> &'static [Area] {
+        areas::pages()
+    }
+
+    /// One area per screensaver installed, in the order they are offered.
+    ///
+    /// Each holds a screensaver's own settings. They are reached from the
+    /// Screensaver page rather than from the side list, so the app asks for
+    /// them by name rather than finding them among the pages.
+    #[must_use]
+    pub fn screensavers(&self) -> &'static [Area] {
+        areas::screensaver::areas()
+    }
+
+    /// The area holding the settings of the screensaver `show` names, if it
+    /// names one that is installed.
+    ///
+    /// `show` is the value of `screensaver.show`: a screensaver's id, or
+    /// `random`, which names all of them and so none in particular.
+    #[must_use]
+    pub fn screensaver(&self, show: &str) -> Option<&'static Area> {
+        areas::screensaver::area_of(show)
     }
 
     /// Every setting, in order.

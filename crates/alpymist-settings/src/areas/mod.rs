@@ -14,9 +14,12 @@ use std::sync::OnceLock;
 
 /// The areas written here, in the order the app lists them.
 ///
-/// Not the whole list: every screensaver installed has an area of its own, read
-/// from the file it ships rather than written anywhere in Alpymist. [`areas`]
-/// is the two together.
+/// This is also, exactly, the list of pages the settings app puts down its
+/// side. Every screensaver installed has an area of its own as well, read from
+/// the file it ships rather than written anywhere in Alpymist — but those are
+/// not pages: they are reached through the Screensaver page, which is where
+/// choosing a screensaver already happens. [`areas`] is the two together, for
+/// everything that resolves a setting's id; [`pages`] is this list alone.
 pub const AREAS: &[Area] = &[
     Area {
         id: "appearance",
@@ -63,7 +66,7 @@ pub const AREAS: &[Area] = &[
     Area {
         id: "screensaver",
         title: "Screensaver",
-        description: "The mountains when nobody is there, and when the screen turns off",
+        description: "Which screensaver appears when nobody is there, and when the screen turns off",
         icon: "\u{f0594}",
         keywords: &["screen saver", "idle", "blank", "lock", "timeout"],
     },
@@ -96,6 +99,16 @@ pub fn areas() -> &'static [Area] {
         }
         Box::leak(all.into_boxed_slice())
     })
+}
+
+/// The areas the settings app lists as pages, in order.
+///
+/// The screensavers' are left out on purpose. Each is reached from the
+/// Screensaver page, beside the list that chooses between them, rather than
+/// standing in the side list as a page of its own — which is what installing
+/// five screensavers would otherwise do to it.
+pub const fn pages() -> &'static [Area] {
+    AREAS
 }
 
 /// Every setting, in each area's order.

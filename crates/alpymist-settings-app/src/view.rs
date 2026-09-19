@@ -8,9 +8,14 @@
 //! settings, or every setting that matches the search. Typing anywhere
 //! searches; arrows move through the areas; Tab moves into the page; Escape
 //! clears a search, then closes.
+//!
+//! A screensaver's own settings are the one thing not down the side. They live
+//! behind a button on the Screensaver page, beside the list that chooses
+//! between screensavers, and open in a dialog over it — so installing five
+//! screensavers adds five entries to that list and none to the side.
 
 use alpymist_about::info::About;
-use alpymist_settings::{Kind, Setting, Settings, Value};
+use alpymist_settings::{Area, Kind, Setting, Settings, Value};
 use denise::theme::{Radius, Role, Theme};
 use denise::{ElementState, Frame, InputEvent, KeyCode, Modifiers, Point, Rect, Size};
 use denise_text::{FontId, GlyphSource, TextStyle};
@@ -36,6 +41,21 @@ const VALUE_W: i32 = 124;
 const SELECT_W: i32 = 240;
 const CONTROL_H: i32 = 36;
 const BUTTON_W: i32 = 180;
+/// The screensaver dialog's width, before it is clamped to the window.
+///
+/// Wide enough that a setting's own sentence still wraps to two lines beside
+/// its slider, and narrow enough to fit the smallest window Settings opens in.
+const DIALOG_W: i32 = 620;
+/// Its header: the name of what is being changed, and a line about it.
+const DIALOG_HEAD: i32 = 74;
+/// Its footer: the button that closes it.
+const DIALOG_FOOT: i32 = CONTROL_H + 2 * GAP;
+/// How dark the page goes behind it. A conventional modal veil.
+const DIALOG_DIM: u8 = 128;
+/// The page the screensaver dialog opens over, and the area its list lives in.
+const SCREENSAVER: &str = "screensaver";
+/// The setting that says which screensaver is shown.
+const SHOW: &str = "screensaver.show";
 
 /// A message from a widget.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,6 +73,11 @@ pub enum Msg {
     Do(usize),
     /// A button beyond settings.
     Action(Action),
+    /// The Screensaver page's button: open the chosen screensaver's own
+    /// settings in a dialog over it.
+    Configure,
+    /// The dialog's button: take it away.
+    Done,
     /// Enter in the search field.
     Submit,
 }
@@ -115,6 +140,20 @@ struct Row {
     shown: Option<Value>,
 }
 
+/// The screensaver settings dialog, while it is up.
+struct Dialog {
+    /// The screensaver areas it shows, in order.
+    ///
+    /// One when a screensaver is chosen. All of them when the choice is a
+    /// different one each time: every screensaver installed is in that
+    /// rotation, so every screensaver's settings are what that choice means.
+    areas: Vec<&'static str>,
+    /// Its sheet, so a press beside it can take it away.
+    sheet: NodeId,
+    /// Where its rows start in [`View::rows`]; the page's come before them.
+    first: usize,
+}
+
 /// The window's contents.
 pub struct View {
     ui: Ui<Msg>,
@@ -136,6 +175,10 @@ pub struct View {
     last: Page,
     rows: Vec<Row>,
     open_row: Option<usize>,
+    /// The screensaver settings dialog, when one is open.
+    dialog: Option<Dialog>,
+    /// The button that opens it, so focus comes back to it when it closes.
+    configure: Option<NodeId>,
     pointer: Point,
     query: String,
 }
@@ -191,7 +234,7 @@ impl View {
             )
             .unwrap_or(root);
         let mut items: Vec<ListItem> = settings
-            .areas()
+            .pages()
             .iter()
             .map(|a| ListItem::new(a.title))
             .collect();
@@ -230,6 +273,8 @@ impl View {
             last: Page::Area(0),
             rows: Vec::new(),
             open_row: None,
+            dialog: None,
+            configure: None,
             pointer: Point::new(0, 0),
             query: String::new(),
         };
@@ -298,17 +343,37 @@ impl View {
 
     /// Show `id`, an area or a setting, and focus it. Returns whether it
     /// exists.
+    ///
+    /// A screensaver's own area — `screensaver-mountains`, or one of its
+    /// settings — has no page of its own: it opens the Screensaver page with
+    /// that screensaver's dialog over it, which is the one place those
+    /// settings are changed. So `alpymist-settings screensaver-mountains.block`
+    /// still lands on the control it names.
     pub fn open(&mut self, id: &str) -> bool {
         if id == "about" {
             self.show(Page::About);
             return true;
         }
         let area = id.split_once('.').map_or(id, |(a, _)| a);
-        let Some(index) = self.settings.areas().iter().position(|a| a.id == area) else {
+        let screensaver = self
+            .settings
+            .screensavers()
+            .iter()
+            .find(|a| a.id == area)
+            .map(|a| a.id);
+        let Some(index) = self
+            .settings
+            .pages()
+            .iter()
+            .position(|a| a.id == area || (screensaver.is_some() && a.id == SCREENSAVER))
+        else {
             return false;
         };
         self.clear_search();
         self.show(Page::Area(index));
+        if let Some(area) = screensaver {
+            self.open_dialog(vec![area]);
+        }
         if let Some(row) = self
             .rows
             .iter()
@@ -365,6 +430,21 @@ impl View {
         let mut pass = Vec::with_capacity(events.len());
         for event in events {
             match *event {
+                // A modal takes every press, so one landing beside its sheet
+                // has nowhere to go; letting it dismiss the dialog is what
+                // keeps the window from feeling stuck. A choice list open over
+                // the dialog answers its own presses first.
+                InputEvent::PointerButton {
+                    position,
+                    state: ElementState::Down,
+                    ..
+                } if self.dialog.is_some()
+                    && !self.ui.popup_open()
+                    && !self.over_dialog(position) =>
+                {
+                    self.pointer = position;
+                    self.close_dialog();
+                }
                 InputEvent::PointerMoved { position }
                 | InputEvent::PointerButton { position, .. } => {
                     self.pointer = position;
@@ -386,7 +466,9 @@ impl View {
                     pass.push(event.clone());
                 }
                 InputEvent::Text { ch }
-                    if self.ui.focused() != Some(self.search) && !self.ui.popup_open() =>
+                    if self.ui.focused() != Some(self.search)
+                        && !self.ui.popup_open()
+                        && self.dialog.is_none() =>
                 {
                     // Typing anywhere searches; a space is a toggle's.
                     if !ch.is_whitespace() {
@@ -412,6 +494,10 @@ impl View {
     fn key(&mut self, code: KeyCode, modifiers: Modifiers) -> Option<Effect> {
         let ctrl = modifiers.contains(Modifiers::CTRL);
         match code {
+            KeyCode::Escape if self.dialog.is_some() => {
+                self.close_dialog();
+                None
+            }
             KeyCode::Escape if !self.query.is_empty() => {
                 self.clear_search();
                 self.show(self.last.clone());
@@ -434,7 +520,7 @@ impl View {
         let ctrl = modifiers.contains(Modifiers::CTRL);
         let focused = self.ui.focused();
         match code {
-            KeyCode::F if ctrl => {
+            KeyCode::F if ctrl && self.dialog.is_none() => {
                 self.ui.focus(Some(self.search));
                 true
             }
@@ -460,12 +546,17 @@ impl View {
         match m {
             Msg::Area(i) => {
                 self.clear_search();
-                if i >= self.settings.areas().len() {
+                if i >= self.settings.pages().len() {
                     self.show(Page::About);
                 } else {
                     self.show(Page::Area(i));
                 }
             }
+            Msg::Configure => {
+                let areas = self.chosen_screensavers();
+                self.open_dialog(areas);
+            }
+            Msg::Done => self.close_dialog(),
             Msg::Submit => self.focus_page(),
             Msg::Do(index) => {
                 if let Some(setting) = self.settings.all().get(index) {
@@ -595,7 +686,7 @@ impl View {
         if page == Page::About
             && let Some(list) = self.ui.widget_mut::<List<Msg>>(self.areas)
         {
-            list.set_selected(Some(self.settings.areas().len()));
+            list.set_selected(Some(self.settings.pages().len()));
         }
         if matches!(page, Page::Search(_))
             && let Some(list) = self.ui.widget_mut::<List<Msg>>(self.areas)
@@ -625,11 +716,17 @@ impl View {
             .iter()
             .find(|r| Some(r.control) == self.ui.focused())
             .map(|r| r.setting);
+        // The dialog is a scene over this one, so rebuilding the page beneath
+        // it means taking it down and putting it back: its rows live in the
+        // same list as the page's, and that list is about to be emptied.
+        let reopen = self.dialog.as_ref().map(|d| d.areas.clone());
+        self.close_dialog();
         if let Some(old) = self.content.take() {
             self.ui.remove(old);
         }
         self.rows.clear();
         self.open_row = None;
+        self.configure = None;
         let s = self.scale;
         let root = self.ui.root();
         let w = i32::try_from(self.size.width).unwrap_or(0) - SIDEBAR * s;
@@ -646,7 +743,7 @@ impl View {
 
         let (icon, title, description) = match &self.page {
             Page::Area(i) => {
-                let a = &self.settings.areas()[*i];
+                let a = &self.settings.pages()[*i];
                 (
                     a.icon.to_owned(),
                     a.title.to_owned(),
@@ -693,7 +790,7 @@ impl View {
         match self.page.clone() {
             Page::About => y = self.build_about(content, y, inner),
             Page::Area(i) => {
-                let area = self.settings.areas()[i].id;
+                let area = self.settings.pages()[i].id;
                 let chosen: Vec<usize> = (0..self.settings.all().len())
                     .filter(|&j| self.settings.all()[j].area() == area)
                     .collect();
@@ -701,19 +798,33 @@ impl View {
                     y = self.build_row(content, j, y, inner, false);
                 }
                 let extra = match area {
-                    "wifi" => Some(("Networks…", Action::OpenWifi)),
-                    "power" => Some(("Battery…", Action::OpenPower)),
-                    "updates" => Some(("Check for updates", Action::CheckUpdates)),
+                    "wifi" => Some(("Networks…".to_owned(), Msg::Action(Action::OpenWifi))),
+                    "power" => Some(("Battery…".to_owned(), Msg::Action(Action::OpenPower))),
+                    "updates" => Some((
+                        "Check for updates".to_owned(),
+                        Msg::Action(Action::CheckUpdates),
+                    )),
+                    // The one door to a screensaver's own settings. Nothing is
+                    // behind it when nothing is installed, and the button is
+                    // then not there to be pressed.
+                    SCREENSAVER if !self.settings.screensavers().is_empty() => {
+                        Some((configure_label(self.chosen_screensaver()), Msg::Configure))
+                    }
                     _ => None,
                 };
-                if let Some((label, action)) = extra {
-                    self.ui.add(
+                let configure = matches!(extra, Some((_, Msg::Configure)));
+                if let Some((label, message)) = extra {
+                    let width = if configure { BUTTON_W + 60 } else { BUTTON_W };
+                    let button = self.ui.add(
                         content,
-                        Button::new(label, Msg::Action(action))
+                        Button::new(label, message)
                             .with_role(Role::Neutral)
                             .with_style(self.style(self.text, 15)),
-                        Rect::new(PAD * s, y + GAP * s, BUTTON_W * s, CONTROL_H * s),
+                        Rect::new(PAD * s, y + GAP * s, width * s, CONTROL_H * s),
                     );
+                    if configure {
+                        self.configure = button;
+                    }
                     y += (GAP + CONTROL_H) * s;
                 }
             }
@@ -746,6 +857,9 @@ impl View {
         // Room at the bottom, so the last row scrolls clear of the edge.
         self.ui
             .add(content, Panel::bare(), Rect::new(0, y, 1, PAD * s));
+        if let Some(areas) = reopen {
+            self.build_dialog(areas);
+        }
         if focused_search {
             self.ui.focus(Some(self.search));
         } else if let Some(setting) = focused_setting
@@ -754,6 +868,177 @@ impl View {
             let control = row.control;
             self.ui.focus(Some(control));
         }
+    }
+
+    /// The screensaver areas the Screensaver page's button leads to.
+    ///
+    /// The one chosen, or — when the choice is a different one each time —
+    /// every screensaver installed, since that choice is all of them.
+    fn chosen_screensavers(&self) -> Vec<&'static str> {
+        match self.chosen_screensaver() {
+            Some(area) => vec![area.id],
+            None => self.settings.screensavers().iter().map(|a| a.id).collect(),
+        }
+    }
+
+    /// The area of the screensaver now chosen, if one in particular is.
+    fn chosen_screensaver(&self) -> Option<&'static Area> {
+        let show = self
+            .values
+            .get(SHOW)
+            .and_then(|v| v.as_ref().ok())
+            .and_then(Value::as_text)?;
+        self.settings.screensaver(show)
+    }
+
+    /// Whether `at` is on the dialog's sheet rather than beside it.
+    fn over_dialog(&self, at: Point) -> bool {
+        self.dialog
+            .as_ref()
+            .and_then(|d| self.ui.bounds(d.sheet))
+            .is_some_and(|b| b.contains(at))
+    }
+
+    /// Put the dialog up over the page, showing `areas`, and focus into it.
+    fn open_dialog(&mut self, areas: Vec<&'static str>) {
+        if areas.is_empty() {
+            return;
+        }
+        self.close_dialog();
+        self.build_dialog(areas);
+        let first = self
+            .dialog
+            .as_ref()
+            .and_then(|d| self.rows.get(d.first))
+            .map(|r| r.control);
+        if let Some(control) = first {
+            self.ui.focus(Some(control));
+        }
+    }
+
+    /// Take the dialog away, and put focus back where it came from.
+    fn close_dialog(&mut self) {
+        let Some(dialog) = self.dialog.take() else {
+            return;
+        };
+        // A choice list opened over it is part of it, and goes with it.
+        while self.ui.popup_open() {
+            self.ui.close_popup();
+        }
+        self.ui.pop_scene();
+        self.rows.truncate(dialog.first);
+        self.open_row = None;
+        let back = self.configure;
+        self.ui.focus(back.or(Some(self.areas)));
+    }
+
+    /// The one area a list of them names, when it names exactly one that is
+    /// installed.
+    fn only(&self, areas: &[&'static str]) -> Option<&'static Area> {
+        match areas {
+            [one] => self.settings.area(one),
+            _ => None,
+        }
+    }
+
+    /// Build the dialog: a sheet over a dimmed page, holding `areas`' settings.
+    ///
+    /// Laid out and then measured, rather than measured and then laid out: how
+    /// tall a row is depends on how many lines its description wraps to, which
+    /// is not known until it has been built. So the sheet goes up at a
+    /// provisional size, the rows are put in it, and the size that came out of
+    /// that is what it is finally given — children keep their places, since
+    /// they are positioned relative to it.
+    #[allow(clippy::too_many_lines)] // one dialog, top to bottom
+    fn build_dialog(&mut self, areas: Vec<&'static str>) {
+        let s = self.scale;
+        let w = i32::try_from(self.size.width).unwrap_or(0);
+        let h = i32::try_from(self.size.height).unwrap_or(0);
+        let dw = (DIALOG_W * s).min(w - 2 * PAD * s).max(4 * PAD * s);
+        let inner = dw - 2 * PAD * s;
+        let head = DIALOG_HEAD * s;
+        let foot = DIALOG_FOOT * s;
+        let root = self.ui.push_scene(DIALOG_DIM);
+        let sheet = self.ui.add(
+            root,
+            Panel::filled(Role::Base100)
+                .with_radius(Radius::Box)
+                .backdrop(),
+            Rect::new((w - dw) / 2, PAD * s, dw, h - 2 * PAD * s),
+        );
+        let Some(sheet) = sheet else {
+            self.ui.pop_scene();
+            return;
+        };
+
+        let (title, description) = dialog_header(self.only(&areas));
+        let title_style = self.style(self.strong, 19);
+        let dim_style = self.style(self.text, 13);
+        let heading_style = self.style(self.strong, 15);
+        self.add_label(
+            sheet,
+            &title,
+            title_style,
+            Role::BaseContent,
+            Rect::new(PAD * s, PAD * s, inner, 26 * s),
+        );
+        self.add_label(
+            sheet,
+            &description,
+            dim_style,
+            Role::Secondary,
+            Rect::new(PAD * s, (PAD + 28) * s, inner, 20 * s),
+        );
+
+        let Some(body) = self.ui.add(sheet, Panel::bare(), Rect::new(0, head, dw, h)) else {
+            self.ui.pop_scene();
+            return;
+        };
+        self.ui.set_scrollable(body, true);
+        let first = self.rows.len();
+        let named = areas.len() > 1;
+        let mut y = 0;
+        for area in &areas {
+            if named {
+                let name = self.settings.area(area).map_or(*area, |a| a.title);
+                self.add_label(
+                    body,
+                    name,
+                    heading_style,
+                    Role::BaseContent,
+                    Rect::new(PAD * s, y + GAP * s, inner, 22 * s),
+                );
+                y += (GAP + 26) * s;
+            }
+            let chosen: Vec<usize> = (0..self.settings.all().len())
+                .filter(|&j| self.settings.all()[j].area() == *area)
+                .collect();
+            for j in chosen {
+                y = self.build_row(body, j, y, inner, false);
+            }
+        }
+
+        let dh = (head + y + foot).min(h - 2 * PAD * s).max(head + foot);
+        self.ui
+            .set_layout(sheet, Rect::new((w - dw) / 2, (h - dh) / 2, dw, dh));
+        self.ui
+            .set_layout(body, Rect::new(0, head, dw, dh - head - foot));
+        let done = self.style(self.text, 15);
+        self.ui.add(
+            sheet,
+            Button::new("Done", Msg::Done).with_style(done),
+            Rect::new(
+                dw - (PAD + 120) * s,
+                dh - foot + GAP * s,
+                120 * s,
+                CONTROL_H * s,
+            ),
+        );
+        self.dialog = Some(Dialog {
+            areas,
+            sheet,
+            first,
+        });
     }
 
     fn add_label(
@@ -1039,6 +1324,31 @@ impl View {
     }
 }
 
+/// What the Screensaver page's button says.
+///
+/// The screensaver's own name when one is chosen, because that is what pressing
+/// it changes. With a different one each time there is no such name, and the
+/// dialog behind the button holds all of them.
+fn configure_label(chosen: Option<&Area>) -> String {
+    match chosen {
+        Some(area) => format!("{} settings…", area.title),
+        None => "Screensaver settings…".to_owned(),
+    }
+}
+
+/// What the dialog is called, and the line under it.
+///
+/// `one` is the single screensaver it shows, when it shows one.
+fn dialog_header(one: Option<&Area>) -> (String, String) {
+    match one {
+        Some(area) => (area.title.to_owned(), area.description.to_owned()),
+        None => (
+            "Screensavers".to_owned(),
+            "A different one each time is all of them, so here is every one's own page.".to_owned(),
+        ),
+    }
+}
+
 /// Logical pixels at a scale, as a text size.
 fn px(logical: i32, scale: i32) -> u16 {
     u16::try_from(logical * scale).unwrap_or(u16::MAX)
@@ -1069,9 +1379,9 @@ fn wrap(ui: &mut Ui<Msg>, style: TextStyle, text: &str, width: i32) -> Vec<Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{Effect, Fonts, Page, View};
+    use super::{Effect, Fonts, Page, View, configure_label, dialog_header};
     use alpymist_about::info::About;
-    use alpymist_settings::{Settings, Value};
+    use alpymist_settings::{Area, Settings, Value};
     use denise::{ElementState, InputEvent, KeyCode, Modifiers, Size};
 
     fn view() -> View {
@@ -1170,5 +1480,61 @@ mod tests {
         let _ = v.handle(&key(KeyCode::Escape), 20);
         assert!(matches!(v.page, Page::Area(_)));
         assert_eq!(v.handle(&key(KeyCode::Escape), 30), [Effect::Close]);
+    }
+
+    /// An area as a screensaver's definition file would produce one.
+    const MOUNTAINS: Area = Area {
+        id: "screensaver-mountains",
+        title: "Mountains",
+        description: "The ranges from the wallpaper.",
+        icon: "\u{f0594}",
+        keywords: &["screensaver", "mountains"],
+    };
+
+    #[test]
+    fn the_side_list_is_the_pages_and_about_and_nothing_else() {
+        let settings = Settings::new();
+        // Whatever is installed, a screensaver never gets a page of its own:
+        // its settings are reached from the Screensaver page's dialog.
+        for area in settings.pages() {
+            assert!(
+                !settings.screensavers().iter().any(|s| s.id == area.id),
+                "{} is a screensaver and is in the side list",
+                area.id
+            );
+        }
+        for area in settings.screensavers() {
+            assert!(
+                settings.areas().iter().any(|a| a.id == area.id),
+                "{} is nowhere, so its ids resolve to nothing",
+                area.id
+            );
+        }
+    }
+
+    #[test]
+    fn the_button_is_named_after_the_screensaver_it_changes() {
+        assert_eq!(configure_label(Some(&MOUNTAINS)), "Mountains settings…");
+        assert_eq!(configure_label(None), "Screensaver settings…");
+    }
+
+    #[test]
+    fn the_dialog_is_the_one_screensaver_or_all_of_them() {
+        let (title, description) = dialog_header(Some(&MOUNTAINS));
+        assert_eq!(title, "Mountains");
+        assert_eq!(description, MOUNTAINS.description);
+        let (title, _) = dialog_header(None);
+        assert_eq!(title, "Screensavers", "a different one each time is all");
+    }
+
+    #[test]
+    fn an_id_no_area_answers_for_opens_nothing() {
+        let mut v = view();
+        assert!(!v.open("screensaver-nothing-installed.block"));
+        assert!(!v.open("nonsense"));
+        assert!(
+            v.open("screensaver.after"),
+            "the page itself is still there"
+        );
     }
 }

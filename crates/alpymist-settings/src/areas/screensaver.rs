@@ -125,6 +125,20 @@ fn definition(area: &str) -> Option<&'static Definition> {
     installed().definitions.iter().find(|d| d.area() == area)
 }
 
+/// The area holding the settings of the screensaver `show` names.
+///
+/// `show` is what `screensaver.show` holds: a screensaver's id, or [`RANDOM`],
+/// which names all of them and so none in particular — that gives `None`, as
+/// does a name whose package is not installed.
+#[must_use]
+pub fn area_of(show: &str) -> Option<&'static crate::model::Area> {
+    if show == RANDOM {
+        return None;
+    }
+    let def = installed().definitions.iter().find(|d| d.id == show)?;
+    installed().areas.iter().find(|a| a.id == def.area())
+}
+
 /// Whether `area` is one of the screensavers'.
 #[must_use]
 pub fn owns(area: &str) -> bool {
