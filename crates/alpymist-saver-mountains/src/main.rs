@@ -52,13 +52,14 @@ fn look() -> Look {
     let Some(values) = alpymist_screensaver::values_for(ID) else {
         return fallback;
     };
+    let number =
+        |key: &str, from: i32| i32::try_from(values.number(key, i64::from(from))).unwrap_or(from);
     Look {
         block: u32::try_from(values.number("block", i64::from(fallback.block)))
             .unwrap_or(fallback.block),
-        mist: i32::try_from(values.number("mist", i64::from(fallback.mist)))
-            .unwrap_or(fallback.mist),
-        drift: i32::try_from(values.number("drift", i64::from(fallback.drift)))
-            .unwrap_or(fallback.drift),
+        fps: values.number("fps", fallback.fps),
+        mist: number("mist", fallback.mist),
+        speed: number("speed", fallback.speed),
     }
 }
 

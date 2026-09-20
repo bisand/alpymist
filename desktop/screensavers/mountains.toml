@@ -7,7 +7,7 @@
 # program cannot disagree.
 
 name = "Mountains"
-description = "The ranges from the desktop wallpaper, with the mist moving through them."
+description = "The ranges from the desktop wallpaper, travelling past with the mist moving through them."
 exec = "alpymist-saver-mountains"
 icon = "󰔎"
 
@@ -36,12 +36,25 @@ unit = "%"
 default = 100
 
 [[setting]]
-key = "drift"
-title = "How fast the mist moves"
-description = "Columns of the drawn picture it crosses in a minute."
-keywords = ["speed", "wind", "slow", "fast"]
+key = "speed"
+title = "How fast the ranges travel"
+description = "As a percentage of its usual pace. The nearest range travels fastest and the rest in proportion, which is what puts them behind one another."
+keywords = ["speed", "scroll", "wind", "slow", "fast", "parallax"]
 kind = "number"
 min = 0
-max = 60
+max = 300
+step = 25
+unit = "%"
+default = 100
+
+[[setting]]
+key = "fps"
+title = "How smoothly it scrolls"
+description = "Frames a second. The ranges travel in a straight line, so fewer frames read as the skyline jumping rather than as slowness — and every frame costs a little battery."
+keywords = ["smooth", "frames", "fps", "battery", "judder"]
+kind = "number"
+min = 8
+max = 30
 step = 1
-default = 14
+unit = "fps"
+default = 12

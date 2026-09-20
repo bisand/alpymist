@@ -12,11 +12,20 @@
 //! stars cross the sky slowest of all. Between them there is no pixel that
 //! holds one colour for long.
 //!
+//! The second version moved all of that at fourteen columns a minute, which is
+//! a column every four seconds: arithmetically travelling, and to anyone
+//! looking at it a still picture. What a side-scroller does — and this is one,
+//! the same trick the platform games drew their skylines with — is move about
+//! a column a frame, and the whole of the effect is in that rate. So the pace
+//! here is [`PACE`] and the frame rate is high enough to carry it, and both
+//! are what the settings turn down for a machine that would rather have the
+//! battery.
+//!
 //! What the shared host does with the result — the magnification, the frame
 //! pacing, the input that takes it away — is none of this program's business,
 //! and is none of any other screensaver's either. This crate is the picture.
 
-use alpymist_screensaver::paint::Painting;
+use alpymist_screensaver::paint::{Painting, interval};
 use alpymist_screensaver::scene::{Motion, UNIT, drift, haze, motions, reduced, sine};
 use alpymist_ui::backdrop::{Backdrop, Layer};
 use alpymist_ui::palette::{Palette, Rgb};
@@ -34,10 +43,12 @@ pub const SCENE_SEED: u64 = 0x_A1B2_C3D4_E5F6;
 pub struct Look {
     /// Physical pixels to one drawn pixel.
     pub block: u32,
+    /// Frames a second. The host clamps what it is given.
+    pub fps: i64,
     /// How much mist there is, as a percentage of what the scene composes.
     pub mist: i32,
-    /// How fast everything travels, in columns a minute for the nearest range.
-    pub drift: i32,
+    /// How fast everything travels, as a percentage of [`PACE`].
+    pub speed: i32,
 }
 
 impl Default for Look {
@@ -46,11 +57,23 @@ impl Default for Look {
     fn default() -> Self {
         Self {
             block: 6,
+            fps: 12,
             mist: 100,
-            drift: 14,
+            speed: 100,
         }
     }
 }
+
+/// How far the nearest range travels in a minute, in columns of the drawn
+/// picture, when the speed setting is left at a hundred per cent.
+///
+/// Six columns a second. At the default twelve frames a second that is a
+/// column every other frame, which is the rate a scrolling picture stops
+/// ticking and starts travelling; at the default block it is thirty-six
+/// physical pixels a second, so a skyline crosses a laptop panel in something
+/// under a minute. Everything else in the picture is a fraction of this, so
+/// this one number is the whole of how alive the scene looks.
+pub const PACE: i32 = 360;
 
 /// One band of mist.
 ///
@@ -82,9 +105,12 @@ struct Range {
     ///
     /// Twice, with the second half the first half reversed, so that panning
     /// wraps with no seam: the last column and the first are neighbours in the
-    /// terrain as well as in the arithmetic. At this resolution, over the
-    /// minutes it takes to travel that far, the reflection reads as more
-    /// mountains rather than as a mirror.
+    /// terrain as well as in the arithmetic. At [`PACE`] the nearest range is
+    /// most of a minute reaching the fold and twice that coming back round to
+    /// where it began, and the four behind it take their own longer laps, so
+    /// what comes past is a reflection rather than a repeat — but it is a
+    /// reflection, and a picture that wanted a genuinely endless ridge would
+    /// have to compose more terrain rather than fold this.
     tops: Vec<i32>,
     /// Its colour at each column of `tops`, already hazed for its distance and
     /// shaded by how high the ground stands there.
@@ -116,6 +142,8 @@ pub struct Mountains {
     small: Size,
     /// Physical pixels to one drawn pixel.
     block: u32,
+    /// Milliseconds between frames, which the settings ask for.
+    interval: u64,
     /// The sky's colour at each row: it is bands, so one value a row is all.
     sky: Vec<u32>,
     /// The ranges, furthest first, which is the order they are painted in.
@@ -189,7 +217,7 @@ impl Mountains {
         // is what makes them read as being at different distances rather than
         // as one flat picture sliding past.
         let count = i32::try_from(ranges.len()).unwrap_or(1).max(1);
-        let fastest = settings.drift.max(0);
+        let fastest = PACE * settings.speed.clamp(0, 1000) / 100;
         for (i, range) in ranges.iter_mut().enumerate() {
             let nearness = i32::try_from(i).unwrap_or(0) + 1;
             range.speed = (fastest * nearness / count).max(i32::from(fastest > 0));
@@ -213,7 +241,11 @@ impl Mountains {
                         .unwrap_or(alpha)
                         .max(1),
                     motion,
-                    speed: (fastest + i * fastest / 2).max(1),
+                    // A band pools in front of the range it was composed with
+                    // and behind the next one up, so it travels between their
+                    // two speeds. Mist that kept pace with the ground would
+                    // read as painted on it; this reads as weather over it.
+                    speed: (fastest * (2 * i + 3) / (2 * count)).max(i32::from(fastest > 0)),
                     seed: 40 + i * 113,
                 }
             })
@@ -223,6 +255,7 @@ impl Mountains {
         Self {
             small,
             block,
+            interval: interval(settings.fps),
             sky,
             stars: stars(small),
             ranges,
@@ -383,6 +416,15 @@ impl Painting for Mountains {
 
     fn block(&self) -> u32 {
         self.block
+    }
+
+    /// More than the host's default, and for the reason the host names: this
+    /// picture travels in a straight line, and at that the gap between frames
+    /// is not slowness, it is the skyline jumping. Every frame is a wakeup and
+    /// a wakeup costs battery, which is why it is a setting and why the low
+    /// end of that setting is the host's own default.
+    fn interval_ms(&self) -> u64 {
+        self.interval
     }
 
     fn frame(&mut self, elapsed: u64) -> &[u32] {
@@ -595,12 +637,70 @@ mod tests {
         assert_eq!(a.small(), Size::new(200, 150));
     }
 
+    /// What was wrong with the version before this one. It travelled — the
+    /// test above passed — at fourteen columns a minute, which is a picture
+    /// that stands still to anybody looking at it. The rate is the feature, so
+    /// the rate is what is tested: a second of a screensaver scrolling is
+    /// something you can see happening.
+    #[test]
+    fn a_second_of_it_is_a_visible_amount_of_travel() {
+        let mut m = Mountains::compose(Size::new(1366, 768), &Look::default());
+        let first = m.frame(0).to_vec();
+        let second = m.frame(1_000).to_vec();
+        let moved = first.iter().zip(&second).filter(|(a, b)| a != b).count();
+        let share = moved * 100 / first.len().max(1);
+        assert!(
+            share >= 10,
+            "{share}% of the picture changed in a second: that is a photograph"
+        );
+    }
+
+    /// And that a frame comes often enough to carry it: at the pace above, a
+    /// picture drawn at the host's default rate steps a column and a half at a
+    /// time, which is the skyline juddering rather than travelling.
+    #[test]
+    fn it_asks_for_more_frames_than_a_still_picture_would() {
+        let m = Mountains::compose(Size::new(640, 480), &Look::default());
+        assert_eq!(m.interval_ms(), 1000 / 12);
+        let slow = Look {
+            fps: 8,
+            ..Look::default()
+        };
+        assert_eq!(
+            Mountains::compose(Size::new(640, 480), &slow).interval_ms(),
+            125
+        );
+        let greedy = Look {
+            fps: 500,
+            ..Look::default()
+        };
+        assert!(Mountains::compose(Size::new(640, 480), &greedy).interval_ms() >= 1000 / 30);
+    }
+
+    /// Turned all the way down it is the picture it always was, and turned up
+    /// it does not run away with itself: both ends of the setting draw.
+    #[test]
+    fn the_speed_setting_reaches_both_ends_without_tearing() {
+        for speed in [0, 25, 100, 300] {
+            let look = Look {
+                block: 4,
+                speed,
+                ..Look::default()
+            };
+            let mut m = Mountains::compose(Size::new(800, 600), &look);
+            for ms in [0, 7_000, 600_000] {
+                assert!(m.frame(ms).iter().all(|px| px >> 24 == 0xFF));
+            }
+        }
+    }
+
     #[test]
     fn nothing_moving_is_a_setting_and_not_a_panic() {
         let still = Look {
             block: 4,
             mist: 0,
-            drift: 0,
+            speed: 0,
+            ..Look::default()
         };
         let mut m = Mountains::compose(Size::new(320, 240), &still);
         assert!(m.frame(0).iter().all(|px| px >> 24 == 0xFF));
