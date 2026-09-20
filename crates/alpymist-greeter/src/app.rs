@@ -11,10 +11,9 @@
 
 use crate::login::Outcome;
 use crate::users::User;
-use alpymist_ui::backdrop::Backdrop;
 use alpymist_ui::palette::{Palette, Rgb};
 use alpymist_ui::render::{
-    ButtonStyle, button_ink, colour, new_cursor, paint_backdrop, paint_button, paint_cursor,
+    ButtonStyle, Scenery, button_ink, colour, new_cursor, paint_button, paint_cursor,
 };
 use alpymist_ui::typeface::{self, Typeface};
 use denise::color::Color;
@@ -280,7 +279,7 @@ pub struct App {
     pub started: bool,
     power: Option<Power>,
     palette: Palette,
-    backdrop: Backdrop,
+    scenery: Scenery,
     layout: Layout,
     size: (u32, u32),
     /// Fira Mono, or the built-in bitmap without it.
@@ -313,7 +312,7 @@ impl App {
             pending: None,
             started: false,
             power: None,
-            backdrop: Backdrop::compose(width, height, &palette, SCENE_SEED),
+            scenery: Scenery::compose(width, height, &palette, SCENE_SEED),
             layout: Layout::for_screen(width, height),
             palette,
             size: (width, height),
@@ -495,7 +494,7 @@ impl App {
     /// Recompose for a new screen size.
     pub fn resize(&mut self, width: u32, height: u32) {
         if self.size != (width, height) {
-            self.backdrop = Backdrop::compose(width, height, &self.palette, SCENE_SEED);
+            self.scenery = Scenery::compose(width, height, &self.palette, SCENE_SEED);
             self.layout = Layout::for_screen(width, height);
             self.size = (width, height);
         }
@@ -508,7 +507,7 @@ impl App {
         let l = self.layout;
         let p = self.palette;
 
-        paint_backdrop(canvas, &self.backdrop);
+        self.scenery.paint_onto(canvas);
 
         // The card: the installer's panel, smaller.
         let radius = i32::from(l.text_px) / 2;
