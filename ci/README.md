@@ -48,8 +48,25 @@ sorts before "base", so a top-level definition is overwritten a moment later.
   1280x800 source. It is wrapped in `if loadfont ...; then`, exactly as the
   distributions' own `grub.cfg`s are: a `gfxterm` with no font is a black
   screen, and falling back to the plain console menu is the difference between
-  plain and unusable. `grub_mod` gains `png font gfxterm`, and the font comes
+  plain and unusable. `grub_mod` gains `jpeg font gfxterm`, and the font comes
   out of Alpine's `grub` package.
+
+  **What is embedded is all there is.** mkimage puts no GRUB module tree on
+  the image, so a command that was not built into `bootaa64.efi` cannot be
+  loaded at boot — it is not a command at all, and `grub.cfg` carries on past
+  it silently, because it is not `set -e`. The menu then comes up branded in
+  every way except the picture, which is a confusing thing to debug. Two
+  separate faults of exactly that shape were found by booting, one ISO each:
+
+  - `png.mod` does not exist for arm64-efi — 145 modules, `jpeg` among them
+    and no PNG decoder. Hence the JPEG background; `jpeg.mod` is on both
+    arm64-efi and x86_64-efi.
+  - `background_image` is not in `gfxterm.mod`. It lives in
+    `gfxterm_background.mod`, with `bitmap_scale` for `-m stretch`.
+
+  Neither needs an ISO to check. Run `grub-mkimage --directory=/usr/lib/grub/
+  <format>` with the module list and `strings` the result for the command you
+  expect — a second, against twenty-five minutes.
 
 The pictures themselves are drawn by `alpymist-wallpaper --boot` during the
 `alpymist-splash` build and carried by its `alpymist-splash-boot` subpackage,

@@ -2,7 +2,7 @@
 //!
 //! `alpymist-wallpaper OUT.png [WIDTH HEIGHT]`
 //! `alpymist-wallpaper --mark OUT.png [SIZE]`
-//! `alpymist-wallpaper --boot OUT.png [WIDTH HEIGHT]`
+//! `alpymist-wallpaper --boot OUT.png|OUT.jpg [WIDTH HEIGHT]`
 //!
 //! Run while building the desktop package, so the desktop background is the
 //! same misty mountains as the boot splash and the installer — drawn by the
@@ -38,7 +38,7 @@ fn main() -> ExitCode {
             eprintln!("alpymist-wallpaper: {why}");
             eprintln!("usage: alpymist-wallpaper OUT.png [WIDTH HEIGHT]");
             eprintln!("       alpymist-wallpaper --mark OUT.png [SIZE]");
-            eprintln!("       alpymist-wallpaper --boot OUT.png [WIDTH HEIGHT]");
+            eprintln!("       alpymist-wallpaper --boot OUT.png|OUT.jpg [WIDTH HEIGHT]");
             ExitCode::FAILURE
         }
     }
@@ -53,7 +53,7 @@ fn run(args: &[String]) -> Result<String, String> {
     if let Some(rest) = args.split_first().filter(|(f, _)| *f == "--boot") {
         let (out, width, height) = parse(rest.1)?;
         let pixels = render_boot(width, height)?;
-        write_png(&out, &pixels, width, height)?;
+        write_image(&out, &pixels, width, height)?;
         return Ok(out);
     }
     let (out, width, height) = parse(args)?;
@@ -171,6 +171,135 @@ fn render_boot(width: u32, height: u32) -> Result<Vec<u32>, String> {
     Ok(pixels)
 }
 
+/// Pack an ARGB word buffer down to the opaque RGB bytes both encoders want.
+fn to_rgb(pixels: &[u32]) -> Vec<u8> {
+    let mut rgb = Vec::with_capacity(pixels.len() * 3);
+    for px in pixels {
+        let [_, r, g, b] = px.to_be_bytes();
+        rgb.extend_from_slice(&[r, g, b]);
+    }
+    rgb
+}
+
+/// Write `path` as a JPEG or a PNG, whichever its extension asks for.
+///
+/// GRUB decodes only what it was built with, and Alpine's `grub-efi` for
+/// arm64-efi ships no `png.mod` at all — 145 modules, `jpeg` among them and no
+/// PNG decoder anywhere. `jpeg.mod` is there on x86_64-efi too, so a JPEG is
+/// the one format both boot menus can read. syslinux's vesamenu takes either,
+/// so its background stays a PNG and only GRUB's is transcoded.
+fn write_image(path: &str, pixels: &[u32], width: u32, height: u32) -> Result<(), String> {
+    let jpeg = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("jpg") || e.eq_ignore_ascii_case("jpeg"));
+    if jpeg {
+        write_jpeg(path, pixels, width, height)
+    } else {
+        write_png(path, pixels, width, height)
+    }
+}
+
+/// Quality for the boot background.
+///
+/// It is a soft gradient with one hard-edged mark on it, which is the part
+/// that would show ringing first; 92 leaves none visible at the size a boot
+/// menu is drawn, and the file is a fraction of the PNG either way.
+const JPEG_QUALITY: u8 = 92;
+
+fn write_jpeg(path: &str, pixels: &[u32], width: u32, height: u32) -> Result<(), String> {
+    let (w, h) = (
+        u16::try_from(width).map_err(|_| "image too wide for a JPEG".to_string())?,
+        u16::try_from(height).map_err(|_| "image too tall for a JPEG".to_string())?,
+    );
+    let mut buf = Vec::new();
+    jpeg_encoder::Encoder::new(&mut buf, JPEG_QUALITY)
+        .encode(&to_rgb(pixels), w, h, jpeg_encoder::ColorType::Rgb)
+        .map_err(|e| format!("encoding {path}: {e}"))?;
+    number_components_from_one(&mut buf)?;
+    std::fs::write(path, &buf).map_err(|e| format!("writing {path}: {e}"))
+}
+
+/// Renumber the colour components from 0,1,2 to 1,2,3, in place.
+///
+/// The JPEG spec treats a component's id as an arbitrary label, and
+/// jpeg-encoder numbers them from zero. JFIF numbers them from one, and that
+/// is what a bootloader's reader expects: GRUB computes `id - 1` and then
+/// bounds-checks the result, so a file whose first component is 0 underflows
+/// and is refused outright —
+/// `jpeg.c:grub_jpeg_decode_sof:372:jpeg: invalid index`. It refuses the file,
+/// `background_image` fails, and since `grub.cfg` is not `set -e` the menu
+/// comes up with no picture and no explanation.
+///
+/// Six bytes: the three ids in the frame header, and the three selectors in
+/// the scan header that have to go on matching them.
+fn number_components_from_one(buf: &mut [u8]) -> Result<(), String> {
+    let word = |b: &[u8], i: usize| -> usize { (b[i] as usize) << 8 | b[i + 1] as usize };
+    let mut i = 2; // past the start-of-image marker
+    let mut renumbered = false;
+    while i + 4 <= buf.len() {
+        if buf[i] != 0xFF {
+            return Err("not a JPEG: expected a marker".into());
+        }
+        let marker = buf[i + 1];
+        // Standalone markers carry no length; none of them appear before the
+        // scan header in what we write, but step over them rather than
+        // mis-reading the next two bytes as a length.
+        if matches!(marker, 0x01 | 0xD0..=0xD9) {
+            i += 2;
+            continue;
+        }
+        let len = word(buf, i + 2);
+        let body = i + 4;
+        // The length counts its own two bytes, so the next marker is at
+        // i + 2 + len. Checked, because the length is read out of the file.
+        let next = i
+            .checked_add(2)
+            .and_then(|v| v.checked_add(len))
+            .ok_or_else(|| "not a JPEG: segment length overflows".to_string())?;
+        if next > buf.len() {
+            return Err("not a JPEG: segment runs past the end".into());
+        }
+        match marker {
+            // Frame header: precision, height, width, count, then id/sampling/quant each.
+            0xC0..=0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF => {
+                let count = buf[body + 5] as usize;
+                for c in 0..count {
+                    let at = body + 6 + c * 3;
+                    if at >= buf.len() {
+                        return Err("not a JPEG: truncated frame header".into());
+                    }
+                    if buf[at] == 0 {
+                        renumbered = true;
+                    }
+                    buf[at] += 1;
+                }
+            }
+            // Scan header: count, then selector/tables each. Its selectors name
+            // the ids above, so they move with them.
+            0xDA => {
+                let count = buf[body] as usize;
+                for c in 0..count {
+                    let at = body + 1 + c * 2;
+                    if at >= buf.len() {
+                        return Err("not a JPEG: truncated scan header".into());
+                    }
+                    buf[at] += 1;
+                }
+                // Entropy-coded data follows; there is nothing further to walk.
+                return if renumbered {
+                    Ok(())
+                } else {
+                    Err("the encoder already numbered components from one".into())
+                };
+            }
+            _ => {}
+        }
+        i = next;
+    }
+    Err("not a JPEG: no scan header".into())
+}
+
 fn write_png(path: &str, pixels: &[u32], width: u32, height: u32) -> Result<(), String> {
     let file = std::fs::File::create(path).map_err(|e| format!("creating {path}: {e}"))?;
     let mut encoder = png::Encoder::new(BufWriter::new(file), width, height);
@@ -179,11 +308,7 @@ fn write_png(path: &str, pixels: &[u32], width: u32, height: u32) -> Result<(), 
     encoder.set_color(png::ColorType::Rgb);
     encoder.set_depth(png::BitDepth::Eight);
     encoder.set_compression(png::Compression::Best);
-    let mut rgb = Vec::with_capacity(pixels.len() * 3);
-    for px in pixels {
-        let [_, r, g, b] = px.to_be_bytes();
-        rgb.extend_from_slice(&[r, g, b]);
-    }
+    let rgb = to_rgb(pixels);
     encoder
         .write_header()
         .and_then(|mut w| w.write_image_data(&rgb))
@@ -192,7 +317,57 @@ fn write_png(path: &str, pixels: &[u32], width: u32, height: u32) -> Result<(), 
 
 #[cfg(test)]
 mod tests {
-    use super::{parse, render};
+    use super::{number_components_from_one, parse, render, to_rgb};
+
+    /// The component ids out of a JPEG's frame header.
+    fn component_ids(buf: &[u8]) -> Vec<u8> {
+        let mut i = 2;
+        while i + 4 <= buf.len() {
+            let marker = buf[i + 1];
+            let len = (buf[i + 2] as usize) << 8 | buf[i + 3] as usize;
+            if (0xC0..=0xCF).contains(&marker) && !matches!(marker, 0xC4 | 0xC8 | 0xCC) {
+                let count = buf[i + 9] as usize;
+                return (0..count).map(|c| buf[i + 10 + c * 3]).collect();
+            }
+            i += 2 + len;
+        }
+        Vec::new()
+    }
+
+    fn encode_tiny() -> Vec<u8> {
+        let pixels = vec![0x00FF_8040_u32; 16 * 16];
+        let mut buf = Vec::new();
+        jpeg_encoder::Encoder::new(&mut buf, 90)
+            .encode(&to_rgb(&pixels), 16, 16, jpeg_encoder::ColorType::Rgb)
+            .expect("the encoder writes a tiny image");
+        buf
+    }
+
+    #[test]
+    fn a_jpeg_leaves_the_encoder_numbered_from_zero() {
+        // If this ever stops being true the renumbering must go, not stay:
+        // it would be adding one to ids that were already right.
+        assert_eq!(component_ids(&encode_tiny()), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn renumbering_gives_the_components_the_ids_a_bootloader_expects() {
+        let mut buf = encode_tiny();
+        number_components_from_one(&mut buf).expect("renumbers");
+        assert_eq!(component_ids(&buf), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn renumbering_twice_is_refused_rather_than_silently_wrong() {
+        let mut buf = encode_tiny();
+        number_components_from_one(&mut buf).expect("renumbers");
+        assert!(number_components_from_one(&mut buf).is_err());
+    }
+
+    #[test]
+    fn something_that_is_not_a_jpeg_is_refused() {
+        assert!(number_components_from_one(&mut [0xFF, 0xD8, 0x00, 0x01, 0x02]).is_err());
+    }
 
     #[test]
     fn the_mark_defaults_to_an_icon_sized_square() {

@@ -34,7 +34,9 @@ splash. The geometry lives in `crates/alpymist-ui/src/badge.rs`, traced from
 - **The boot menus** — `alpymist-wallpaper --boot` draws the backdrop with the
   badge above the space the menu uses. The `alpymist-splash-boot` subpackage
   carries the result, and `profiles/mkimg.alpymist.sh` puts it behind both the
-  syslinux and the GRUB menu.
+  syslinux and the GRUB menu. Two files: a 640x480 PNG for syslinux's fixed
+  VESA mode, and a 1280x800 JPEG that GRUB stretches to the panel — GRUB on
+  arm64 has no PNG decoder.
 - **The site's favicon** — `site/static/favicon.svg`, the only place the SVG is
   used as it is. Its viewBox crops to the disc so the mark fills the square:
   the disc is the favicon's own container, and setting it on a panel only
