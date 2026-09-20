@@ -30,6 +30,13 @@ denise-drm = { workspace = true, optional = true }
 denise-evdev = { workspace = true, optional = true }
 signal-hook = { version = "0.3", optional = true }
 
+# Timing probes, not shipped. The DRM one needs a display, so it is kept off
+# the default build where `cargo clippy --all-targets` would try to compile it
+# without denise-drm.
+[[example]]
+name = "drm-frame-bench"
+required-features = ["drm"]
+
 [features]
 default = ["winit"]
 winit = ["dep:denise-winit"]

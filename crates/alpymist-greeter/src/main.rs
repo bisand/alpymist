@@ -162,11 +162,9 @@ mod preview {
 mod console {
     use alpymist_greeter::app::{App, Authenticator, Status, action_for};
     use alpymist_greeter::login::{self, Outcome, Stream};
-    use denise::geom::Rect;
-    use denise::{InputEvent, InputSource, Surface};
+    use denise::{InputEvent, InputSource};
     use denise_drm::SurfaceConfig;
     use denise_evdev::{Console, InputBackend};
-    use denise_render::Canvas;
     use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
     use std::os::unix::net::UnixStream;
     use std::sync::Arc;
@@ -222,11 +220,15 @@ mod console {
         };
 
         // The boot splash lets go of the display as greetd starts; wait for it.
-        let mut surface = alpymist_ui::display::open_patiently(
+        //
+        // A Screen rather than the surface itself: it draws into ordinary
+        // memory and copies the result over, which is about four times faster
+        // than rasterising into the scanout mapping. See its documentation.
+        let mut screen = alpymist_ui::display::Screen::open_patiently(
             SurfaceConfig::default(),
             alpymist_ui::display::PATIENCE,
         )?;
-        let size = surface.size();
+        let size = screen.size();
         eprintln!("display: {}x{} via DRM/KMS", size.width, size.height);
 
         let mut app = App::new(
@@ -288,12 +290,7 @@ mod console {
             }
 
             if dirty {
-                {
-                    let mut frame = surface.acquire()?;
-                    let mut canvas = Canvas::new(&mut frame);
-                    app.draw(&mut canvas);
-                }
-                surface.present(&[Rect::from_size(size)])?;
+                screen.present_with(|canvas| app.draw(canvas))?;
                 dirty = false;
             } else {
                 std::thread::sleep(Duration::from_millis(10));

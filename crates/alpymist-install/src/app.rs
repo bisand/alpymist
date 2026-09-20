@@ -12,12 +12,10 @@ use crate::pointer;
 use crate::screens::{self, Row, TextTarget};
 use crate::wifi;
 use crate::wizard::{Step, Wizard};
-use alpymist_ui::backdrop::Backdrop;
 use alpymist_ui::chrome::Chrome;
 use alpymist_ui::palette::Palette;
 use alpymist_ui::render::{
-    ButtonStyle, button_ink, colour, new_cursor, paint_backdrop, paint_button, paint_cursor,
-    paint_panel,
+    ButtonStyle, Scenery, button_ink, colour, new_cursor, paint_button, paint_cursor, paint_panel,
 };
 use alpymist_ui::typeface::{self, Typeface};
 use denise::geom::Point;
@@ -174,8 +172,8 @@ pub struct App {
     cursor: usize,
     /// Colours.
     pub palette: Palette,
-    /// The mountains, recomposed on resize.
-    backdrop: Backdrop,
+    /// The mountains, recomposed on resize and rasterised once after it.
+    scenery: Scenery,
     /// Panel geometry, recomputed on resize.
     chrome: Chrome,
     /// Size the above were built for.
@@ -231,7 +229,7 @@ impl App {
         let mut app = Self {
             wizard: Wizard::new(answers),
             cursor: 0,
-            backdrop: Backdrop::compose(width, height, &palette, SCENE_SEED),
+            scenery: Scenery::compose(width, height, &palette, SCENE_SEED),
             chrome: Chrome::for_screen(width, height),
             palette,
             size: (width, height),
@@ -350,9 +348,11 @@ impl App {
     }
 
     /// Take whatever the Wi-Fi worker has reported.
-    fn drain_wifi(&mut self) {
+    fn drain_wifi(&mut self) -> bool {
         let mut joined = false;
+        let mut moved = false;
         while let Some(event) = self.wifi.as_ref().and_then(|l| l.events.try_recv().ok()) {
+            moved = true;
             let state = &mut self.wizard.answers.wifi;
             match event {
                 wifi::Event::Networks(networks) => {
@@ -378,6 +378,7 @@ impl App {
             }
             self.snap_cursor();
         }
+        moved
     }
 
     /// The row the cursor is on.
@@ -720,18 +721,29 @@ impl App {
     /// while rendering would tie the install's visible state to the redraw
     /// rate, so a screen that stopped repainting would look like an install
     /// that had frozen — and would be untestable without a framebuffer.
-    pub fn tick(&mut self) {
-        self.drain_install();
-        self.drain_wifi();
+    pub fn tick(&mut self) -> bool {
+        // Both, every time: `||` would short-circuit and leave a channel
+        // undrained whenever the first one had something in it.
+        let installed = self.drain_install();
+        let wifi = self.drain_wifi();
+        installed || wifi
     }
 
     /// Take whatever the install thread has reported since the last frame.
-    fn drain_install(&mut self) {
+    ///
+    /// Returns whether anything arrived, which is what tells the DRM loop the
+    /// screen needs repainting when nobody has touched a key.
+    fn drain_install(&mut self) -> bool {
         let Some(running) = self.install.as_mut() else {
-            return;
+            return false;
         };
+        let mut moved = false;
         loop {
-            match running.events.try_recv() {
+            let event = running.events.try_recv();
+            // Set here rather than in every arm: anything that is not an error
+            // is something the screen has to show.
+            moved |= event.is_ok();
+            match event {
                 // Everything shown is also logged: the screen keeps only the
                 // tail, and after a failed install the log is all there is.
                 // Commands are logged as displayed, which never includes input.
@@ -770,11 +782,13 @@ impl App {
                 Err(TryRecvError::Disconnected) => {
                     if running.outcome.is_none() {
                         running.outcome = Some(false);
+                        moved = true;
                     }
                     break;
                 }
             }
         }
+        moved
     }
 
     /// How the install ended, once it has.
@@ -821,7 +835,7 @@ impl App {
         if self.size == (width, height) {
             return false;
         }
-        self.backdrop = Backdrop::compose(width, height, &self.palette, SCENE_SEED);
+        self.scenery = Scenery::compose(width, height, &self.palette, SCENE_SEED);
         self.chrome = Chrome::for_screen(width, height);
         self.size = (width, height);
         true
@@ -855,7 +869,7 @@ impl App {
         let palette = self.palette;
         let step = self.wizard.step();
 
-        paint_backdrop(canvas, &self.backdrop);
+        self.scenery.paint_onto(canvas);
         paint_panel(canvas, &chrome, &palette);
         self.paint_buttons(canvas);
 

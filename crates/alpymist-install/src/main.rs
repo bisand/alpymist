@@ -123,11 +123,9 @@ mod drm_run {
     use alpymist_install::answers::{Answers, Firmware};
     use alpymist_install::app::{App, action_for};
     use alpymist_install::typing;
-    use denise::geom::Rect;
-    use denise::{InputEvent, InputSource, Surface};
+    use denise::{InputEvent, InputSource};
     use denise_drm::SurfaceConfig;
     use denise_evdev::{Console, InputBackend};
-    use denise_render::Canvas;
     use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -193,11 +191,15 @@ mod drm_run {
             signal_hook::flag::register(signal, Arc::clone(&stop))?;
         }
         // The boot splash lets go of the display as this starts; wait for it.
-        let mut surface = alpymist_ui::display::open_patiently(
+        //
+        // A Screen rather than the surface itself: it draws into ordinary
+        // memory and copies the result over, which is about four times faster
+        // than rasterising into the scanout mapping. See its documentation.
+        let mut screen = alpymist_ui::display::Screen::open_patiently(
             SurfaceConfig::default(),
             alpymist_ui::display::PATIENCE,
         )?;
-        let size = surface.size();
+        let size = screen.size();
 
         eprintln!("display: {}x{} via DRM/KMS", size.width, size.height);
 
@@ -259,6 +261,12 @@ mod drm_run {
 
         let mut events: Vec<InputEvent> = Vec::new();
         let mut next_retry = Instant::now() + RETRY_EVERY;
+        // Nothing in this screen animates -- no clock, no blinking caret -- so
+        // a frame is worth drawing only when something has actually moved. The
+        // first one always is. Without this the loop repaints an untouched
+        // welcome screen as fast as the hardware will flip, which on the
+        // machines Alpymist is for is a core at full tilt and a warm lap.
+        let mut dirty = true;
         // The layout keys are currently translated with, once input exists.
         let mut typing_as: Option<&'static str> = None;
         loop {
@@ -276,6 +284,7 @@ mod drm_run {
                 let editing_text = app.focused_field().is_some();
                 if let Some(action) = action_for(event, editing_text) {
                     app.act(action);
+                    dirty = true;
                 }
             }
             // Type the way the chosen layout does, as soon as it is chosen, so
@@ -292,23 +301,32 @@ mod drm_run {
                 eprintln!("typing as: {}", wanted.name);
                 typing_as = Some(wanted.name);
             }
-            app.tick();
+            // The install thread and the Wi-Fi listener both report without
+            // anyone touching anything, so the tick decides this too.
+            dirty |= app.tick();
             if app.quitting || stop.load(Ordering::Relaxed) {
                 eprintln!("stopping; giving the console back");
                 return Ok(app.restart_requested);
             }
 
-            {
-                let mut frame = surface.acquire()?;
-                let mut canvas = Canvas::new(&mut frame);
-                app.draw(&mut canvas);
+            if dirty {
+                screen.present_with(|canvas| app.draw(canvas))?;
+                dirty = false;
+            } else {
+                std::thread::sleep(IDLE);
             }
-            surface.present(&[Rect::from_size(size)])?;
         }
     }
 
     /// How often to look again when no input device has appeared yet.
     const RETRY_EVERY: Duration = Duration::from_secs(1);
+
+    /// How long to wait before looking for work again, with nothing to draw.
+    ///
+    /// Short enough that the first keystroke after a pause is not visibly late,
+    /// long enough that an idle installer is not a busy loop. The greeter uses
+    /// the same figure.
+    const IDLE: Duration = Duration::from_millis(10);
 
     /// Open whatever input devices exist, or report that none do yet.
     ///
