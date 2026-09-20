@@ -27,3 +27,10 @@ jobs:
       - run: cargo run -q -p xtask -- version
       - run: cargo clippy --workspace --all-targets --features alpymist-ui/render -- -D warnings
       - run: cargo test --workspace --features alpymist-ui/render
+      # What the installer, the splash and the login screen actually ship as.
+      # Nothing above compiles them: a workspace build takes each crate's
+      # default features, and for these three that is the desktop preview, not
+      # the DRM backend the packages are built with. A change to something they
+      # share would otherwise be found by the package build, twenty minutes
+      # into Dev, which is how it was found once.
+      - run: cargo check --no-default-features --features drm -p alpymist-greeter -p alpymist-install -p alpymist-splash

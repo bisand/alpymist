@@ -290,7 +290,13 @@ mod console {
             }
 
             if dirty {
-                screen.present_with(|canvas| app.draw(canvas))?;
+                // The region `draw` reports is for a compositor that can be
+                // told to upload less than a screen. There is none here: this
+                // is the scanout mapping, and `present_with` copies the whole
+                // frame into it in one pass either way.
+                screen.present_with(|canvas| {
+                    app.draw(canvas);
+                })?;
                 dirty = false;
             } else {
                 std::thread::sleep(Duration::from_millis(10));
