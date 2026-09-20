@@ -29,7 +29,7 @@ build_alpymist_boot() {
 	mv "$DESTDIR"/usr/share/grub/unicode.pf2 "$DESTDIR"/boot/grub/fonts/
 	rm -rf "$DESTDIR"/usr
 	# Loudly, rather than shipping a menu that points at nothing.
-	for _fn in menu-640.png menu-1280.png; do
+	for _fn in menu-640.png menu-1280.jpg; do
 		[ -f "$DESTDIR"/boot/alpymist/$_fn ] \
 			|| die "alpymist-splash-boot has no $_fn"
 	done
@@ -119,9 +119,23 @@ profile_alpymist() {
 # Only provable in CI or under QEMU: nothing here can be exercised on a
 # development machine.
 _alpymist_boot_menus() {
-	# GRUB decodes nothing it was not built with, and draws no text without
-	# gfxterm and a font.
-	grub_mod="$grub_mod png font gfxterm"
+	# GRUB has only what it was built with. mkimage puts no module tree on
+	# the image, so a command that is not embedded cannot be loaded later --
+	# it is simply not a command, and grub.cfg carries on past it without a
+	# word. Two things were learned that way, each costing an ISO build and a
+	# boot:
+	#
+	#   jpeg, not png. Alpine's grub-efi for arm64-efi has no png.mod among
+	#   its 145 modules. jpeg.mod is on both arm64-efi and x86_64-efi.
+	#
+	#   gfxterm_background, not just gfxterm. gfxterm.mod is the terminal;
+	#   the `background_image` command lives in gfxterm_background.mod, and
+	#   `-m stretch` scales through bitmap_scale.
+	#
+	# `grub-mkimage --directory=/usr/lib/grub/<format>` with this list, then
+	# `strings` for `background_image`, checks the whole of that in a second
+	# without building an image.
+	grub_mod="$grub_mod jpeg font gfxterm gfxterm_background bitmap_scale"
 
 	# vesamenu.c32 is what draws a background at all; base unpacks only the
 	# text-mode modules. Anything missing from the package is skipped rather
@@ -201,9 +215,9 @@ _alpymist_boot_menus() {
 			set gfxmode=auto
 			insmod all_video
 			insmod gfxterm
-			insmod png
+			insmod jpeg
 			terminal_output gfxterm
-			background_image -m stretch /boot/alpymist/menu-1280.png
+			background_image -m stretch /boot/alpymist/menu-1280.jpg
 			set color_normal=light-gray/black
 			set color_highlight=black/cyan
 		fi

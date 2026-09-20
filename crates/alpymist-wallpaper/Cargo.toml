@@ -12,6 +12,7 @@ publish = false
 alpymist-ui = { workspace = true, features = ["render"] }
 denise = { workspace = true }
 denise-render = { workspace = true }
+jpeg-encoder = { version = "0.7.1", default-features = false, features = ["std"] }
 png = "0.17"
 
 [lints]

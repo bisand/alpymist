@@ -33,11 +33,13 @@ build() {
 		-p alpymist-splash --no-default-features --features drm
 	# The boot menus' backgrounds, drawn by the same code as the splash they
 	# hand over to, so the machine shows one continuous picture from the
-	# bootloader onwards. Two sizes: syslinux draws at a fixed 640x480 VESA
-	# mode, GRUB stretches to the panel.
+	# bootloader onwards. Two sizes because syslinux draws at a fixed 640x480
+	# VESA mode and GRUB stretches to the panel, and two formats because
+	# Alpine's grub-efi for arm64 ships no PNG decoder at all; see
+	# write_image in alpymist-wallpaper.
 	cargo build --release --locked -p alpymist-wallpaper
 	./target/release/alpymist-wallpaper --boot menu-640.png 640 480
-	./target/release/alpymist-wallpaper --boot menu-1280.png 1280 800
+	./target/release/alpymist-wallpaper --boot menu-1280.jpg 1280 800
 }
 
 package() {
@@ -59,8 +61,8 @@ boot() {
 	# would only waste the space.
 	install -Dm644 "$builddir"/menu-640.png \
 		"$subpkgdir"/usr/share/alpymist/boot/menu-640.png
-	install -Dm644 "$builddir"/menu-1280.png \
-		"$subpkgdir"/usr/share/alpymist/boot/menu-1280.png
+	install -Dm644 "$builddir"/menu-1280.jpg \
+		"$subpkgdir"/usr/share/alpymist/boot/menu-1280.jpg
 }
 
 # Filled in by `abuild checksum` at build time; see alpymist-install.
