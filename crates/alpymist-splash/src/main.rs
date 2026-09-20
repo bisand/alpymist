@@ -112,11 +112,9 @@ mod window {
 mod console {
     use super::Splash;
     use crate::handover::{self, Reason};
-    use denise::Surface;
-    use denise::geom::Rect;
-    use denise_drm::{DrmSurface, SurfaceConfig};
+    use alpymist_ui::display::Screen;
+    use denise_drm::SurfaceConfig;
     use denise_evdev::Console;
-    use denise_render::Canvas;
     use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
     use std::io::Write as _;
     use std::os::unix::fs::MetadataExt as _;
@@ -132,7 +130,7 @@ mod console {
     /// A display the splash has drawn on, and which device node it was.
     struct Shown {
         /// Held, not read: dropping it gives the display up.
-        _surface: DrmSurface,
+        _screen: Screen,
         node: Option<(PathBuf, u64)>,
     }
 
@@ -151,19 +149,18 @@ mod console {
     }
 
     fn show(splash: &mut Splash) -> Option<Shown> {
-        let mut surface = DrmSurface::open(SurfaceConfig::default()).ok()?;
-        let size = surface.size();
-        let node = surface.card().path().and_then(|path: &Path| {
+        // Through a Screen: the splash draws once per display device, but that
+        // one paint costs about four times as much straight into the scanout
+        // mapping as it does into memory that is then copied over, and this
+        // runs while the machine is still booting.
+        let mut screen = Screen::open(SurfaceConfig::default()).ok()?;
+        let size = screen.size();
+        let node = screen.device_path().and_then(|path: &Path| {
             std::fs::metadata(path)
                 .ok()
                 .map(|m| (path.to_path_buf(), m.ino()))
         });
-        {
-            let mut frame = surface.acquire().ok()?;
-            let mut canvas = Canvas::new(&mut frame);
-            splash.draw(&mut canvas);
-        }
-        surface.present(&[Rect::from_size(size)]).ok()?;
+        screen.present_with(|canvas| splash.draw(canvas)).ok()?;
         eprintln!(
             "splash: {}x{} on {}",
             size.width,
@@ -172,7 +169,7 @@ mod console {
                 .map_or("an unnamed device".into(), |(p, _)| p.display().to_string())
         );
         Some(Shown {
-            _surface: surface,
+            _screen: screen,
             node,
         })
     }

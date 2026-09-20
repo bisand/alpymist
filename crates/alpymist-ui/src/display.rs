@@ -10,6 +10,7 @@ use denise::pixels::PixelView;
 use denise::surface::{PixelFormat, Surface, SurfaceError, required_words};
 use denise_drm::{DrmError, DrmSurface, SurfaceConfig};
 use denise_render::Canvas;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 /// How long to wait for the display to be free.
@@ -60,22 +61,47 @@ pub struct Screen {
 }
 
 impl Screen {
+    /// Open the display, or say why not.
+    ///
+    /// For callers with their own retry loop; anything starting where the
+    /// splash may still hold the display wants [`Screen::open_patiently`].
+    ///
+    /// # Errors
+    /// Whatever the display could not do.
+    pub fn open(config: SurfaceConfig) -> Result<Self, DrmError> {
+        Ok(Self::wrap(DrmSurface::open(config)?))
+    }
+
     /// Open the display, waiting up to `patience` for another process to let go.
     ///
     /// # Errors
     /// The last error, if the display never became free.
     pub fn open_patiently(config: SurfaceConfig, patience: Duration) -> Result<Self, DrmError> {
-        let surface = open_patiently(config, patience)?;
+        Ok(Self::wrap(open_patiently(config, patience)?))
+    }
+
+    /// Give a surface its shadow buffer.
+    fn wrap(surface: DrmSurface) -> Self {
         let size = surface.size();
         // Saturating rather than failing: a size this cannot index needs a
         // display larger than the machine's address space, and `present_with`
         // reports it as the buffer shortage it is rather than refusing to open.
         let len = usize::try_from(u64::from(size.width) * u64::from(size.height)).unwrap_or(0);
-        Ok(Self {
+        Self {
             surface,
             shadow: vec![0u32; len],
             size,
-        })
+        }
+    }
+
+    /// The device node being drawn on, where there is one.
+    ///
+    /// For noticing that it has been replaced: early in boot the display is
+    /// simpledrm, and when the real driver loads that device goes away, often
+    /// replaced under the same name.
+    #[must_use]
+    pub fn device_path(&self) -> Option<&Path> {
+        self.surface.card().path()
     }
 
     /// The size every frame is drawn at.
