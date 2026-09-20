@@ -10,7 +10,7 @@
 # the new account: it becomes the user's own to change, as on Omarchy, rather
 # than system files an upgrade would overwrite.
 pkgname=alpymist-desktop
-pkgver=0.0.8
+pkgver=0.1.0
 pkgrel=0
 pkgdesc="Alpymist desktop: what every tier shares"
 url="https://github.com/bisand/alpymist"

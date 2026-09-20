@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-install
-pkgver=0.0.8
+pkgver=0.1.0
 pkgrel=0
 pkgdesc="Alpymist graphical installer, drawn straight to DRM/KMS"
 url="https://github.com/bisand/alpymist"

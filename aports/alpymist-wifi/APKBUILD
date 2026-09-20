@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-wifi
-pkgver=0.0.8
+pkgver=0.1.0
 pkgrel=0
 pkgdesc="Alpymist Wi-Fi: iwd from a popup under the bar, the bar's Wi-Fi icon, and a command line"
 url="https://github.com/bisand/alpymist"
