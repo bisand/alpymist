@@ -27,7 +27,9 @@ the other founding decisions.
 
 ## Status
 
-Pre-alpha. Nothing is installable yet, but the build pipeline runs end to end:
+Early, and installable: the ISOs attached to each release boot an installer,
+and the packages come from a signed repository. The build pipeline runs end to
+end:
 
 ```
 make iso     # build a bootable ISO in the Alpine builder container

@@ -23,8 +23,8 @@
 			boot it.
 		</p>
 		<p class="warning" role="note">
-			<strong>Pre-alpha.</strong> Expect breakage. Try it in a virtual machine or on hardware you do not
-			need tomorrow.
+			<strong>Young software.</strong> It installs and it runs, and it will have rough edges. Try it in
+			a virtual machine, or on hardware you do not need tomorrow.
 		</p>
 	</header>
 

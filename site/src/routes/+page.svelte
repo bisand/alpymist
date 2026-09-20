@@ -41,7 +41,7 @@
 <section class="hero">
 	<Backdrop />
 	<div class="wrap hero-inner">
-		<p class="eyebrow">Alpine + mist · pre-alpha</p>
+		<p class="eyebrow">Alpine + mist · early days</p>
 		<h1>A curated desktop for the machine you already have.</h1>
 		<p class="lede">
 			Alpymist is an opinionated Wayland desktop on Alpine Linux. It runs Hyprland where the
