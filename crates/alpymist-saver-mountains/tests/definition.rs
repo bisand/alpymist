@@ -31,7 +31,7 @@ fn the_shipped_definition_names_this_program() {
 fn every_setting_the_file_declares_is_one_the_program_reads() {
     // The keys `look()` asks for. A knob in the file that is not here would be
     // a control in Settings that changes nothing.
-    let read = ["block", "mist", "drift"];
+    let read = ["block", "fps", "mist", "speed"];
     let def = definition();
     let declared: Vec<&str> = def.knobs.iter().map(|k| k.key.as_str()).collect();
     for key in read {
@@ -57,8 +57,9 @@ fn what_the_file_defaults_to_is_what_the_program_defaults_to() {
         };
         let expected = match knob.key.as_str() {
             "block" => i64::from(built_in.0),
-            "mist" => i64::from(built_in.1),
-            _ => i64::from(built_in.2),
+            "fps" => built_in.1,
+            "mist" => i64::from(built_in.2),
+            _ => i64::from(built_in.3),
         };
         assert_eq!(
             default, expected,
@@ -73,6 +74,6 @@ fn what_the_file_defaults_to_is_what_the_program_defaults_to() {
 /// Spelt out rather than imported: `Look` belongs to the binary, and a binary's
 /// modules are not a library an integration test can reach into. Keeping them
 /// here is the point — if either side moves, this test says so.
-const fn alpymist_saver_mountains_defaults() -> (u32, i32, i32) {
-    (6, 100, 14)
+const fn alpymist_saver_mountains_defaults() -> (u32, i64, i32, i32) {
+    (6, 12, 100, 100)
 }

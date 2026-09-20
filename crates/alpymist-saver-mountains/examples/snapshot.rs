@@ -11,8 +11,9 @@ use std::io::BufWriter;
 #[path = "../src/picture.rs"]
 mod picture;
 
-/// Seconds in: far enough apart that the ranges have visibly travelled.
-const AT: [u64; 6] = [0, 30_000, 90_000, 180_000, 300_000, 600_000];
+/// Seconds in: far enough apart that the ranges have visibly travelled, which
+/// at [`picture::PACE`] is seconds rather than the minutes it once took.
+const AT: [u64; 6] = [0, 2_000, 5_000, 15_000, 45_000, 120_000];
 
 fn main() {
     let mut args = std::env::args().skip(1);
