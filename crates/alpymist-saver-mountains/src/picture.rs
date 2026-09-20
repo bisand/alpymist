@@ -169,13 +169,21 @@ const BALLOON: [u32; 21] = [
 /// How many cells across and down [`BALLOON`] is: a C64 sprite's own shape.
 const BALLOON_SIZE: (i32, i32) = (24, 21);
 
-/// How often a balloon drifts through, in milliseconds, and how much of that
-/// it is somewhere on the picture.
+/// How often a balloon comes through.
 ///
-/// It crosses three pictures' width in one of these, so it is in this one for
-/// about a third of it: a couple of minutes of balloon and four of empty sky.
-/// Rare enough to be a thing you catch rather than scenery.
-const BALLOON_EVERY: u64 = 360_000;
+/// It is on the picture for somewhere between a quarter and two thirds of
+/// this, depending how near that crossing is, and the sky is empty the rest
+/// of the time: rare enough to be a thing you catch rather than scenery.
+const BALLOON_EVERY: u64 = 210_000;
+
+/// How long after the screensaver appears the first balloon does.
+///
+/// Much sooner than the gap between them afterwards, and deliberately: this
+/// is the one thing in the picture worth waiting for, and at a full gap the
+/// machine would have to be left alone for three and a half minutes before it
+/// was ever shown one. The first arrives while somebody might still be
+/// watching it go.
+const BALLOON_FIRST: u64 = 12_000;
 
 /// How often the burner lights, and for how long.
 ///
@@ -187,8 +195,50 @@ const BALLOON_EVERY: u64 = 360_000;
 const BURN_EVERY: u64 = 11_000;
 const BURN_FOR: u64 = 700;
 
+/// How long the climb after a burn lasts, before the long sink back.
+const CLIMB_FOR: u64 = 2_600;
+
 /// What the burner throws.
 const FLAME: Rgb = Rgb::new(0xF2, 0xA8, 0x4B);
+
+/// Where the balloon is, when one is up.
+struct Balloon {
+    /// The column its leftmost cell is drawn at.
+    x: i32,
+    /// The row its top cell is drawn at.
+    y: i32,
+    /// Drawn pixels to one sprite cell.
+    scale: i32,
+    /// How many ranges it is in front of.
+    depth: usize,
+    /// Whether the burner is lit this instant.
+    burning: bool,
+}
+
+/// How far the balloon has risen above its own height, in drawn pixels.
+///
+/// A balloon does not fly at a height, it trades for one: the burner goes,
+/// the envelope takes a moment to feel it, it climbs for a few seconds, and
+/// then it sinks slowly the rest of the way to the next burn. That is why the
+/// flare and the climb belong to each other rather than being two animations
+/// sharing a picture, and it is most of what makes a shape in the distance
+/// read as a balloon being flown rather than a lamp hung in the sky.
+fn lift(elapsed: u64, swing: i32) -> i32 {
+    let phase = elapsed % BURN_EVERY;
+    // The burn itself, and then the climb it buys.
+    let climbed = BURN_FOR + CLIMB_FOR;
+    let ms = |t: u64| i32::try_from(t).unwrap_or(0);
+    if phase < BURN_FOR {
+        // Heating, and nothing has happened yet — which is the part that
+        // makes it cause and effect rather than a blinking light.
+        0
+    } else if phase < climbed {
+        ms(phase - BURN_FOR) * swing / ms(CLIMB_FOR).max(1)
+    } else {
+        // And down again, gently, all the way to the next one.
+        swing - ms(phase - climbed) * swing / ms(BURN_EVERY - climbed).max(1)
+    }
+}
 
 /// Where the aircraft is, at one instant.
 struct Flight {
@@ -202,6 +252,9 @@ struct Flight {
     scale: i32,
     /// Whether it is heading left, in which case it is drawn mirrored.
     left: bool,
+    /// How many ranges are behind it: nought puts it behind the lot, on the
+    /// horizon, and the number of ranges puts it in front of them all.
+    depth: usize,
     /// How near it is, nought to a hundred. Its size, its haze and how far it
     /// swings all come from this one number, which is what makes those three
     /// read as one aeroplane at one distance rather than three coincidences.
@@ -215,6 +268,7 @@ struct Flight {
 /// reads as mist; at a sixth of the resolution it is three rows tall and reads
 /// as a scan line. So the bands are taken out of the scene here and painted
 /// patchy across their width and drifting sideways instead.
+#[derive(Clone, Copy)]
 struct Band {
     /// The row it rests at.
     y: u32,
@@ -306,6 +360,9 @@ pub struct Mountains {
     skyline: Vec<i32>,
     /// And the colour each of those columns is painted in.
     shades: Vec<u32>,
+    /// The row at which the range in front takes over, per range per column:
+    /// how far down each range is actually visible.
+    cover: Vec<i32>,
 }
 
 impl Mountains {
@@ -426,6 +483,7 @@ impl Mountains {
             across: Vec::new(),
             skyline: Vec::new(),
             shades: Vec::new(),
+            cover: Vec::new(),
         }
     }
 
@@ -433,14 +491,29 @@ impl Mountains {
     fn paint(&mut self, elapsed: u64) {
         self.paint_sky();
         self.paint_stars(elapsed);
-        // Before the ranges, not after: an aeroplane this far off is behind
-        // the mountains, so the mountains hide it when it passes low, and the
-        // mist in front of them veils it. Painting it last would have put a
-        // distant aeroplane in front of the nearest ridge.
-        self.paint_balloon(elapsed);
-        self.paint_aircraft(elapsed);
-        self.paint_ranges(elapsed);
-        self.paint_mist(elapsed);
+        self.prepare_ranges(elapsed);
+        // Back to front, with whatever is in the sky put down at the distance
+        // it is at. Painting the aeroplane before all the ranges — which is
+        // what this did at first — makes it an aeroplane on the horizon for
+        // ever, however near it comes: it would grow, and stay behind a ridge
+        // it was supposed to be in front of, and the growing read as a
+        // mistake rather than as an approach. What tells you a thing is close
+        // is what it passes in front of.
+        let count = self.ranges.len();
+        let plane = self.flight(elapsed);
+        let balloon = self.crossing(elapsed);
+        for r in 0..=count {
+            if balloon.as_ref().is_some_and(|it| it.depth == r) {
+                self.paint_balloon(elapsed);
+            }
+            if self.aircraft && plane.depth == r {
+                self.paint_aircraft(elapsed);
+            }
+            if r < count {
+                self.fill_range(r);
+                self.paint_band(elapsed, r);
+            }
+        }
     }
 
     /// Where the aircraft is at `elapsed`.
@@ -455,7 +528,6 @@ impl Mountains {
     /// picture composed at any instant is already in the right place.
     fn flight(&self, elapsed: u64) -> Flight {
         let w = i32::try_from(self.small.width).unwrap_or(1);
-        let h = i32::try_from(self.small.height).unwrap_or(1);
         let turn = |period: u64, phase: i64| {
             let period = i64::try_from(period.max(1)).unwrap_or(1);
             i64::try_from(elapsed).unwrap_or(0) % period * 360 / period + phase
@@ -468,22 +540,41 @@ impl Mountains {
         // beyond both edges when it is near.
         let span = w / 2 + w * near / 100;
         let x = w / 2 + sine(across) * span / UNIT - PLANE_WIDE * scale / 2;
-        // It flies in the band between the top of the picture and the highest
-        // peak, three quarters of the way down it and rising and falling by a
-        // quarter — so at the bottom of its swing it grazes the tallest ridge
-        // and goes behind it, and over the valleys either side of that it is
-        // in clear sky the whole time.
-        let ceiling = self.horizon.clamp(4, h.max(4));
-        let climb = ceiling * (10 + near / 4) / 100;
-        let y = ceiling * 3 / 4 + sine(turn(BOB, 40)) * climb / UNIT;
+        // How low it flies is how near it is, because that is what near
+        // looks like from the ground: a thing on the horizon is on the
+        // horizon, and a thing passing close by is across the middle of the
+        // view, in front of the hills behind it.
+        let climb = self.band(near) * (6 + near / 5) / 100;
+        let y = self.band(near) - PLANE_SIZE.1 * scale + sine(turn(BOB, 40)) * climb / UNIT;
         Flight {
             x,
             y,
             scale,
             // Where it is going, which is a quarter turn ahead of where it is.
             left: sine(across + 90) < 0,
+            depth: self.depth(near),
             near,
         }
+    }
+
+    /// The row a thing at this distance sits on: the highest peak when it is
+    /// far off, most of the way down the picture when it is close.
+    ///
+    /// One line, and it is what ties a flier's size, its speed, its height in
+    /// the frame and what it passes in front of to the same number. Getting
+    /// any one of them from somewhere else is what makes a scene look assembled.
+    fn band(&self, near: i32) -> i32 {
+        let h = i32::try_from(self.small.height).unwrap_or(1);
+        let far = (self.horizon + 4).clamp(4, h.max(4));
+        let close = h * 62 / 100;
+        far + (close - far) * near.clamp(0, 100) / 100
+    }
+
+    /// How many ranges a thing at this distance is in front of.
+    fn depth(&self, near: i32) -> usize {
+        let count = self.ranges.len();
+        let over = usize::try_from(near.clamp(0, 100)).unwrap_or(0) * (count + 1) / 101;
+        over.min(count)
     }
 
     /// Scratch, for the flight example: the flight as plain numbers.
@@ -535,63 +626,93 @@ impl Mountains {
         });
     }
 
-    /// The balloon, when one is drifting through.
+    /// Where a balloon is, if one is crossing at all.
     ///
     /// It goes one way at one speed and does not manoeuvre, because that is
-    /// what a balloon does: it is in the air, not flying. The aircraft passes
-    /// it on its own business — no arrangement between them, they are simply
-    /// both up there, and every so often the two cross.
-    fn paint_balloon(&mut self, elapsed: u64) {
+    /// what a balloon does: it is in the air, not flying. Each crossing has
+    /// its own distance — one comes past on the ridge line, the next much
+    /// closer and in front of half the scene — because a balloon that arrived
+    /// at the same distance every time would be a flight path rather than
+    /// weather. The aeroplane is up there on its own business; every so often
+    /// the two of them cross, and nothing arranges that either.
+    fn crossing(&self, elapsed: u64) -> Option<Balloon> {
         if !self.balloon {
-            return;
+            return None;
         }
         let width = i32::try_from(self.small.width).unwrap_or(1);
+        let (wide, tall) = BALLOON_SIZE;
+        // Wound forward, so the first crossing is soon after the screensaver
+        // appears rather than a whole gap into it.
+        let since = elapsed.saturating_add(BALLOON_EVERY - BALLOON_FIRST);
+        let pass = since / BALLOON_EVERY;
+        let phase = since % BALLOON_EVERY;
+        // The first crossing after the screensaver appears is the middle
+        // one: far enough to be a balloon over the mountains, near enough to
+        // be worth looking at. The far one and the near one follow.
+        let near = match pass % 3 {
+            1 => 58,
+            2 => 16,
+            _ => 94,
+        };
+        // Nearer is quicker across, which is the perspective the aeroplane
+        // gets as well: the same drift covers more of the view up close.
+        let crossing = (BALLOON_EVERY * u64::try_from(140 - near).unwrap_or(100) / 200).max(1);
+        if phase >= crossing {
+            return None;
+        }
         // One drawn pixel to a sprite cell on a picture the size a laptop
-        // panel reduces to, which puts the balloon at about the share of the
-        // screen a sprite took up on a C64. A picture with far more rows than
-        // that is a bigger screen, not a nearer balloon.
+        // panel reduces to, which is about the share of the screen a sprite
+        // took up on a C64. A picture with far more rows than that is a
+        // bigger screen rather than a nearer balloon; a near crossing is a
+        // step bigger again, the way a C64 sprite could be expanded.
         let scale = i32::try_from(self.small.height / 128)
             .unwrap_or(1)
-            .clamp(1, 3);
-        let (wide, tall) = BALLOON_SIZE;
-        // Three pictures' width of travel, entering off one edge and leaving
-        // off the other, which is where the empty stretches come from.
-        let span = width * 3;
-        let phase = i64::try_from(elapsed % BALLOON_EVERY).unwrap_or(0);
+            .clamp(1, 3)
+            + i32::from(near >= 70);
+        let travel = width + wide * scale;
         let gone =
-            i32::try_from(phase * i64::from(span) / i64::try_from(BALLOON_EVERY).unwrap_or(1))
+            i32::try_from(phase.saturating_mul(u64::try_from(travel).unwrap_or(1)) / crossing)
                 .unwrap_or(0);
-        let x = gone - width - wide * scale;
-        if x >= width || x + wide * scale <= 0 {
-            return;
-        }
-        // Flying the ridge line, rising and falling on its own slow breath: a
-        // balloon holds its height rather than flying at one. The basket hangs
-        // a little below the highest peak, so a summit passing in front of it
-        // takes the bottom of it away for a moment — which is the reason the
-        // sky is painted before the mountains and not after.
-        let sway = sine(i64::try_from(elapsed % 37_000).unwrap_or(0) * 360 / 37_000) * 2 / UNIT;
-        let y = (self.horizon - tall * scale + 4 * scale).max(0) + sway;
+        Some(Balloon {
+            x: gone - wide * scale,
+            y: self.band(near) - tall * scale + lift(elapsed, 3 * scale),
+            scale,
+            depth: self.depth(near),
+            burning: elapsed % BURN_EVERY < BURN_FOR,
+        })
+    }
 
+    /// The balloon, where the sky says it is.
+    fn paint_balloon(&mut self, elapsed: u64) {
+        let Some(balloon) = self.crossing(elapsed) else {
+            return;
+        };
+        let (wide, _) = BALLOON_SIZE;
         let palette = Palette::alpymist();
-        let burning = elapsed % BURN_EVERY < BURN_FOR;
-        self.stamp(x, y, scale, BALLOON_SIZE, |row, col| {
-            let bits = usize::try_from(row).ok().and_then(|r| BALLOON.get(r))?;
-            if bits >> (wide - 1 - col) & 1 == 0 {
-                return None;
-            }
-            Some(match (burning, row) {
-                // Lit: the envelope glowing from the inside, and the burner
-                // itself at the throat brighter still.
-                (true, 0..=12) => (FLAME, 150),
-                (true, _) => (FLAME, 225),
-                // Dark: it is night and this is a long way off, so it is
-                // bright enough to see and no brighter. The rigging and the
-                // basket carry a little more, being nearer solid things.
-                (false, 0..=12) => (palette.ink_dim, 130),
-                (false, _) => (palette.ink_dim, 160),
-            })
-        });
+        let burning = balloon.burning;
+        self.stamp(
+            balloon.x,
+            balloon.y,
+            balloon.scale,
+            BALLOON_SIZE,
+            |row, col| {
+                let bits = usize::try_from(row).ok().and_then(|r| BALLOON.get(r))?;
+                if bits >> (wide - 1 - col) & 1 == 0 {
+                    return None;
+                }
+                Some(match (burning, row) {
+                    // Lit: the envelope glowing from the inside, and the
+                    // burner at the throat brighter still.
+                    (true, 0..=12) => (FLAME, 150),
+                    (true, _) => (FLAME, 225),
+                    // Dark: it is night and this is a long way off, so it is
+                    // bright enough to see and no brighter. The rigging and
+                    // the basket carry a little more, being solid things.
+                    (false, 0..=12) => (palette.ink_dim, 130),
+                    (false, _) => (palette.ink_dim, 160),
+                })
+            },
+        );
     }
 
     /// Put a small bitmap into the picture, one cell to a `scale` square.
@@ -671,20 +792,16 @@ impl Mountains {
     }
 
     /// The ranges, each at the offset its own speed has carried it to.
-    fn paint_ranges(&mut self, elapsed: u64) {
+    fn prepare_ranges(&mut self, elapsed: u64) {
         let width = self.small.width as usize;
-        let height = self.small.height;
+        let height = i32::try_from(self.small.height).unwrap_or(0);
         let count = self.ranges.len();
-        if count == 0 {
-            return;
-        }
-        // Every range's skyline for this frame, worked out once. Reading it
-        // down the rows afterwards keeps the painting row-major, which on a
-        // cache this small is most of the difference.
         self.skyline.clear();
         self.skyline.resize(count * width, i32::MAX);
         self.shades.clear();
         self.shades.resize(count * width, 0xFF00_0000);
+        self.cover.clear();
+        self.cover.resize(count * width, height);
         for (r, range) in self.ranges.iter().enumerate() {
             let extended = range.tops.len();
             if extended == 0 {
@@ -700,31 +817,62 @@ impl Mountains {
                 self.shades[base + x] = range.colour.get(at).copied().unwrap_or(0xFF00_0000);
             }
         }
-        for y in 0..height {
-            let row_at = y as usize * width;
-            let Some(row) = self.pixels.get_mut(row_at..row_at + width) else {
-                continue;
-            };
-            let row_y = i32::try_from(y).unwrap_or(0);
-            for (x, px) in row.iter_mut().enumerate() {
-                // Nearest first: the first range whose skyline has been reached
-                // is the one you can see, and the ones behind it do not matter.
-                for r in (0..count).rev() {
-                    if self.skyline[r * width + x] <= row_y {
-                        *px = self.shades[r * width + x];
-                        break;
-                    }
-                }
+        // How far down each range can be seen before a nearer one takes over.
+        // Worked out once, from the front backwards, so that painting the
+        // ranges back to front — which is what lets an aeroplane be put down
+        // among them — still writes every pixel exactly once, as the old
+        // nearest-wins pass over the rows did.
+        for x in 0..width {
+            let mut nearer = height;
+            for r in (0..count).rev() {
+                self.cover[r * width + x] = nearer;
+                nearer = nearer.min(self.skyline[r * width + x]);
             }
         }
     }
 
-    /// The mist, drifting across whatever is behind it.
-    fn paint_mist(&mut self, elapsed: u64) {
+    /// Paint range `r`, where it can be seen: from its own skyline down to
+    /// wherever the range in front of it takes over.
+    fn fill_range(&mut self, r: usize) {
+        let width = self.small.width as usize;
+        let height = i32::try_from(self.small.height).unwrap_or(0);
+        let base = r * width;
+        for x in 0..width {
+            let Some(&top) = self.skyline.get(base + x) else {
+                continue;
+            };
+            let bottom = self.cover.get(base + x).copied().unwrap_or(height);
+            let colour = self.shades.get(base + x).copied().unwrap_or(0xFF00_0000);
+            let mut y = top.max(0);
+            while y < bottom.min(height) {
+                if let Some(px) = self
+                    .pixels
+                    .get_mut(usize::try_from(y).unwrap_or(0) * width + x)
+                {
+                    *px = colour;
+                }
+                y += 1;
+            }
+        }
+    }
+
+    /// One band of mist, drifting across whatever is behind it.
+    ///
+    /// Behind it, and no further: a band pools in front of the range it was
+    /// composed with, so it is painted between that range and the next one
+    /// up. Painting all of them over the finished picture — which is what
+    /// this did — laid the furthest valley's mist over the nearest tree line,
+    /// and at these opacities that passed for haze until something had to
+    /// fly through it.
+    fn paint_band(&mut self, elapsed: u64, j: usize) {
         let width = self.small.width as usize;
         let rows = self.small.height;
 
-        for band in &self.bands {
+        // Copied out, not borrowed: what follows writes into `self.pixels`.
+        let Some(band) = self.bands.get(j).copied() else {
+            return;
+        };
+        {
             let (rise, swell) = band.motion.at(elapsed);
             let slide = drift(elapsed, band.speed);
             let top = band.y.saturating_add_signed(rise);
@@ -756,14 +904,14 @@ impl Mountains {
                     continue;
                 };
                 for (px, across) in line.iter_mut().zip(&self.across) {
-                    let alpha = down * across / 100;
-                    let Ok(alpha) = u8::try_from(alpha.clamp(0, 255)) else {
+                    let ink = down * across / 100;
+                    let Ok(ink) = u8::try_from(ink.clamp(0, 255)) else {
                         continue;
                     };
-                    if alpha == 0 {
+                    if ink == 0 {
                         continue;
                     }
-                    *px = over(*px, band.colour, alpha);
+                    *px = over(*px, band.colour, ink);
                 }
             }
         }
@@ -1099,6 +1247,83 @@ mod tests {
             "turning them on changed nothing, so nothing is being drawn"
         );
         assert!(bare.frame(at).iter().all(|px| px >> 24 == 0xFF));
+    }
+
+    /// The complaint this answers: whatever it did, the aeroplane was always
+    /// behind the furthest ridge, so it could grow all it liked and still read
+    /// as a thing on the horizon. What tells you something is close is what it
+    /// passes in front of.
+    #[test]
+    fn what_is_in_the_sky_comes_past_at_different_distances() {
+        let m = scene(1366, 768);
+        let count = m.ranges.len();
+        let depths: Vec<usize> = (0..140).map(|s| m.flight(s * 1000).depth).collect();
+        assert!(
+            depths.contains(&0),
+            "it is never out on the horizon behind the lot of them"
+        );
+        assert!(
+            depths.iter().any(|&d| d >= count),
+            "it is never in front of the mountains, so it never comes close"
+        );
+        // And it gets there gradually rather than jumping: no step in its
+        // distance is more than one range.
+        for pair in depths.windows(2) {
+            let step = pair[0].abs_diff(pair[1]);
+            assert!(
+                step <= 1,
+                "it moved {step} ranges between one second and the next"
+            );
+        }
+    }
+
+    /// A balloon every three and a half minutes is one nobody ever sees if the
+    /// first is a full gap away, which is exactly how it was found that nobody
+    /// had seen one.
+    #[test]
+    fn the_first_balloon_arrives_while_somebody_might_still_be_watching() {
+        let m = scene(1366, 768);
+        let width = i32::try_from(m.small().width).unwrap_or(1);
+        let (wide, _) = super::BALLOON_SIZE;
+        let seen = (0..45).any(|s| {
+            m.crossing(s * 1000)
+                .is_some_and(|b| b.x + wide * b.scale > 0 && b.x < width)
+        });
+        assert!(seen, "no balloon in the first three quarters of a minute");
+        // And they are not all at the same distance, or it is a flight path.
+        let distances: Vec<usize> = (0..12)
+            .filter_map(|n| m.crossing(n * super::BALLOON_EVERY + 20_000))
+            .map(|b| b.depth)
+            .collect();
+        assert!(
+            distances.windows(2).any(|p| p[0] != p[1]),
+            "every balloon comes past at the same distance"
+        );
+    }
+
+    /// The burner and the climb are one thing: it goes up *after* a burn and
+    /// sinks between them, which is what flying a balloon is.
+    #[test]
+    fn the_balloon_rises_on_the_burner_and_sinks_between_burns() {
+        let swing = 6;
+        assert_eq!(super::lift(0, swing), 0, "it moves before the burner does");
+        let during = super::lift(super::BURN_FOR / 2, swing);
+        assert_eq!(
+            during, 0,
+            "it is already climbing while the burner heats it"
+        );
+        let climbing = super::lift(super::BURN_FOR + super::CLIMB_FOR / 2, swing);
+        let topped = super::lift(super::BURN_FOR + super::CLIMB_FOR, swing);
+        assert!(
+            0 < climbing && climbing < topped,
+            "the climb after the burn is not a climb: {climbing} then {topped}"
+        );
+        assert_eq!(topped, swing, "it does not get the height the burn bought");
+        let sinking = super::lift(super::BURN_EVERY - 1, swing);
+        assert!(
+            sinking < topped / 2,
+            "it is still up at {sinking} when the next burn comes"
+        );
     }
 
     /// A sprite is drawn wherever the flight puts it, including half off the
