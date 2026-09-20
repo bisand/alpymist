@@ -38,7 +38,7 @@ default = 100
 [[setting]]
 key = "speed"
 title = "How fast the ranges travel"
-description = "As a percentage of its usual pace. The nearest range travels fastest and the rest in proportion, which is what puts them behind one another."
+description = "As a percentage of its usual pace. The nearest range travels fastest and every range behind it is close to twice as slow again — nine to one from the front of the picture to the back, which is what gives it depth rather than flatness."
 keywords = ["speed", "scroll", "wind", "slow", "fast", "parallax"]
 kind = "number"
 min = 0
@@ -58,3 +58,19 @@ max = 30
 step = 1
 unit = "fps"
 default = 12
+
+[[setting]]
+key = "aircraft"
+title = "An aircraft crossing"
+description = "An aeroplane comes in from the distance and goes back out again, with its navigation lights on and its strobe going. It passes behind the mountains."
+keywords = ["plane", "aeroplane", "aircraft", "lights", "sky"]
+kind = "switch"
+default = true
+
+[[setting]]
+key = "balloon"
+title = "A balloon, now and then"
+description = "Every few minutes a hot-air balloon drifts through, with its burner flaring. It is the shape the Commodore 64 manual taught everybody to draw."
+keywords = ["balloon", "c64", "commodore", "sprite", "retro"]
+kind = "switch"
+default = true

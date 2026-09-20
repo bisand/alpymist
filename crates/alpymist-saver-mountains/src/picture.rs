@@ -49,6 +49,10 @@ pub struct Look {
     pub mist: i32,
     /// How fast everything travels, as a percentage of [`PACE`].
     pub speed: i32,
+    /// Whether an aircraft crosses the sky at all.
+    pub aircraft: bool,
+    /// Whether a balloon drifts through now and then.
+    pub balloon: bool,
 }
 
 impl Default for Look {
@@ -60,20 +64,149 @@ impl Default for Look {
             fps: 12,
             mist: 100,
             speed: 100,
+            aircraft: true,
+            balloon: true,
         }
     }
 }
 
-/// How far the nearest range travels in a minute, in columns of the drawn
+/// How far the *nearest* range travels in a minute, in columns of the drawn
 /// picture, when the speed setting is left at a hundred per cent.
 ///
-/// Six columns a second. At the default twelve frames a second that is a
-/// column every other frame, which is the rate a scrolling picture stops
-/// ticking and starts travelling; at the default block it is thirty-six
-/// physical pixels a second, so a skyline crosses a laptop panel in something
-/// under a minute. Everything else in the picture is a fraction of this, so
-/// this one number is the whole of how alive the scene looks.
-pub const PACE: i32 = 360;
+/// Nine columns a second, which at the default block is fifty-four physical
+/// pixels a second: the tree line crosses a laptop panel in about twenty-five
+/// seconds. This is the front of the picture and the fastest thing in it;
+/// everything behind is [`DEPTH`] slower again, step by step.
+pub const PACE: i32 = 540;
+
+/// How much faster each range travels than the one behind it, in hundredths.
+///
+/// Distance is what this number is. Apparent speed falls with distance, so
+/// ranges spaced evenly in speed — which is what this picture had, each range
+/// a fifth of the pace more than the last — are ranges spaced evenly in
+/// *nothing*: the back three came past within a quarter of each other's speed
+/// and read as one flat card a long way off. Each step back being one and
+/// three quarters times slower puts them at nine to one front to back rather
+/// than five to four, which is the depth of a picture rather than the depth of
+/// a diagram.
+///
+/// It stops where the composed scene stops. Five ranges at this ratio put the
+/// furthest at about a column a second, still travelling — at twice this
+/// ratio it would be four physical pixels a second, and the horizon would be
+/// back to the standing-still the pace was raised to cure.
+const DEPTH: i32 = 175;
+
+/// The aircraft, nose to the right: one bit per cell, top row first.
+///
+/// Seven cells by three, which at one drawn pixel to a cell is a shape the
+/// size of a word of this comment on the screen — and it still reads as an
+/// aeroplane, because a fin, a fuselage and a wing is all an aeroplane is from
+/// the ground. Flying the other way it is drawn mirrored.
+const PLANE: [u8; 3] = [0b110_0000, 0b011_1111, 0b001_1000];
+
+/// How many cells across and down [`PLANE`] is.
+const PLANE_SIZE: (i32, i32) = (PLANE_WIDE, 3);
+
+/// How many cells across [`PLANE`] is.
+const PLANE_WIDE: i32 = 7;
+
+/// How long the aircraft takes to swing from one end of its crossing to the
+/// other and back, in milliseconds.
+///
+/// Prime-ish against the others and against the ranges' own laps, so the sky
+/// does not fall into a pattern with the ground. Near the ends of this it is
+/// off the side of the picture, which is what gives the sky stretches with
+/// nothing in it: an aeroplane that is always there is scenery, and one that
+/// arrives is something to notice.
+const CROSS: u64 = 79_000;
+
+/// How long it takes to come in from the distance and go back out, and to rise
+/// and fall, in milliseconds.
+const APPROACH: u64 = 137_000;
+const BOB: u64 = 19_000;
+
+/// The navigation lights an aircraft carries: red to port, green to starboard,
+/// steady, and one to each wingtip.
+///
+/// Not from the palette, and deliberately: these are not Alpymist's colours to
+/// choose. An aircraft's lights are red and green because the rules of the air
+/// say which side is which, and a themed aeroplane would simply be wrong.
+/// Muted from the signal colours, because everything in this picture is.
+const PORT: Rgb = Rgb::new(0xD8, 0x4C, 0x42);
+const STARBOARD: Rgb = Rgb::new(0x56, 0xC0, 0x6A);
+
+/// The white strobe on the tail: a flash, not a light that is on.
+const STROBE_EVERY: u64 = 1_800;
+const STROBE_FOR: u64 = 150;
+
+/// And the red anti-collision beacon on the belly, which blinks slower.
+///
+/// A different period from the strobe on purpose: two lights blinking in step
+/// read as a decoration, and two that drift past each other read as an
+/// aircraft, because that is what an aircraft's do.
+const BEACON_EVERY: u64 = 1_300;
+const BEACON_FOR: u64 = 320;
+
+/// The balloon from the Commodore 64 manual, as it is printed there.
+///
+/// Twenty-four cells by twenty-one, which is what a C64 sprite was, and these
+/// are the manual's own numbers — the `DATA 0,127,0 : DATA 1,255,192 …` of the
+/// chapter on sprites, three bytes to a row, which for a lot of people was the
+/// first picture they ever made a computer draw. One colour draws all of it:
+/// the Commodore logo in the middle of the envelope is where the bits are
+/// *off*, so it is the sky showing through, exactly as it was on a 1982
+/// television.
+///
+/// Here because the screensaver's whole look is a machine of about that
+/// vintage, and because a balloon drifting past mountains is what the sprite
+/// was always doing on the front of that manual.
+const BALLOON: [u32; 21] = [
+    0x00_7F00, 0x01_FFC0, 0x03_FFE0, 0x03_E7E0, 0x07_D9F0, 0x07_DFF0, 0x07_D9F0, 0x03_E7E0,
+    0x03_FFE0, 0x03_FFE0, 0x02_FFA0, 0x01_7F40, 0x01_3E40, 0x00_9C80, 0x00_9C80, 0x00_4900,
+    0x00_4900, 0x00_3E00, 0x00_3E00, 0x00_3E00, 0x00_1C00,
+];
+
+/// How many cells across and down [`BALLOON`] is: a C64 sprite's own shape.
+const BALLOON_SIZE: (i32, i32) = (24, 21);
+
+/// How often a balloon drifts through, in milliseconds, and how much of that
+/// it is somewhere on the picture.
+///
+/// It crosses three pictures' width in one of these, so it is in this one for
+/// about a third of it: a couple of minutes of balloon and four of empty sky.
+/// Rare enough to be a thing you catch rather than scenery.
+const BALLOON_EVERY: u64 = 360_000;
+
+/// How often the burner lights, and for how long.
+///
+/// A hot-air balloon at night is a dark shape that comes alight: the envelope
+/// glows from the inside for as long as the burner is on, which is a second
+/// here and there. It is the only warm colour anywhere in this picture, and
+/// the only thing in it that is not blue, which is most of why it is worth
+/// having at all.
+const BURN_EVERY: u64 = 11_000;
+const BURN_FOR: u64 = 700;
+
+/// What the burner throws.
+const FLAME: Rgb = Rgb::new(0xF2, 0xA8, 0x4B);
+
+/// Where the aircraft is, at one instant.
+struct Flight {
+    /// The column its leftmost cell is drawn at. Off the picture is allowed;
+    /// painting clips.
+    x: i32,
+    /// The row its top cell is drawn at.
+    y: i32,
+    /// Drawn pixels to one cell of [`PLANE`]: one when it is far off, three
+    /// when it is closest.
+    scale: i32,
+    /// Whether it is heading left, in which case it is drawn mirrored.
+    left: bool,
+    /// How near it is, nought to a hundred. Its size, its haze and how far it
+    /// swings all come from this one number, which is what makes those three
+    /// read as one aeroplane at one distance rather than three coincidences.
+    near: i32,
+}
 
 /// One band of mist.
 ///
@@ -144,6 +277,16 @@ pub struct Mountains {
     block: u32,
     /// Milliseconds between frames, which the settings ask for.
     interval: u64,
+    /// Whether an aircraft crosses the sky.
+    aircraft: bool,
+    /// Whether a balloon drifts through.
+    balloon: bool,
+    /// The row of the highest peak in the whole scene, which is as low as the
+    /// aircraft is allowed to fly.
+    horizon: i32,
+    /// Columns the stars cross in a minute: one [`DEPTH`] step further off
+    /// than the furthest range, because the sky is behind the mountains.
+    sky_speed: i32,
     /// The sky's colour at each row: it is bands, so one value a row is all.
     sky: Vec<u32>,
     /// The ranges, furthest first, which is the order they are painted in.
@@ -164,13 +307,6 @@ pub struct Mountains {
     /// And the colour each of those columns is painted in.
     shades: Vec<u32>,
 }
-
-/// How far the stars travel for every column the nearest range does.
-///
-/// Slowest of everything: they are the furthest away. Not still, though — the
-/// top of the sky is the one part of the picture the ranges never reach, so if
-/// the stars did not move nothing up there ever would.
-const STAR_SHARE: i32 = 8;
 
 impl Mountains {
     /// Compose for an output of this size, as the settings ask for.
@@ -212,24 +348,42 @@ impl Mountains {
             }
         }
 
-        // The composed scene puts the furthest range first. The nearest travels
-        // at the speed the settings ask for and the rest in proportion, which
-        // is what makes them read as being at different distances rather than
-        // as one flat picture sliding past.
-        let count = i32::try_from(ranges.len()).unwrap_or(1).max(1);
+        // The composed scene puts the furthest range first, so this walks it
+        // backwards: the nearest travels at the speed the settings ask for and
+        // each one behind it at [`DEPTH`] less again. Never quite nothing,
+        // though — a range rounded down to a standstill is a band of pixels
+        // holding one colour for as long as the machine is left alone, which
+        // is the thing this screensaver is for.
         let fastest = PACE * settings.speed.clamp(0, 1000) / 100;
-        for (i, range) in ranges.iter_mut().enumerate() {
-            let nearness = i32::try_from(i).unwrap_or(0) + 1;
-            range.speed = (fastest * nearness / count).max(i32::from(fastest > 0));
+        let mut speed = fastest;
+        for range in ranges.iter_mut().rev() {
+            range.speed = speed.max(i32::from(fastest > 0));
+            speed = speed * 100 / DEPTH;
         }
+        // What is behind each band of mist, in the order the bands come in.
+        let behind: Vec<i32> = ranges.iter().map(|r| r.speed).collect();
+
+        // The highest peak anywhere in the scene, which is where the sky the
+        // aircraft has to itself ends. Worked out from the terrain rather than
+        // picked: a scene composed for a different shape of screen puts its
+        // ridges somewhere else, and an aeroplane flying at a fixed fraction
+        // of the height spends that scene behind a mountain.
+        let horizon = ranges
+            .iter()
+            .filter_map(|r| r.tops.iter().copied().min())
+            .min()
+            .unwrap_or_else(|| i32::try_from(small.height / 4).unwrap_or(1));
+        // The sky is one step further off again than the furthest range.
+        let furthest = ranges.first().map_or(0, |r| r.speed);
+        let sky_speed = (furthest * 100 / DEPTH).max(i32::from(furthest > 0));
 
         let motions = motions(taken.len());
         let bands = taken
             .into_iter()
             .zip(motions)
             .enumerate()
-            .map(|(i, ((y, height, colour, alpha), motion))| {
-                let i = i32::try_from(i).unwrap_or(0);
+            .map(|(at, ((y, height, colour, alpha), motion))| {
+                let i = i32::try_from(at).unwrap_or(0);
                 Band {
                     // Taller than the composed band, and centred on it: what
                     // the ramp has to work with is what stops it being a line.
@@ -243,9 +397,13 @@ impl Mountains {
                     motion,
                     // A band pools in front of the range it was composed with
                     // and behind the next one up, so it travels between their
-                    // two speeds. Mist that kept pace with the ground would
-                    // read as painted on it; this reads as weather over it.
-                    speed: (fastest * (2 * i + 3) / (2 * count)).max(i32::from(fastest > 0)),
+                    // two speeds — a third again as fast as the one behind,
+                    // which is halfway between them now that the step is a
+                    // ratio and not an addition. Mist that kept pace with the
+                    // ground would read as painted on it; this reads as
+                    // weather over it.
+                    speed: (behind.get(at).copied().unwrap_or(fastest) * 4 / 3)
+                        .max(i32::from(fastest > 0)),
                     seed: 40 + i * 113,
                 }
             })
@@ -256,6 +414,10 @@ impl Mountains {
             small,
             block,
             interval: interval(settings.fps),
+            aircraft: settings.aircraft,
+            balloon: settings.balloon,
+            horizon,
+            sky_speed,
             sky,
             stars: stars(small),
             ranges,
@@ -271,8 +433,205 @@ impl Mountains {
     fn paint(&mut self, elapsed: u64) {
         self.paint_sky();
         self.paint_stars(elapsed);
+        // Before the ranges, not after: an aeroplane this far off is behind
+        // the mountains, so the mountains hide it when it passes low, and the
+        // mist in front of them veils it. Painting it last would have put a
+        // distant aeroplane in front of the nearest ridge.
+        self.paint_balloon(elapsed);
+        self.paint_aircraft(elapsed);
         self.paint_ranges(elapsed);
         self.paint_mist(elapsed);
+    }
+
+    /// Where the aircraft is at `elapsed`.
+    ///
+    /// Three sines of unrelated periods, and the near one governs the other
+    /// two: further off it hangs about the middle of the picture, barely
+    /// moving and barely rising, because that is what distance does to a
+    /// thing's apparent motion — near, the same angular sweep carries it right
+    /// across and off both sides. That coupling is the whole of the
+    /// perspective. It is also why nothing here is a position that has to be
+    /// remembered between frames: a flight is a function of the clock, so a
+    /// picture composed at any instant is already in the right place.
+    fn flight(&self, elapsed: u64) -> Flight {
+        let w = i32::try_from(self.small.width).unwrap_or(1);
+        let h = i32::try_from(self.small.height).unwrap_or(1);
+        let turn = |period: u64, phase: i64| {
+            let period = i64::try_from(period.max(1)).unwrap_or(1);
+            i64::try_from(elapsed).unwrap_or(0) % period * 360 / period + phase
+        };
+
+        let near = 50 + sine(turn(APPROACH, 0)) * 50 / UNIT;
+        let scale = (1 + near * 3 / 100).clamp(1, 3);
+        let across = turn(CROSS, 0);
+        // How far it swings: half the picture when it is far off, half again
+        // beyond both edges when it is near.
+        let span = w / 2 + w * near / 100;
+        let x = w / 2 + sine(across) * span / UNIT - PLANE_WIDE * scale / 2;
+        // It flies in the band between the top of the picture and the highest
+        // peak, three quarters of the way down it and rising and falling by a
+        // quarter — so at the bottom of its swing it grazes the tallest ridge
+        // and goes behind it, and over the valleys either side of that it is
+        // in clear sky the whole time.
+        let ceiling = self.horizon.clamp(4, h.max(4));
+        let climb = ceiling * (10 + near / 4) / 100;
+        let y = ceiling * 3 / 4 + sine(turn(BOB, 40)) * climb / UNIT;
+        Flight {
+            x,
+            y,
+            scale,
+            // Where it is going, which is a quarter turn ahead of where it is.
+            left: sine(across + 90) < 0,
+            near,
+        }
+    }
+
+    /// Scratch, for the flight example: the flight as plain numbers.
+    #[allow(dead_code)]
+    pub fn flight_probe(&self, elapsed: u64) -> (i32, i32, i32, bool, i32) {
+        let f = self.flight(elapsed);
+        (f.x, f.y, f.scale, f.left, f.near)
+    }
+
+    /// The aircraft, if the settings have one at all.
+    fn paint_aircraft(&mut self, elapsed: u64) {
+        if !self.aircraft {
+            return;
+        }
+        let flight = self.flight(elapsed);
+        let palette = Palette::alpymist();
+        // Further off is fainter, which is the haze the ranges are given too.
+        let body = u8::try_from((110 + flight.near).clamp(0, 255)).unwrap_or(150);
+        // Lights carry further than the thing carrying them, so they do not
+        // fade with it: a distant aircraft at night is its lights and nothing
+        // else, and at one drawn pixel each that is exactly what this becomes.
+        let lamp = u8::try_from((190 + flight.near / 2).clamp(0, 255)).unwrap_or(220);
+        let strobe = elapsed % STROBE_EVERY < STROBE_FOR;
+        let beacon = elapsed % BEACON_EVERY < BEACON_FOR;
+
+        self.stamp(flight.x, flight.y, flight.scale, PLANE_SIZE, |row, col| {
+            // Mirrored when it is heading the other way, and read in the
+            // silhouette's own coordinates — so that turning round swaps which
+            // wingtip the eye sees red on, the way it would if the aircraft
+            // had really turned rather than been drawn backwards.
+            let bit = if flight.left {
+                col
+            } else {
+                PLANE_WIDE - 1 - col
+            };
+            let row_bits = usize::try_from(row).ok().and_then(|r| PLANE.get(r))?;
+            if row_bits >> bit & 1 == 0 {
+                return None;
+            }
+            Some(match (row, bit) {
+                // The wingtips: port and starboard, always on.
+                (2, 4) => (PORT, lamp),
+                (2, 3) => (STARBOARD, lamp),
+                // The tail's white strobe, and the belly beacon.
+                (0, 6) if strobe => (palette.ink, 255),
+                (1, 4) if beacon => (PORT, 255),
+                _ => (palette.ink_dim, body),
+            })
+        });
+    }
+
+    /// The balloon, when one is drifting through.
+    ///
+    /// It goes one way at one speed and does not manoeuvre, because that is
+    /// what a balloon does: it is in the air, not flying. The aircraft passes
+    /// it on its own business — no arrangement between them, they are simply
+    /// both up there, and every so often the two cross.
+    fn paint_balloon(&mut self, elapsed: u64) {
+        if !self.balloon {
+            return;
+        }
+        let width = i32::try_from(self.small.width).unwrap_or(1);
+        // One drawn pixel to a sprite cell on a picture the size a laptop
+        // panel reduces to, which puts the balloon at about the share of the
+        // screen a sprite took up on a C64. A picture with far more rows than
+        // that is a bigger screen, not a nearer balloon.
+        let scale = i32::try_from(self.small.height / 128)
+            .unwrap_or(1)
+            .clamp(1, 3);
+        let (wide, tall) = BALLOON_SIZE;
+        // Three pictures' width of travel, entering off one edge and leaving
+        // off the other, which is where the empty stretches come from.
+        let span = width * 3;
+        let phase = i64::try_from(elapsed % BALLOON_EVERY).unwrap_or(0);
+        let gone =
+            i32::try_from(phase * i64::from(span) / i64::try_from(BALLOON_EVERY).unwrap_or(1))
+                .unwrap_or(0);
+        let x = gone - width - wide * scale;
+        if x >= width || x + wide * scale <= 0 {
+            return;
+        }
+        // Flying the ridge line, rising and falling on its own slow breath: a
+        // balloon holds its height rather than flying at one. The basket hangs
+        // a little below the highest peak, so a summit passing in front of it
+        // takes the bottom of it away for a moment — which is the reason the
+        // sky is painted before the mountains and not after.
+        let sway = sine(i64::try_from(elapsed % 37_000).unwrap_or(0) * 360 / 37_000) * 2 / UNIT;
+        let y = (self.horizon - tall * scale + 4 * scale).max(0) + sway;
+
+        let palette = Palette::alpymist();
+        let burning = elapsed % BURN_EVERY < BURN_FOR;
+        self.stamp(x, y, scale, BALLOON_SIZE, |row, col| {
+            let bits = usize::try_from(row).ok().and_then(|r| BALLOON.get(r))?;
+            if bits >> (wide - 1 - col) & 1 == 0 {
+                return None;
+            }
+            Some(match (burning, row) {
+                // Lit: the envelope glowing from the inside, and the burner
+                // itself at the throat brighter still.
+                (true, 0..=12) => (FLAME, 150),
+                (true, _) => (FLAME, 225),
+                // Dark: it is night and this is a long way off, so it is
+                // bright enough to see and no brighter. The rigging and the
+                // basket carry a little more, being nearer solid things.
+                (false, 0..=12) => (palette.ink_dim, 130),
+                (false, _) => (palette.ink_dim, 160),
+            })
+        });
+    }
+
+    /// Put a small bitmap into the picture, one cell to a `scale` square.
+    ///
+    /// `cell` answers for each row and column of the sprite: the colour and
+    /// the opacity to lay there, or nothing where the sprite is empty. Clipped
+    /// at all four edges, so a sprite may be half off the picture or entirely
+    /// off it without the caller checking.
+    fn stamp(
+        &mut self,
+        x: i32,
+        y: i32,
+        scale: i32,
+        size: (i32, i32),
+        cell: impl Fn(i32, i32) -> Option<(Rgb, u8)>,
+    ) {
+        let width = i32::try_from(self.small.width).unwrap_or(1);
+        let height = i32::try_from(self.small.height).unwrap_or(1);
+        let scale = scale.max(1);
+        let (wide, tall) = size;
+        for row in 0..tall {
+            for col in 0..wide {
+                let Some((ink, alpha)) = cell(row, col) else {
+                    continue;
+                };
+                for down in 0..scale {
+                    for right in 0..scale {
+                        let px = x + col * scale + right;
+                        let py = y + row * scale + down;
+                        if px < 0 || py < 0 || px >= width || py >= height {
+                            continue;
+                        }
+                        let at = usize::try_from(py * width + px).unwrap_or(0);
+                        if let Some(under) = self.pixels.get_mut(at) {
+                            *under = over(*under, ink, alpha);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// The sky, which is one colour a row.
@@ -287,8 +646,10 @@ impl Mountains {
     fn paint_stars(&mut self, elapsed: u64) {
         let width = self.small.width;
         let extended = width.saturating_mul(2).max(1);
-        let fastest = self.ranges.last().map_or(0, |r| r.speed);
-        let slide = drift(elapsed, (fastest / STAR_SHARE).max(1));
+        // Slowest of everything, and not still: the top of the sky is the one
+        // part of the picture the ranges never reach, so if the stars did not
+        // move nothing up there ever would.
+        let slide = drift(elapsed, self.sky_speed);
         for star in &self.stars {
             // Travelling the other way from the ranges would read as the sky
             // sliding over the ground; they go the same way, slower.
@@ -675,6 +1036,81 @@ mod tests {
             ..Look::default()
         };
         assert!(Mountains::compose(Size::new(640, 480), &greedy).interval_ms() >= 1000 / 30);
+    }
+
+    /// The complaint the depth answers: five ranges spaced a fifth of the pace
+    /// apart are five ranges at *no* particular distance from each other, and
+    /// the back three of them travel within a quarter of one another's speed,
+    /// which the eye reads as one card a long way off. Spacing by ratio is
+    /// what makes the picture deep.
+    #[test]
+    fn each_range_is_a_step_further_off_than_the_one_in_front() {
+        let m = scene(1366, 768);
+        let speeds: Vec<i32> = m.ranges.iter().map(|r| r.speed).collect();
+        assert!(speeds.len() >= 3, "a scene with no depth to test");
+        for pair in speeds.windows(2) {
+            let (behind, front) = (pair[0], pair[1]);
+            assert!(
+                front * 100 >= behind * 160,
+                "{front} in front of {behind} is not a step, it is a rounding error"
+            );
+        }
+        let furthest = speeds[0];
+        let nearest = *speeds.last().unwrap_or(&0);
+        assert!(furthest > 0, "the horizon stands still");
+        assert!(
+            nearest >= furthest * 5,
+            "{nearest} to {furthest} front to back is a diagram, not a distance"
+        );
+    }
+
+    /// And the sky is one step further off again than the furthest of them.
+    ///
+    /// It stopped being that when the depth widened: the stars were a fixed
+    /// share of the *nearest* range, so making the front faster eventually had
+    /// the sky overtaking the horizon it is supposed to be behind.
+    #[test]
+    fn the_stars_are_further_off_than_the_mountains() {
+        let m = scene(1366, 768);
+        let furthest = m.ranges.first().map_or(0, |r| r.speed);
+        assert!(m.sky_speed > 0, "a sky that never moves at all");
+        assert!(
+            m.sky_speed < furthest,
+            "the stars at {} overtake the horizon at {furthest}",
+            m.sky_speed
+        );
+    }
+
+    /// The two things in the sky are settings, and both ends of both draw.
+    #[test]
+    fn the_sky_traffic_can_be_turned_off_and_shows_when_it_is_not() {
+        let empty = Look {
+            aircraft: false,
+            balloon: false,
+            ..Look::default()
+        };
+        let mut bare = Mountains::compose(Size::new(1366, 768), &empty);
+        let mut busy = Mountains::compose(Size::new(1366, 768), &Look::default());
+        // Two hundred seconds in, both an aeroplane and a balloon are up.
+        let at = 200_000;
+        assert_ne!(
+            bare.frame(at).to_vec(),
+            busy.frame(at).to_vec(),
+            "turning them on changed nothing, so nothing is being drawn"
+        );
+        assert!(bare.frame(at).iter().all(|px| px >> 24 == 0xFF));
+    }
+
+    /// A sprite is drawn wherever the flight puts it, including half off the
+    /// side and entirely off it, and on a picture smaller than the sprite.
+    #[test]
+    fn what_flies_off_the_edge_is_clipped_and_not_a_panic() {
+        for size in [Size::new(120, 90), Size::new(3840, 2160)] {
+            let mut m = Mountains::compose(size, &Look::default());
+            for ms in (0..420_000).step_by(3_000) {
+                assert!(m.frame(ms).iter().all(|px| px >> 24 == 0xFF));
+            }
+        }
     }
 
     /// Turned all the way down it is the picture it always was, and turned up

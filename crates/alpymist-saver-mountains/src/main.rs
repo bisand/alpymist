@@ -60,6 +60,8 @@ fn look() -> Look {
         fps: values.number("fps", fallback.fps),
         mist: number("mist", fallback.mist),
         speed: number("speed", fallback.speed),
+        aircraft: values.switch("aircraft", fallback.aircraft),
+        balloon: values.switch("balloon", fallback.balloon),
     }
 }
 

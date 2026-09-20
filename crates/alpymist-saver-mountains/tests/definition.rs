@@ -31,7 +31,7 @@ fn the_shipped_definition_names_this_program() {
 fn every_setting_the_file_declares_is_one_the_program_reads() {
     // The keys `look()` asks for. A knob in the file that is not here would be
     // a control in Settings that changes nothing.
-    let read = ["block", "fps", "mist", "speed"];
+    let read = ["block", "fps", "mist", "speed", "aircraft", "balloon"];
     let def = definition();
     let declared: Vec<&str> = def.knobs.iter().map(|k| k.key.as_str()).collect();
     for key in read {
@@ -50,22 +50,25 @@ fn every_setting_the_file_declares_is_one_the_program_reads() {
 
 #[test]
 fn what_the_file_defaults_to_is_what_the_program_defaults_to() {
-    let built_in = alpymist_saver_mountains_defaults();
+    let (block, fps, mist, speed, aircraft, balloon) = alpymist_saver_mountains_defaults();
     for knob in definition().knobs {
-        let Dial::Number { default, .. } = knob.dial else {
-            panic!("{}: this screensaver's settings are all numbers", knob.key);
-        };
-        let expected = match knob.key.as_str() {
-            "block" => i64::from(built_in.0),
-            "fps" => built_in.1,
-            "mist" => i64::from(built_in.2),
-            _ => i64::from(built_in.3),
-        };
-        assert_eq!(
-            default, expected,
-            "{} defaults to {default} in the file and {expected} in the program",
-            knob.key
-        );
+        match (knob.key.as_str(), &knob.dial) {
+            ("aircraft", Dial::Switch { default }) => assert_eq!(*default, aircraft),
+            ("balloon", Dial::Switch { default }) => assert_eq!(*default, balloon),
+            (key, Dial::Number { default, .. }) => {
+                let expected = match key {
+                    "block" => i64::from(block),
+                    "fps" => fps,
+                    "mist" => i64::from(mist),
+                    _ => i64::from(speed),
+                };
+                assert_eq!(
+                    *default, expected,
+                    "{key} defaults to {default} in the file and {expected} in the program"
+                );
+            }
+            (key, _) => panic!("{key}: the file and the program disagree about what kind it is"),
+        }
     }
 }
 
@@ -74,6 +77,6 @@ fn what_the_file_defaults_to_is_what_the_program_defaults_to() {
 /// Spelt out rather than imported: `Look` belongs to the binary, and a binary's
 /// modules are not a library an integration test can reach into. Keeping them
 /// here is the point — if either side moves, this test says so.
-const fn alpymist_saver_mountains_defaults() -> (u32, i64, i32, i32) {
-    (6, 12, 100, 100)
+const fn alpymist_saver_mountains_defaults() -> (u32, i64, i32, i32, bool, bool) {
+    (6, 12, 100, 100, true, true)
 }
