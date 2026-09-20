@@ -18,6 +18,6 @@
   "custom/session": {
     "format": "󰐥",
     "tooltip-format": "Session",
-    "on-click": "sh -c 'case $(printf \"Lock\\nLog out\\nRestart\\nShut down\" | fuzzel --dmenu --lines 4) in Lock) swaylock -f -c 0b121e;; \"Log out\") labwc --exit;; Restart) doas reboot;; \"Shut down\") doas poweroff;; esac'"
+    "on-click": "sh -c 'case $(printf \"Lock\\nLog out\\nRestart\\nShut down\" | fuzzel --dmenu --lines 4) in Lock) alpymist-lock;; \"Log out\") labwc --exit;; Restart) doas reboot;; \"Shut down\") doas poweroff;; esac'"
   }
 }

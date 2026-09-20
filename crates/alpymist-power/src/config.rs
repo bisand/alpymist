@@ -140,7 +140,7 @@ impl Default for Commands {
         Self {
             // -f returns once the lock is up, which is what suspending after
             // it needs.
-            lock: "swaylock -f -c 0b121e".into(),
+            lock: "alpymist-lock -f".into(),
             menu: "alpymist-menu system".into(),
         }
     }
@@ -277,7 +277,7 @@ mod tests {
         let mut c = Config::default();
         c.bar.time = true;
         c.actions.lid_on_power = Action::Nothing;
-        c.commands.lock = "swaylock -f -c \"#000\"".into();
+        c.commands.lock = "swaylock -f".into();
         assert_eq!(Config::parse(&c.to_toml()).unwrap(), c);
     }
 

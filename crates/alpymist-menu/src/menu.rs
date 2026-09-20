@@ -458,7 +458,7 @@ mod tests {
         [menu.system]
         title = "System"
         items = [
-          { name = "Lock", exec = "swaylock" },
+          { name = "Lock", exec = "alpymist-lock" },
           { name = "Restart", exec = "reboot", keywords = ["reboot"] },
           { name = "Shut down", exec = "poweroff", keywords = ["poweroff", "halt"] },
         ]

@@ -148,9 +148,10 @@ _shell() {
 	_skel shell "$subpkgdir"
 }
 
-# The Wayland tools the Full and Lite tiers share. Hyprland's own wallpaper,
-# lock and idle daemons are not packaged for Alpine 3.24; the sway ones work
-# under any wlroots-style compositor, Hyprland included.
+# The Wayland tools the Full and Lite tiers share. Hyprland's own wallpaper
+# and idle daemons are not packaged for Alpine 3.24; the sway ones work under
+# any wlroots-style compositor, Hyprland included. The lock is neither: it is
+# alpymist-lock, which is the login screen again (ADR 0010).
 _wayland() {
 	pkgdesc="Alpymist desktop: tools shared by the Wayland tiers"
 	# alpymist-wifi and alpymist-power are the bar's Wi-Fi and battery icons
@@ -163,9 +164,13 @@ _wayland() {
 	# alpymist-saver-starfield are the screensavers Alpymist ships, and are
 	# named separately because they are packages like any other — take one
 	# away and the rest still works, add another and it is offered beside them.
+	# alpymist-lock is what Super+L, the menu's Lock and a lid set to lock
+	# all run, and what the idle watch runs before the screen goes off or
+	# the machine sleeps.
 	depends="
 		$pkgname=$pkgver-r$pkgrel
 		alpymist-about
+		alpymist-lock
 		alpymist-settings
 		alpymist-power
 		alpymist-saver-mountains
@@ -180,7 +185,6 @@ _wayland() {
 		pavucontrol
 		slurp
 		swaybg
-		swaylock
 		waybar
 		wl-clipboard
 		xdg-desktop-portal-wlr

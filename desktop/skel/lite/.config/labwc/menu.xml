@@ -6,7 +6,7 @@
     <item label="Browser"><action name="Execute" command="librewolf" /></item>
     <item label="Applications"><action name="Execute" command="fuzzel" /></item>
     <separator />
-    <item label="Lock"><action name="Execute" command="swaylock -f -c 0b121e" /></item>
+    <item label="Lock"><action name="Execute" command="alpymist-lock" /></item>
     <item label="Log out"><action name="Exit" /></item>
   </menu>
 </openbox_menu>

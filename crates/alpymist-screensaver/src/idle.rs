@@ -19,10 +19,11 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::process::{Child, Command};
 
-/// The lock screen, and the blue it uses: the same command the compositors bind
-/// to Super+L, so locking from the keyboard and locking from idleness look the
-/// same.
-const LOCK: &str = "swaylock -f -c 0b121e";
+/// The lock screen: the same command the compositors bind to Super+L, so
+/// locking from the keyboard and locking from idleness are the same thing. `-f`
+/// returns once the screen is covered, which is what a lock before sleeping
+/// needs and what a lock before a blank screen may as well have.
+const LOCK: &str = "alpymist-lock -f";
 
 /// Turning the screen off. `wlopm` speaks `wlr-output-power-management`, which
 /// Hyprland and labwc both implement, so one command covers both Wayland tiers
@@ -87,8 +88,8 @@ pub fn arguments(config: &Config) -> Vec<String> {
     }
     if config.lock {
         // Locking before suspend is the one place waiting matters, and
-        // `swaylock -f` does the waiting itself: it forks only once the lock is
-        // on screen, so the command returns when the screen is already covered.
+        // `alpymist-lock -f` does the waiting itself: it returns only once the
+        // lock is on screen, so the command is done when the screen is covered.
         args.extend(["before-sleep".to_owned(), LOCK.to_owned()]);
     }
     args
@@ -202,7 +203,7 @@ mod tests {
         assert!(joined.contains("timeout 300"), "five minutes: {joined}");
         assert!(joined.contains("timeout 600"), "ten minutes: {joined}");
         assert!(joined.contains("wlopm --off"), "and darkness: {joined}");
-        assert!(!joined.contains("swaylock"), "but no lock unasked for");
+        assert!(!joined.contains("alpymist-lock"), "but no lock unasked for");
     }
 
     #[test]
@@ -252,8 +253,12 @@ mod tests {
             ..Config::default()
         };
         let line = line(&c);
-        assert!(line.contains("before-sleep swaylock"), "{line}");
-        assert_eq!(line.matches("swaylock").count(), 2, "at blank, and asleep");
+        assert!(line.contains("before-sleep alpymist-lock"), "{line}");
+        assert_eq!(
+            line.matches("alpymist-lock").count(),
+            2,
+            "at blank, and asleep"
+        );
     }
 
     #[test]
