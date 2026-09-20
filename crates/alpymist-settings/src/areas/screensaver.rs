@@ -248,7 +248,7 @@ pub fn settings() -> Vec<Setting> {
             "screensaver.lock",
             "Lock when the screen turns off",
             "Ask for the password to get back in.",
-            &["password", "security", "swaylock", "screen lock"],
+            &["password", "security", "lock", "screen lock"],
             Kind::Switch,
             Value::Bool(defaults.lock),
         ),

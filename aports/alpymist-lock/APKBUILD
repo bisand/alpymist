@@ -1,0 +1,49 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-lock
+pkgver=0.1.0
+pkgrel=0
+pkgdesc="Alpymist lock screen: the login screen again, on an ext-session-lock-v1 surface"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+# The screen is drawn by Denise on the CPU into wl_shm, as the menu's is, so it
+# needs the same keymap library; the password goes through libpam, which is
+# what linux-pam-dev is for. Nothing is generated at build time: the PAM
+# bindings are written out, not produced by bindgen, so there is no clang here.
+makedepends="cargo libxkbcommon-dev linux-pam-dev"
+# linux-pam is the stack /etc/pam.d/alpymist-lock includes, and pam_unix's
+# setuid unix_chkpwd is what lets this read a password as the account itself
+# rather than as root. The font is a suggestion: without it the screen falls
+# back to Denise's built-in bitmap and still reads correctly.
+depends="linux-pam font-fira-ttf"
+options="!check"  # the test suite runs in CI, not in the package build
+source="alpymist-lock.pam"
+builddir="$srcdir"
+
+prepare() {
+	# Same as alpymist: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	cargo build --release --locked -p alpymist-lock
+}
+
+package() {
+	install -Dm755 "$builddir"/target/release/alpymist-lock \
+		"$pkgdir"/usr/bin/alpymist-lock
+	# The service the lock authenticates as. A file of the package's own,
+	# unlike /etc/alpymist/hyprland-keyboard.conf: nothing installs a different
+	# one, and a machine that lost it could not be unlocked.
+	install -Dm644 "$srcdir"/alpymist-lock.pam \
+		"$pkgdir"/etc/pam.d/alpymist-lock
+}
+
+# Filled in by `abuild checksum` at build time; see alpymist-install.
+sha512sums=""

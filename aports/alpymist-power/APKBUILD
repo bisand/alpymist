@@ -14,9 +14,9 @@ license="MIT OR Apache-2.0"
 # of files under /sys and runs poweroff and reboot. polkit lets the seat group
 # do all but the charge limit without a password, which alpymist-auth asks
 # for. The popup is drawn as alpymist-wifi's is, so it needs libxkbcommon and
-# the same fonts; swaylock is what the lid locks with.
+# the same fonts; alpymist-lock is what the lid locks with.
 makedepends="cargo libxkbcommon-dev"
-depends="alpymist-auth font-fira-ttf font-nerd-fonts-symbols polkit swaylock"
+depends="alpymist-auth alpymist-lock font-fira-ttf font-nerd-fonts-symbols polkit"
 subpackages="$pkgname-openrc"
 options="!check"  # the test suite runs in CI, not in the package build
 source="alpymist-power.initd"

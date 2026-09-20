@@ -218,7 +218,7 @@ mod tests {
         items = [
           { name = "Apps", menu = "apps" },
           { name = "System", menu = "system" },
-          { name = "Lock", exec = "swaylock" },
+          { name = "Lock", exec = "alpymist-lock" },
         ]
         [menu.system]
         title = "System"

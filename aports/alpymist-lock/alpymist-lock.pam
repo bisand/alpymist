@@ -1,0 +1,15 @@
+# PAM for the Alpymist lock screen.
+#
+# The same stack a login goes through — Alpine's base-auth, in
+# /usr/lib/pam.d where linux-pam 1.7 keeps a distribution's own, and what
+# /etc/pam.d/alpymist-greetd includes as well — so what unlocks the screen is
+# exactly what logs the account in. An account with no password unlocks on
+# Enter for the same reason it logs in on Enter: base-auth is pam_unix with
+# nullok, and a machine with such an account is not made safe by a lock screen.
+#
+# Only auth. alpymist-lock never calls pam_acct_mgmt: a lock screen asks
+# whether this is the person, and refusing somebody entry to a session that is
+# already running, over a password that expired while they were at lunch,
+# answers a question nobody asked. There is no session here either — the
+# session is the one already open behind the lock.
+auth		include		base-auth

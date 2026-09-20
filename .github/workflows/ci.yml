@@ -19,8 +19,9 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      # alpymist-menu reads keymaps through libxkbcommon.
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev
+      # alpymist-menu reads keymaps through libxkbcommon; alpymist-lock checks
+      # passwords through libpam.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libpam0g-dev
       - run: cargo fmt --all --check
       # Every APKBUILD's pkgver is the workspace version (ADR 0008).
       - run: cargo run -q -p xtask -- version

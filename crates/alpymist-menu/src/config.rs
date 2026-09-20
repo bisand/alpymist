@@ -15,7 +15,7 @@
 //! [menu.system]
 //! title = "System"
 //! items = [
-//!   { name = "Lock", icon = "", exec = "swaylock -f" },
+//!   { name = "Lock", icon = "", exec = "alpymist-lock" },
 //! ]
 //! ```
 //!

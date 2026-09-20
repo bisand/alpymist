@@ -281,3 +281,25 @@ they are drawn from a grid of square cells blown up whole, and they are not
 turned to follow the ship's roll, because a chunky grid rotated off the
 screen's grid stops looking like a sprite and starts looking like a mistake.
 Smooth movement and coarse rocks are two settings, not one.
+
+---
+
+## Addendum, 2026-09-20 — the lock is Alpymist's now
+
+**Status:** accepted · amends §1 and §2 above.
+
+§1 said "Locking stays `swaylock`", and the consequences said a lock screen of
+Alpymist's own would be a separate decision. That decision is
+[ADR 0010](0010-lock-screen.md), and it was made: the lock is
+`alpymist-lock`, an `ext-session-lock-v1` client showing the login screen.
+
+What changes here is one constant. `idle::LOCK` is `alpymist-lock -f` instead
+of `swaylock -f -c 0b121e`, at the blank timeout and before sleeping, and
+`-f` means the same thing it did — return once the screen is covered.
+
+What does not change is the division §1 was actually about. The screensaver is
+still an overlay surface that never asks for anything, and the lock is still
+somewhere else: a different program, a different protocol, and a different
+surface, started by the same watch. "If the mountains ask you for anything,
+something is wrong" is as true as it was — and now there is a real lock screen
+to compare them with, which is what makes it checkable.

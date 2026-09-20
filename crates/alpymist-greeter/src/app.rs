@@ -43,6 +43,23 @@ pub enum Power {
     PowerOff,
 }
 
+/// What this screen is for.
+///
+/// The lock screen is this screen: `alpymist-lock` puts it on an
+/// `ext-session-lock-v1` surface with PAM behind it instead of greetd, so
+/// getting back into a session looks like starting one. What differs is small
+/// and lives here — there is nobody else to choose, and a locked machine is
+/// not where restart and power off belong.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Purpose {
+    /// Starting a session: greetd, the whole list of accounts, and the footer's
+    /// power buttons.
+    #[default]
+    Login,
+    /// Getting back into one that is already running.
+    Unlock,
+}
+
 /// What an input event asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
@@ -277,6 +294,8 @@ pub struct App {
     pending: Option<Receiver<(Outcome, Vec<String>)>>,
     /// Set once greetd has accepted a session: the greeter should exit.
     pub started: bool,
+    /// Logging in, or unlocking.
+    pub purpose: Purpose,
     power: Option<Power>,
     palette: Palette,
     scenery: Scenery,
@@ -286,6 +305,13 @@ pub struct App {
     pub face: Typeface,
     pointer: Cursor,
     theme: Theme,
+    /// Where the pointer was drawn in the last frame, so the next one can say
+    /// that that is one of the places the picture changed.
+    painted_pointer: Option<Rect>,
+    /// Whether the clock reads differently from the frame on screen.
+    clock_moved: bool,
+    /// Whether the scene was composed again, which changes every pixel.
+    recomposed: bool,
 }
 
 impl App {
@@ -311,6 +337,7 @@ impl App {
             authenticate,
             pending: None,
             started: false,
+            purpose: Purpose::Login,
             power: None,
             scenery: Scenery::compose(width, height, &palette, SCENE_SEED),
             layout: Layout::for_screen(width, height),
@@ -319,6 +346,9 @@ impl App {
             face: typeface::load(),
             pointer: new_cursor(),
             theme: denise::theme::DARK,
+            painted_pointer: None,
+            clock_moved: true,
+            recomposed: true,
         }
     }
 
@@ -348,6 +378,7 @@ impl App {
         let changed = clock != self.clock || date != self.date;
         self.clock = clock;
         self.date = date;
+        self.clock_moved |= changed;
         changed
     }
 
@@ -356,19 +387,36 @@ impl App {
         self.power.take()
     }
 
+    /// Whether this screen draws the pointer itself.
+    ///
+    /// The login screen does: it runs on DRM with no compositor, and nothing
+    /// else would. The lock screen must not — the compositor draws one, and a
+    /// second cursor chasing it would be both wrong to look at and expensive
+    /// to keep up with, since following a pointer means a new frame for every
+    /// motion event and a screen's worth of compositing behind each one.
+    fn draws_pointer(&self) -> bool {
+        self.purpose == Purpose::Login
+    }
+
     /// Do what an action asks. Returns whether the screen needs redrawing.
     pub fn act(&mut self, action: Action) -> bool {
         if let Action::PointerTo(x, y) = action {
+            if !self.draws_pointer() {
+                return false;
+            }
             self.pointer.position = Point::new(x, y);
             self.pointer.visible = true;
             return true;
         }
         if let Action::ClickAt(x, y) = action {
-            self.pointer.position = Point::new(x, y);
-            self.pointer.visible = true;
+            let moved = self.draws_pointer();
+            if moved {
+                self.pointer.position = Point::new(x, y);
+                self.pointer.visible = true;
+            }
             return match self.hit(x, y) {
                 Some(action) => self.act(action),
-                None => true,
+                None => moved,
             };
         }
         // Nothing changes under a login in progress: the password being
@@ -413,7 +461,9 @@ impl App {
             }
             Action::Clear => self.clear(),
             Action::Submit => self.submit(),
-            Action::Power(power) => self.power = Some(power),
+            // A locked machine offers neither, so neither can be asked for:
+            // the keys are not bound and the buttons are not drawn.
+            Action::Power(power) if self.purpose == Purpose::Login => self.power = Some(power),
             _ => return false,
         }
         true
@@ -429,11 +479,12 @@ impl App {
 
     fn hit(&self, x: i32, y: i32) -> Option<Action> {
         let l = &self.layout;
+        let powers = self.purpose == Purpose::Login;
         if inside(l.button, x, y) {
             Some(Action::Submit)
-        } else if inside(l.restart, x, y) {
+        } else if powers && inside(l.restart, x, y) {
             Some(Action::Power(Power::Restart))
-        } else if inside(l.power_off, x, y) {
+        } else if powers && inside(l.power_off, x, y) {
             Some(Action::Power(Power::PowerOff))
         } else if self.users.len() > 1 && inside(l.previous, x, y) {
             Some(Action::PreviousUser)
@@ -497,11 +548,26 @@ impl App {
             self.scenery = Scenery::compose(width, height, &self.palette, SCENE_SEED);
             self.layout = Layout::for_screen(width, height);
             self.size = (width, height);
+            self.recomposed = true;
         }
     }
 
-    /// Draw the whole screen.
-    pub fn draw(&mut self, canvas: &mut Canvas<'_>) {
+    /// Draw the whole screen, and say what part of it may differ from the
+    /// frame before.
+    ///
+    /// Everything is painted every time — the whole picture costs a fraction
+    /// of a millisecond, and the parts that never change are a copy. What the
+    /// rectangle is for is the *compositor*: telling it that a screen's worth
+    /// of pixels changed makes it upload and composite a screen's worth, which
+    /// on a machine drawing in software is tens of milliseconds a
+    /// keystroke — far more than the drawing it is reporting.
+    ///
+    /// Outside that rectangle this frame is the last frame, so a caller may
+    /// pass it straight to `wl_surface.damage_buffer` — as long as the memory
+    /// painted into holds the whole picture, which it does here. A caller
+    /// drawing into a buffer that does *not* already hold the last frame must
+    /// ignore this and take everything.
+    pub fn draw(&mut self, canvas: &mut Canvas<'_>) -> Rect {
         let size = canvas.size();
         self.resize(size.width, size.height);
         let l = self.layout;
@@ -530,14 +596,67 @@ impl App {
             ButtonStyle::Primary
         };
         paint_button(canvas, l.button, button_style, &p);
-        paint_button(canvas, l.restart, ButtonStyle::Quiet, &p);
-        paint_button(canvas, l.power_off, ButtonStyle::Quiet, &p);
+        if self.purpose == Purpose::Login {
+            paint_button(canvas, l.restart, ButtonStyle::Quiet, &p);
+            paint_button(canvas, l.power_off, ButtonStyle::Quiet, &p);
+        }
 
         let mut pen = Pen::new(canvas);
         self.draw_sky_text(&mut pen);
         self.draw_card_text(&mut pen, button_style);
         self.draw_footer(&mut pen);
         paint_cursor(&mut pen, &self.pointer, &self.theme);
+
+        self.damage(size)
+    }
+
+    /// The pointer's rectangle, when it is being drawn.
+    fn pointer_rect(&self) -> Option<Rect> {
+        if !self.pointer.visible {
+            return None;
+        }
+        let sprite = self.pointer.image;
+        let at = self.pointer.position;
+        Some(Rect::new(
+            at.x - sprite.hotspot.x,
+            at.y - sprite.hotspot.y,
+            sprite.width,
+            sprite.height,
+        ))
+    }
+
+    /// What the frame just painted may differ from the one before it.
+    ///
+    /// Three things move: the card, which holds everything anybody types or is
+    /// told; the clock, once a minute; and the pointer, which has to take its
+    /// old place with it or leave a copy of itself behind.
+    fn damage(&mut self, size: denise::geom::Size) -> Rect {
+        let l = self.layout;
+        let whole = Rect::new(
+            0,
+            0,
+            i32::try_from(size.width).unwrap_or(i32::MAX),
+            i32::try_from(size.height).unwrap_or(i32::MAX),
+        );
+        let pointer = self.pointer_rect();
+        let was = self.painted_pointer;
+        self.painted_pointer = pointer;
+        let clock_moved = std::mem::replace(&mut self.clock_moved, false);
+        if std::mem::replace(&mut self.recomposed, false) {
+            return whole;
+        }
+        let mut region = rect(l.card);
+        if clock_moved {
+            // The whole band the clock and the date are centred in: where
+            // their text starts depends on how wide it is.
+            let top = l.clock_at.1;
+            let bottom = l.date_y + i32::from(l.text_px);
+            region = region.union(&Rect::new(0, top, whole.width, bottom - top));
+        }
+        for sprite in [was, pointer].into_iter().flatten() {
+            region = region.union(&sprite);
+        }
+        region.intersect(&whole).unwrap_or(whole)
     }
 
     fn centred(&mut self, pen: &mut Pen<'_>, centre_x: i32, y: i32, px: u16, text: &str, ink: Rgb) {
@@ -626,10 +745,10 @@ impl App {
             self.centred(pen, centre, l.message_y, l.text_px, &message, ink);
         }
 
-        let label = if self.checking() {
-            "Checking"
-        } else {
-            "Enter  Log in"
+        let label = match (self.checking(), self.purpose) {
+            (true, _) => "Checking",
+            (false, Purpose::Login) => "Enter  Log in",
+            (false, Purpose::Unlock) => "Enter  Unlock",
         };
         let at = self.face.centre_in(l.button, l.text_px, label);
         self.face.draw(
@@ -674,15 +793,17 @@ impl App {
             left.trim(),
             colour(p.ink_dim),
         );
-        for (r, label) in [(l.restart, "F11  Restart"), (l.power_off, "F12  Power off")] {
-            let at = self.face.centre_in(r, l.text_px, label);
-            self.face.draw(
-                pen,
-                at,
-                l.text_px,
-                label,
-                colour(button_ink(ButtonStyle::Quiet, &p)),
-            );
+        if self.purpose == Purpose::Login {
+            for (r, label) in [(l.restart, "F11  Restart"), (l.power_off, "F12  Power off")] {
+                let at = self.face.centre_in(r, l.text_px, label);
+                self.face.draw(
+                    pen,
+                    at,
+                    l.text_px,
+                    label,
+                    colour(button_ink(ButtonStyle::Quiet, &p)),
+                );
+            }
         }
     }
 }
@@ -697,7 +818,7 @@ fn byte_at(value: &str, index: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{Action, App, Authenticator, Layout, Power, Status, action_for};
+    use super::{Action, App, Authenticator, Layout, Power, Purpose, Status, action_for};
     use crate::login::Outcome;
     use crate::users::User;
     use denise::input::{ElementState, InputEvent, KeyCode, Modifiers};
@@ -887,6 +1008,30 @@ mod tests {
             None,
             "control characters are keys, not password text"
         );
+    }
+
+    #[test]
+    fn a_locked_screen_does_not_offer_to_restart_or_switch_off() {
+        let (mut a, _) = app(&["andre"]);
+        a.purpose = Purpose::Unlock;
+        let l = a.layout;
+        for r in [l.restart, l.power_off] {
+            a.act(Action::ClickAt(r.0 + r.2 / 2, r.1 + r.3 / 2));
+            assert!(a.take_power().is_none(), "a footer button still there");
+        }
+        a.act(Action::Power(Power::PowerOff));
+        assert!(a.take_power().is_none(), "not even when asked directly");
+    }
+
+    #[test]
+    fn logging_in_still_does() {
+        let (mut a, _) = app(&["andre"]);
+        let l = a.layout;
+        a.act(Action::ClickAt(
+            l.power_off.0 + l.power_off.2 / 2,
+            l.power_off.1 + l.power_off.3 / 2,
+        ));
+        assert_eq!(a.take_power(), Some(Power::PowerOff));
     }
 
     fn contains(outer: (i32, i32, i32, i32), inner: (i32, i32, i32, i32)) -> bool {
