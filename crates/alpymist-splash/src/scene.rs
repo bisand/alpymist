@@ -6,12 +6,27 @@
 use alpymist_ui::backdrop::Backdrop;
 use alpymist_ui::convert::px;
 use alpymist_ui::palette::Palette;
+use alpymist_ui::picture::Picture;
+use alpymist_ui::render::{colour, paint_backdrop, paint_badge};
+use alpymist_ui::typeface::Typeface;
+use denise::color::Color;
+use denise::geom::{Point, Rect, Size};
+use denise::painter::Pen;
+use denise::pixels::PixelView;
+use denise_render::Canvas;
 
 /// The seed that fixes the mountains.
 ///
-/// The installer draws the same value, so the picture does not change when the
-/// splash hands over to it.
+/// Only for when there is no [`PICTURE`]. The installer draws the same value,
+/// so then the picture does not change when the splash hands over to it.
 pub const SCENE_SEED: u64 = 0x_A1B2_C3D4_E5F6;
+
+/// The picture behind the splash, installed by the `alpymist-splash` package.
+///
+/// Also what the boot menus are made from, so the splash follows them with the
+/// same picture. If it is missing or will not decode, the splash draws the
+/// mountains instead: a boot never waits on a photograph.
+pub const PICTURE: &str = "/usr/share/alpymist/boot/splash.jpg";
 
 /// The wordmark, spaced out because the built-in font is tight at large scales.
 pub const WORDMARK: &str = "A L P Y M I S T";
@@ -90,10 +105,18 @@ impl Layout {
     }
 }
 
-/// The whole splash: a composed backdrop plus where the text goes.
+/// What is behind the badge and the words.
+pub enum Background {
+    /// The boot picture, scaled to cover the screen, a row at a time.
+    Picture(Vec<u32>),
+    /// The drawn mountains, when there is no picture.
+    Drawn(Backdrop),
+}
+
+/// The whole splash: a background plus where the text goes.
 pub struct Scene {
-    /// The mountain scene.
-    pub backdrop: Backdrop,
+    /// The picture, or the mountain scene.
+    pub background: Background,
     /// Text placement.
     pub layout: Layout,
     /// Colours.
@@ -103,12 +126,17 @@ pub struct Scene {
 }
 
 impl Scene {
-    /// Compose the splash for a screen of this size.
+    /// Compose the splash for a screen of this size, over `picture` if there
+    /// is one.
     #[must_use]
-    pub fn new(width: u32, height: u32) -> Self {
+    pub fn new(width: u32, height: u32, picture: Option<&Picture>) -> Self {
         let palette = Palette::alpymist();
+        let background = match picture.and_then(|p| p.cover(width, height)) {
+            Some(pixels) => Background::Picture(pixels),
+            None => Background::Drawn(Backdrop::compose(width, height, &palette, SCENE_SEED)),
+        };
         Self {
-            backdrop: Backdrop::compose(width, height, &palette, SCENE_SEED),
+            background,
             layout: Layout::for_screen(width, height),
             palette,
             size: (width, height),
@@ -116,19 +144,66 @@ impl Scene {
     }
 
     /// Recompose if the screen size changed; returns whether it did.
-    pub fn resize(&mut self, width: u32, height: u32) -> bool {
+    pub fn resize(&mut self, width: u32, height: u32, picture: Option<&Picture>) -> bool {
         if self.size == (width, height) {
             return false;
         }
-        *self = Self::new(width, height);
+        *self = Self::new(width, height, picture);
         true
+    }
+
+    /// Paint the background over the whole of `canvas`.
+    pub fn paint_background(&self, canvas: &mut Canvas<'_>) {
+        let size = Size::new(self.size.0, self.size.1);
+        match &self.background {
+            Background::Picture(pixels) => {
+                if let Some(view) = PixelView::new(pixels, size, size.width) {
+                    canvas.copy_from(&view, &[Rect::from_size(size)]);
+                }
+            }
+            Background::Drawn(backdrop) => paint_backdrop(canvas, backdrop),
+        }
+    }
+
+    /// Paint the badge, the wordmark and the tagline over the background.
+    pub fn paint_marks(&self, canvas: &mut Canvas<'_>, face: &mut Typeface) {
+        let layout = self.layout;
+        let palette = self.palette;
+        paint_badge(canvas, layout.badge_at, layout.badge_size, &palette);
+
+        // Bitmap scales are glyph-cell multiples; a real font wants pixel
+        // heights, and a cell is eight pixels tall.
+        let wordmark_px = u16::try_from(layout.wordmark_scale * 8).unwrap_or(96);
+        let tagline_px = u16::try_from(layout.tagline_scale * 8).unwrap_or(16);
+        let words = [
+            (layout.wordmark_at, wordmark_px, WORDMARK, palette.ink),
+            (layout.tagline_at, tagline_px, TAGLINE, palette.ink_dim),
+        ];
+
+        let mut pen = Pen::new(canvas);
+        for ((x, y), size, text, ink) in words {
+            // The drawn sky is dark and even wherever the words go; a
+            // photograph is not, and small type over a lit peak disappears
+            // into it. A shadow in the night sky's colour keeps its edges.
+            if matches!(self.background, Background::Picture(_)) {
+                let d = i32::from(size / 16).max(1);
+                let sky = palette.sky_high;
+                let shade = Color::rgba(sky.r, sky.g, sky.b, SHADOW_ALPHA);
+                face.draw(&mut pen, Point::new(x + d, y + d), size, text, shade);
+            }
+            face.draw(&mut pen, Point::new(x, y), size, text, colour(ink));
+        }
     }
 }
 
+/// How dark the words' shadow is over a picture.
+const SHADOW_ALPHA: u8 = 200;
+
 #[cfg(test)]
 mod tests {
-    use super::{Layout, Scene, TAGLINE, WORDMARK, text_width};
+    use super::{Background, Layout, Scene, TAGLINE, WORDMARK, text_width};
     use alpymist_ui::convert::px;
+    use alpymist_ui::picture::Picture;
 
     #[test]
     fn the_badge_stands_above_the_wordmark_and_stays_on_screen() {
@@ -228,10 +303,23 @@ mod tests {
 
     #[test]
     fn resizing_recomposes_only_when_the_size_actually_changed() {
-        let mut s = Scene::new(1024, 768);
-        assert!(!s.resize(1024, 768), "same size must not recompose");
-        assert!(s.resize(1280, 800));
+        let mut s = Scene::new(1024, 768, None);
+        assert!(!s.resize(1024, 768, None), "same size must not recompose");
+        assert!(s.resize(1280, 800, None));
         assert_eq!(s.size, (1280, 800));
+    }
+
+    #[test]
+    fn a_picture_fills_the_screen_and_its_absence_draws_the_mountains() {
+        let picture = Picture::from_rgb(16, 9, vec![0x20; 16 * 9 * 3]).unwrap();
+        match Scene::new(1366, 768, Some(&picture)).background {
+            Background::Picture(pixels) => assert_eq!(pixels.len(), 1366 * 768),
+            Background::Drawn(_) => panic!("had a picture and drew the mountains"),
+        }
+        assert!(matches!(
+            Scene::new(1366, 768, None).background,
+            Background::Drawn(_)
+        ));
     }
 
     #[test]

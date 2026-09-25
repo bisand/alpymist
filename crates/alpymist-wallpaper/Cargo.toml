@@ -1,6 +1,6 @@
 [package]
 name = "alpymist-wallpaper"
-description = "Renders the Alpymist misty mountains to a PNG, for the desktop background."
+description = "Renders the Alpymist misty mountains to a PNG, and the boot menus' backgrounds."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,7 +9,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
-alpymist-ui = { workspace = true, features = ["render"] }
+alpymist-ui = { workspace = true, features = ["render", "picture"] }
 denise = { workspace = true }
 denise-render = { workspace = true }
 jpeg-encoder = { version = "0.7.1", default-features = false, features = ["std"] }

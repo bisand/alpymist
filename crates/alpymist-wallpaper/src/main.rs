@@ -2,21 +2,26 @@
 //!
 //! `alpymist-wallpaper OUT.png [WIDTH HEIGHT]`
 //! `alpymist-wallpaper --mark OUT.png [SIZE]`
-//! `alpymist-wallpaper --boot OUT.png|OUT.jpg [WIDTH HEIGHT]`
+//! `alpymist-wallpaper --boot OUT.png|OUT.jpg [WIDTH HEIGHT [PICTURE.jpg]]`
 //!
-//! Run while building the desktop package, so the desktop background is the
-//! same misty mountains as the boot splash and the installer — drawn by the
-//! same code with the same seed, rather than a picture that could drift from
-//! them.
+//! Run while building the desktop package, so the drawn wallpaper is the same
+//! misty mountains as the installer and the login screen — drawn by the same
+//! code with the same seed, rather than a picture that could drift from them.
+//!
+//! The boot menus are the exception: they show the same photograph as the
+//! splash that follows them, so `--boot` scales that onto the menu's size and
+//! puts the badge over it. Without one it draws the mountains, as before.
 
 #![forbid(unsafe_code)]
 
 use alpymist_ui::backdrop::Backdrop;
 use alpymist_ui::badge;
 use alpymist_ui::palette::Palette;
+use alpymist_ui::picture::Picture;
 use alpymist_ui::render::{paint_backdrop, paint_badge};
 use denise::PixelFormat;
-use denise::geom::Size;
+use denise::geom::{Rect, Size};
+use denise::pixels::PixelView;
 use denise_render::Canvas;
 use std::io::BufWriter;
 use std::process::ExitCode;
@@ -38,7 +43,9 @@ fn main() -> ExitCode {
             eprintln!("alpymist-wallpaper: {why}");
             eprintln!("usage: alpymist-wallpaper OUT.png [WIDTH HEIGHT]");
             eprintln!("       alpymist-wallpaper --mark OUT.png [SIZE]");
-            eprintln!("       alpymist-wallpaper --boot OUT.png|OUT.jpg [WIDTH HEIGHT]");
+            eprintln!(
+                "       alpymist-wallpaper --boot OUT.png|OUT.jpg [WIDTH HEIGHT [PICTURE.jpg]]"
+            );
             ExitCode::FAILURE
         }
     }
@@ -51,8 +58,15 @@ fn run(args: &[String]) -> Result<String, String> {
         return Ok(out);
     }
     if let Some(rest) = args.split_first().filter(|(f, _)| *f == "--boot") {
-        let (out, width, height) = parse(rest.1)?;
-        let pixels = render_boot(width, height)?;
+        let (sized, picture) = match rest.1 {
+            [out, w, h, picture] => (vec![out.clone(), w.clone(), h.clone()], Some(picture)),
+            other => (other.to_vec(), None),
+        };
+        let (out, width, height) = parse(&sized)?;
+        let picture = picture
+            .map(|p| Picture::load(std::path::Path::new(p)))
+            .transpose()?;
+        let pixels = render_boot(width, height, picture.as_ref())?;
         write_image(&out, &pixels, width, height)?;
         return Ok(out);
     }
@@ -147,22 +161,26 @@ const BOOT_BADGE_TOP: u32 = 8;
 /// The badge's side on the boot background, as a fraction of the height.
 const BOOT_BADGE_SIZE: u32 = 4;
 
-/// Paint the boot menu's background: the backdrop, with the badge above the
-/// space the menu will use.
-fn render_boot(width: u32, height: u32) -> Result<Vec<u32>, String> {
+/// Paint the boot menu's background: the picture, or the drawn backdrop if
+/// there is none, with the badge above the space the menu will use.
+fn render_boot(width: u32, height: u32, picture: Option<&Picture>) -> Result<Vec<u32>, String> {
     let len = usize::try_from(u64::from(width) * u64::from(height))
         .map_err(|_| "image too large for this machine".to_string())?;
     let mut pixels = vec![0u32; len];
     let palette = Palette::alpymist();
-    let backdrop = Backdrop::compose(width, height, &palette, SCENE_SEED);
-    let mut canvas = Canvas::from_pixels(
-        &mut pixels,
-        Size::new(width, height),
-        width,
-        PixelFormat::Argb8888,
-    )
-    .ok_or("could not create a canvas of that size")?;
-    paint_backdrop(&mut canvas, &backdrop);
+    let size = Size::new(width, height);
+    let covered = picture
+        .map(|p| p.cover(width, height).ok_or("could not scale the picture"))
+        .transpose()?;
+    let mut canvas = Canvas::from_pixels(&mut pixels, size, width, PixelFormat::Argb8888)
+        .ok_or("could not create a canvas of that size")?;
+    if let Some(covered) = &covered {
+        let view = PixelView::new(covered, size, width).ok_or("picture the wrong size")?;
+        canvas.copy_from(&view, &[Rect::from_size(size)]);
+    } else {
+        let backdrop = Backdrop::compose(width, height, &palette, SCENE_SEED);
+        paint_backdrop(&mut canvas, &backdrop);
+    }
 
     let size = i32::try_from(height / BOOT_BADGE_SIZE).unwrap_or(i32::MAX);
     let left = (i32::try_from(width).unwrap_or(i32::MAX) - size) / 2;
@@ -317,7 +335,8 @@ fn write_png(path: &str, pixels: &[u32], width: u32, height: u32) -> Result<(), 
 
 #[cfg(test)]
 mod tests {
-    use super::{number_components_from_one, parse, render, to_rgb};
+    use super::{number_components_from_one, parse, render, render_boot, to_rgb};
+    use alpymist_ui::picture::Picture;
 
     /// The component ids out of a JPEG's frame header.
     fn component_ids(buf: &[u8]) -> Vec<u8> {
@@ -393,6 +412,26 @@ mod tests {
                 "{w}x{h}"
             );
         }
+    }
+
+    /// With a picture the boot background is that picture, and the badge
+    /// still goes over it, where the menu leaves room.
+    #[test]
+    fn a_boot_picture_is_the_background_with_the_badge_on_it() {
+        let grey = 0x40;
+        let picture = Picture::from_rgb(32, 18, vec![grey; 32 * 18 * 3]).unwrap();
+        let (w, h) = (640, 480);
+        let px = render_boot(w, h, Some(&picture)).unwrap();
+        let flat = 0xFF40_4040;
+        assert_eq!(px[0], flat, "the corner is the picture");
+        assert_eq!(px[px.len() - 1], flat);
+        // The badge's centre, a quarter of the height wide from an eighth down.
+        let (cx, cy) = (w / 2, h / 8 + h / 8);
+        assert_ne!(
+            px[(cy * w + cx) as usize],
+            flat,
+            "no badge over the picture"
+        );
     }
 
     /// The backdrop is a cold night sky over dark ridges: the top should be

@@ -3,8 +3,9 @@
 #
 # The Alpymist desktop: which Alpine packages make up each tier, and the
 # configuration that makes them look and behave as one system. The only thing
-# compiled is the wallpaper, rendered by the same code that draws the splash
-# and installer. Configuration lives in the repository under desktop/.
+# compiled is the drawn wallpaper, rendered by the same code that draws the
+# installer and the login screen. Configuration lives in the repository under
+# desktop/, and the photographs in brand/wallpapers/.
 #
 # User-facing configuration is installed to /etc/skel, which adduser copies into
 # the new account: it becomes the user's own to change, as on Omarchy, rather
@@ -37,6 +38,7 @@ depends="
 	alpymist-keys
 	alpymist-shell=$pkgver-r$pkgrel
 	alpymist-splash-openrc
+	alpymist-wallpapers=$pkgver-r$pkgrel
 	alpymist
 	brightnessctl
 	dbus
@@ -65,6 +67,7 @@ depends="
 makedepends="cargo"
 subpackages="
 	alpymist-shell:_shell
+	alpymist-wallpapers:_wallpapers
 	$pkgname-wayland:_wayland
 	$pkgname-full:_full
 	$pkgname-lite:_lite
@@ -100,6 +103,8 @@ _skel() {
 }
 
 package() {
+	# The drawn wallpaper. No longer the default, but still the one every
+	# account made before the photographs points at.
 	install -Dm644 "$builddir"/alpymist.png \
 		"$pkgdir"/usr/share/backgrounds/alpymist/alpymist.png
 	install -Dm644 "$builddir"/mark.png "$pkgdir"/usr/share/alpymist/mark.png
@@ -130,6 +135,20 @@ package() {
 		"$pkgdir"/usr/share/alpymist/flathub.flatpakrepo
 	install -d "$pkgdir"/etc/alpymist
 	_skel common "$pkgdir"
+}
+
+# The photographs: every tier's default wallpaper is one of them, and the rest
+# sit beside it for whoever wants another. All 16:9 at 1920x1080, so each
+# desktop's fill mode crops a little off a 16:10 or 4:3 screen and nothing is
+# stretched. See brand/wallpapers/README.md.
+_wallpapers() {
+	pkgdesc="Alpymist wallpapers: mountain photographs and paintings"
+	depends=""
+	local picture
+	for picture in "$builddir"/brand/wallpapers/*.jpg; do
+		install -Dm644 "$picture" \
+			"$subpkgdir"/usr/share/backgrounds/alpymist/"${picture##*/}"
+	done
 }
 
 # zsh with oh-my-zsh, the two plugins most people add first, and starship. In
