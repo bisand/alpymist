@@ -9,6 +9,10 @@
 //! searches; arrows move through the areas; Tab moves into the page; Escape
 //! clears a search, then closes.
 //!
+//! The Appearance page shows the wallpapers as pictures under the choice that
+//! names them. Their thumbnails are made on another thread and arrive through
+//! [`View::thumbnail`], so the page is up before they are.
+//!
 //! A screensaver's own settings are the one thing not down the side. They live
 //! behind a button on the Screensaver page, beside the list that chooses
 //! between screensavers, and open in a dialog over it — so installing five
@@ -20,7 +24,8 @@ use denise::theme::{Radius, Role, Theme};
 use denise::{ElementState, Frame, InputEvent, KeyCode, Modifiers, Point, Rect, Size};
 use denise_text::{FontId, GlyphSource, TextStyle};
 use denise_ui::widgets::{
-    Align, Button, Label, List, ListItem, Panel, Select, Slider, TextInput, Toggle, open_select,
+    Align, Button, Fit, Image, Label, List, ListItem, Panel, Select, Slider, TextInput, Toggle,
+    open_select,
 };
 use denise_ui::{NodeId, Ui};
 use std::collections::BTreeMap;
@@ -56,6 +61,15 @@ const DIALOG_DIM: u8 = 128;
 const SCREENSAVER: &str = "screensaver";
 /// The setting that says which screensaver is shown.
 const SHOW: &str = "screensaver.show";
+/// The setting that says which wallpaper is shown.
+const WALLPAPER: &str = alpymist_settings::wallpaper::ID;
+/// A wallpaper's thumbnail on the Appearance page: a 16:9 picture, small
+/// enough for three across the narrowest window Settings opens in.
+pub const THUMB_W: i32 = 160;
+/// Its height.
+pub const THUMB_H: i32 = 90;
+/// The ring around the wallpaper that is chosen.
+const RING: i32 = 3;
 
 /// A message from a widget.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +92,8 @@ pub enum Msg {
     Configure,
     /// The dialog's button: take it away.
     Done,
+    /// A wallpaper's thumbnail was pressed: its index among the choices.
+    Wallpaper(usize),
     /// Enter in the search field.
     Submit,
 }
@@ -181,6 +197,11 @@ pub struct View {
     configure: Option<NodeId>,
     pointer: Point,
     query: String,
+    /// The wallpapers' thumbnails as they arrive, by path.
+    thumbnails: BTreeMap<String, (Vec<u32>, Size)>,
+    /// Each thumbnail on the page, as its button and its picture, in the
+    /// order of the choices.
+    wallpapers: Vec<(NodeId, NodeId)>,
 }
 
 impl View {
@@ -277,6 +298,8 @@ impl View {
             configure: None,
             pointer: Point::new(0, 0),
             query: String::new(),
+            thumbnails: BTreeMap::new(),
+            wallpapers: Vec::new(),
         };
         view.place_sidebar();
         view.build();
@@ -387,7 +410,14 @@ impl View {
 
     /// A setting's value changed, or could not be changed: show what it is.
     pub fn set_value(&mut self, id: &'static str, value: Result<Value, String>) {
+        let moved = id == WALLPAPER && self.values.get(id) != Some(&value);
         self.values.insert(id, value.clone());
+        if moved && !self.wallpapers.is_empty() {
+            // The ring goes where the value is, which is not always where it
+            // was pressed: a picture that could not be shown puts it back.
+            self.build();
+            return;
+        }
         let Some(index) = self
             .rows
             .iter()
@@ -397,6 +427,29 @@ impl View {
         };
         if let Ok(v) = value {
             self.show_value(index, &v);
+        }
+    }
+
+    /// A wallpaper's thumbnail is ready: `pixels`, opaque `0xFFRRGGBB` words
+    /// `size` big, for the wallpaper `path` names.
+    pub fn thumbnail(&mut self, path: String, pixels: Vec<u32>, size: Size) {
+        let index = self
+            .wallpaper_choices()
+            .iter()
+            .position(|c| c.value == path);
+        if let Some(&(_, image)) = index.and_then(|i| self.wallpapers.get(i))
+            && let Some(widget) = self.ui.widget_mut::<Image>(image)
+        {
+            widget.set_pixels(pixels.clone(), size);
+        }
+        self.thumbnails.insert(path, (pixels, size));
+    }
+
+    /// The wallpapers there are to choose from.
+    fn wallpaper_choices(&self) -> Vec<alpymist_settings::Choice> {
+        match self.settings.find(WALLPAPER).map(|s| &s.kind) {
+            Some(Kind::Choice(choices)) => choices.clone(),
+            _ => Vec::new(),
         }
     }
 
@@ -557,6 +610,19 @@ impl View {
                 self.open_dialog(areas);
             }
             Msg::Done => self.close_dialog(),
+            Msg::Wallpaper(i) => {
+                if let Some(c) = self.wallpaper_choices().get(i) {
+                    let value = Value::Text(c.value.clone());
+                    if self.values.get(WALLPAPER) != Some(&Ok(value.clone())) {
+                        self.values.insert(WALLPAPER, Ok(value.clone()));
+                        effects.push(Effect::Set {
+                            id: WALLPAPER,
+                            value,
+                        });
+                        self.build();
+                    }
+                }
+            }
             Msg::Submit => self.focus_page(),
             Msg::Do(index) => {
                 if let Some(setting) = self.settings.all().get(index) {
@@ -599,11 +665,17 @@ impl View {
                     }
                     self.ui.focus(Some(control));
                     if self.rows[row].shown.as_ref() != Some(&value) {
+                        let id = setting.id;
                         self.rows[row].shown = Some(value.clone());
                         effects.push(Effect::Set {
-                            id: setting.id,
-                            value,
+                            id,
+                            value: value.clone(),
                         });
+                        if id == WALLPAPER {
+                            // The thumbnails' ring follows the list.
+                            self.values.insert(id, Ok(value));
+                            self.build();
+                        }
                     }
                 }
             }
@@ -716,6 +788,11 @@ impl View {
             .iter()
             .find(|r| Some(r.control) == self.ui.focused())
             .map(|r| r.setting);
+        let focused_wallpaper = self
+            .wallpapers
+            .iter()
+            .position(|&(button, _)| Some(button) == self.ui.focused());
+        self.wallpapers.clear();
         // The dialog is a scene over this one, so rebuilding the page beneath
         // it means taking it down and putting it back: its rows live in the
         // same list as the page's, and that list is about to be emptied.
@@ -796,6 +873,9 @@ impl View {
                     .collect();
                 for j in chosen {
                     y = self.build_row(content, j, y, inner, false);
+                    if self.settings.all()[j].id == WALLPAPER {
+                        y = self.build_wallpapers(content, y, inner);
+                    }
                 }
                 let extra = match area {
                     "wifi" => Some(("Networks…".to_owned(), Msg::Action(Action::OpenWifi))),
@@ -862,12 +942,75 @@ impl View {
         }
         if focused_search {
             self.ui.focus(Some(self.search));
+        } else if let Some(&(button, _)) = focused_wallpaper.and_then(|i| self.wallpapers.get(i)) {
+            self.ui.focus(Some(button));
         } else if let Some(setting) = focused_setting
             && let Some(row) = self.rows.iter().find(|r| r.setting == setting)
         {
             let control = row.control;
             self.ui.focus(Some(control));
         }
+    }
+
+    /// The wallpapers as pictures, under the choice that names them: a
+    /// thumbnail each, its name beneath, and a ring around the one on the
+    /// desktop. Returns where the next card goes.
+    fn build_wallpapers(&mut self, parent: NodeId, top_y: i32, width: i32) -> i32 {
+        let s = self.scale;
+        let choices = self.wallpaper_choices();
+        let current = self
+            .values
+            .get(WALLPAPER)
+            .and_then(|v| v.as_ref().ok())
+            .and_then(Value::as_text)
+            .map(str::to_owned);
+        let (thumb_w, thumb_h, gap) = (THUMB_W * s, THUMB_H * s, GAP * s);
+        let name_h = (LINE_H + 6) * s;
+        let across = ((width + gap) / (thumb_w + gap)).max(1);
+        let label = self.style(self.text, 13);
+        for (i, choice) in choices.iter().enumerate() {
+            let i32_of = |n: usize| i32::try_from(n).unwrap_or(0);
+            let x = PAD * s + i32_of(i) % across * (thumb_w + gap);
+            let top = top_y + RING * s + i32_of(i) / across * (thumb_h + name_h + gap);
+            if current.as_deref() == Some(choice.value.as_str()) {
+                let ring = RING * s;
+                self.ui.add(
+                    parent,
+                    Panel::filled(Role::Primary).with_radius(Radius::Box),
+                    Rect::new(x - ring, top - ring, thumb_w + 2 * ring, thumb_h + 2 * ring),
+                );
+            }
+            let Some(button) = self.ui.add(
+                parent,
+                Button::new("", Msg::Wallpaper(i)).with_role(Role::Neutral),
+                Rect::new(x, top, thumb_w, thumb_h),
+            ) else {
+                continue;
+            };
+            let (pixels, size) = self
+                .thumbnails
+                .get(&choice.value)
+                .cloned()
+                .unwrap_or((Vec::new(), Size::new(0, 0)));
+            let image = Image::new(pixels, size)
+                .with_fit(Fit::Cover)
+                .with_corner_radius(6 * s);
+            if let Some(image) = self
+                .ui
+                .add(button, image, Rect::new(0, 0, thumb_w, thumb_h))
+            {
+                self.wallpapers.push((button, image));
+            }
+            self.add_label(
+                parent,
+                &choice.label,
+                label,
+                Role::Secondary,
+                Rect::new(x, top + thumb_h + 4 * s, thumb_w, LINE_H * s),
+            );
+        }
+        let rows = (i32::try_from(choices.len()).unwrap_or(0) + across - 1) / across;
+        top_y + RING * s + rows * (thumb_h + name_h + gap)
     }
 
     /// The screensaver areas the Screensaver page's button leads to.

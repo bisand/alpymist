@@ -100,6 +100,10 @@ enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Put the chosen wallpaper on the screen, replacing whatever is there.
+    /// Each desktop runs this at login, and Settings after a change;
+    /// `alpymist set appearance.wallpaper` chooses the picture.
+    Wallpaper,
     /// Print the menu fragment for every setting, for packaging.
     #[command(hide = true)]
     MenuFragment,
@@ -163,6 +167,7 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         } => channel::switch(&all, &env, *to, !no_upgrade),
         Command::Probe { format } => Ok(probe(*format)?),
         Command::Session { desktop, args } => session(&all, &env, *desktop, args),
+        Command::Wallpaper => Ok(alpymist_settings::wallpaper::show(&env)?),
         Command::MenuFragment => {
             print!("{}", alpymist_settings::menu::fragment(&all));
             Ok(())

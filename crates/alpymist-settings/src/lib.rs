@@ -28,6 +28,7 @@ pub mod menu;
 pub mod model;
 pub mod values;
 
+pub use areas::wallpaper;
 pub use env::Env;
 pub use model::{Applies, Area, Choice, Kind, Scope, Setting, Value};
 

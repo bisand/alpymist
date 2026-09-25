@@ -6,7 +6,8 @@ dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP >/dev/nul
 # Sound first: the bar's volume module retries a missing audio server until
 # it runs out of file descriptors and takes the whole bar down with it.
 /usr/libexec/pipewire-launcher >/dev/null 2>&1 &
-swaybg -m fill -i /usr/share/backgrounds/alpymist/blue-hour.jpg >/dev/null 2>&1 &
+# The wallpaper chosen in Settings > Appearance.
+alpymist wallpaper >/dev/null 2>&1 &
 waybar -c ~/.config/waybar/labwc.jsonc -s ~/.config/waybar/style.css >/dev/null 2>&1 &
 mako >/dev/null 2>&1 &
 # The screensaver and the screen turning off, on the timings in Setup >

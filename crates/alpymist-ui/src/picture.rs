@@ -37,12 +37,51 @@ impl Picture {
         (width > 0 && height > 0 && rgb.len() == len).then_some(Self { width, height, rgb })
     }
 
-    /// Decode a JPEG.
+    /// Decode a JPEG or a PNG, whichever the bytes are.
     ///
     /// # Errors
     ///
-    /// If the bytes are not a JPEG the decoder can read.
+    /// If the bytes are neither, or not one the decoder can read.
     pub fn decode(bytes: &[u8]) -> Result<Self, String> {
+        if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            return Self::decode_png(bytes);
+        }
+        Self::decode_jpeg(bytes)
+    }
+
+    /// Decode a PNG: the drawn wallpaper is one.
+    fn decode_png(bytes: &[u8]) -> Result<Self, String> {
+        let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
+        // Palettes and sixteen bits a channel come out as eight-bit RGB or RGBA.
+        decoder.set_transformations(png::Transformations::normalize_to_color8());
+        let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
+        let mut buf = vec![0; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut buf).map_err(|e| e.to_string())?;
+        buf.truncate(info.buffer_size());
+        let rgb = match info.color_type {
+            png::ColorType::Rgb => buf,
+            // Over black: nothing shown this way has anything behind it.
+            png::ColorType::Rgba => buf
+                .chunks_exact(4)
+                .flat_map(|p| {
+                    let a = u16::from(p[3]);
+                    let over = |c: u8| u8::try_from(u16::from(c) * a / 255).unwrap_or(c);
+                    [over(p[0]), over(p[1]), over(p[2])]
+                })
+                .collect(),
+            png::ColorType::Grayscale => buf.iter().flat_map(|&g| [g, g, g]).collect(),
+            png::ColorType::GrayscaleAlpha => buf
+                .chunks_exact(2)
+                .flat_map(|p| [p[0], p[0], p[0]])
+                .collect(),
+            png::ColorType::Indexed => return Err("a palette PNG was not expanded".into()),
+        };
+        Self::from_rgb(info.width, info.height, rgb)
+            .ok_or_else(|| "the decoder gave the wrong number of bytes".into())
+    }
+
+    /// Decode a JPEG.
+    fn decode_jpeg(bytes: &[u8]) -> Result<Self, String> {
         use zune_core::bytestream::ZCursor;
         use zune_core::colorspace::ColorSpace;
         use zune_core::options::DecoderOptions;
@@ -63,11 +102,11 @@ impl Picture {
         Self::from_rgb(w, h, rgb).ok_or_else(|| "the decoder gave the wrong number of bytes".into())
     }
 
-    /// Read and decode a JPEG file.
+    /// Read and decode a JPEG or PNG file.
     ///
     /// # Errors
     ///
-    /// If the file cannot be read or is not a JPEG.
+    /// If the file cannot be read or is neither.
     pub fn load(path: &Path) -> Result<Self, String> {
         let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
         Self::decode(&bytes).map_err(|e| format!("{}: {e}", path.display()))
@@ -280,6 +319,21 @@ mod tests {
     fn what_is_not_a_jpeg_is_refused() {
         assert!(Picture::decode(b"not a picture").is_err());
         assert!(Picture::decode(&[]).is_err());
+    }
+
+    #[test]
+    fn a_png_decodes_too() {
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut bytes, 3, 2);
+            encoder.set_color(png::ColorType::Rgb);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().unwrap();
+            writer.write_image_data(&[0x3b; 3 * 2 * 3]).unwrap();
+        }
+        let picture = Picture::decode(&bytes).unwrap();
+        assert_eq!(picture.size(), (3, 2));
+        assert_eq!(picture.rgb[0], 0x3b);
     }
 
     #[test]

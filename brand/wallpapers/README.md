@@ -19,11 +19,11 @@ screen and the lock show, as `/usr/share/alpymist/picture.jpg`.
 | `spiral-sun.jpg` | Painted: a swirling orange sun over glowing ridges. | — |
 | `star-peak.jpg` | Painted: a white peak under a deep blue, starry sky. | — |
 
-The desktop default is set in each tier's skel: `$wallpaper` in
-`desktop/skel/full/.config/hypr/hyprland.conf`, the `swaybg` line in
-`desktop/skel/lite/.config/labwc/autostart`, and the `feh` line in
-`desktop/skel/legacy/.config/i3/config`. Changing it reaches new accounts only.
-Their home directories are theirs. Alpymist's own picture is `_picture` in
+Each account chooses its own in Settings › Appearance, which offers every
+picture in `/usr/share/backgrounds/alpymist/`, so a package that installs more
+there adds them to the choice. Until an account chooses, it gets `DEFAULT` in
+`crates/alpymist-settings/src/areas/wallpaper.rs`, and every tier's
+configuration starts it with `alpymist wallpaper`. Alpymist's own picture is `_picture` in
 `aports/alpymist-splash/APKBUILD`, and nothing else names it.
 
 `alpymist.png`, the drawn mountains, is not here: `alpymist-desktop` renders it

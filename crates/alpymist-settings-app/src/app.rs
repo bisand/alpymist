@@ -4,7 +4,8 @@
 use alpymist_about::info::About;
 
 use alpymist_settings::{Env, Error, Settings, Value};
-use alpymist_settings_app::view::{Action, Effect, Fonts, View};
+use alpymist_settings_app::view::{Action, Effect, Fonts, THUMB_H, THUMB_W, View};
+use alpymist_ui::picture::Picture;
 use alpymist_widget::Outcome;
 use alpymist_widget::host::{self, Sender};
 use alpymist_widget::instance;
@@ -36,6 +37,12 @@ pub enum Event {
     },
     /// The About details went to the clipboard, or not.
     Copied(Result<(), String>),
+    /// A wallpaper's thumbnail is ready.
+    Thumbnail {
+        path: String,
+        pixels: Vec<u32>,
+        size: Size,
+    },
 }
 
 /// A change for the worker.
@@ -263,6 +270,39 @@ impl SettingsApp {
     }
 }
 
+/// Make each wallpaper's thumbnail on a thread of its own, and send them to
+/// the window one by one as they are ready.
+///
+/// A picture is a 1920x1080 JPEG, and on the Atom decoding one takes long
+/// enough to notice: eleven of them in front of the first frame would be a
+/// window that takes a second to open. So the page goes up with empty frames,
+/// and the pictures fill them. At the size they are shown in, and so painted
+/// with no resampling at all.
+fn thumbnails(sender: Sender<Event>, scale: u32) {
+    let scale = scale.max(1);
+    let size = Size::new(
+        u32::try_from(THUMB_W).unwrap_or(160) * scale,
+        u32::try_from(THUMB_H).unwrap_or(90) * scale,
+    );
+    std::thread::spawn(move || {
+        for choice in alpymist_settings::wallpaper::choices(&Env::detect()) {
+            let path = choice.value;
+            let file = alpymist_settings::wallpaper::path_of(&path);
+            let Ok(picture) = Picture::load(Path::new(&file)) else {
+                continue;
+            };
+            if let Some(pixels) = picture.cover(size.width, size.height)
+                && sender
+                    .send(Event::Thumbnail { path, pixels, size })
+                    .is_err()
+            {
+                // The window has gone.
+                return;
+            }
+        }
+    });
+}
+
 fn copy(text: &str) -> Result<(), String> {
     let mut child = Command::new("wl-copy")
         .stdin(Stdio::piped())
@@ -322,6 +362,7 @@ impl App for SettingsApp {
                 view.toast(&format!("No setting or area `{id}`."), true);
             }
             self.view = Some(view);
+            thumbnails(self.sender.clone(), scale);
         }
     }
 
@@ -431,6 +472,7 @@ impl App for SettingsApp {
                     Err(e) => view.toast(&e, true),
                 }
             }
+            Event::Thumbnail { path, pixels, size } => view.thumbnail(path, pixels, size),
             Event::Copied(Ok(())) => view.toast("Copied the details to the clipboard.", false),
             Event::Copied(Err(e)) => view.toast(&e, true),
         }
