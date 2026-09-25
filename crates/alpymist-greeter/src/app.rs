@@ -1,6 +1,6 @@
 //! The login screen: what it holds, what keys do, and how it is drawn.
 //!
-//! The same mountains as the splash and the installer, a clock in the sky, and
+//! The same mountains as the installer, a clock in the sky, and
 //! one card low on the screen with the person and a password field. The first
 //! thing Alpymist shows after the first boot should look like the thing that
 //! installed it.
@@ -27,7 +27,7 @@ use denise_ui::cursor::Cursor;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
-/// The splash's and installer's seed, so the mountains are the same ones.
+/// The installer's seed, so the mountains are the same ones.
 pub const SCENE_SEED: u64 = 0x_A1B2_C3D4_E5F6;
 
 /// Carries out one login attempt: `(username, password)` to how it went, with

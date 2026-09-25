@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-alpymist-ui = { workspace = true, features = ["render"] }
+alpymist-ui = { workspace = true, features = ["render", "picture"] }
 denise = { workspace = true }
 denise-render = { workspace = true }
 denise-winit = { workspace = true, optional = true }

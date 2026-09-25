@@ -1,16 +1,18 @@
 //! Render the splash offscreen to a PNG.
 //!
-//! `cargo run -p alpymist-splash --example snapshot -- out.png [width height]`
+//! `cargo run -p alpymist-splash --example snapshot -- out.png [width height [picture.jpg]]`
+//!
+//! Without a picture, the installed one if this machine has it, and the drawn
+//! mountains if not — as on a real boot.
 //!
 //! Useful for reviewing the design without a display, and for a CI check that
 //! the splash still draws something sane on the sizes we care about.
 
-use alpymist_splash_scene::{Scene, TAGLINE, WORDMARK};
-use alpymist_ui::render::{colour, paint_backdrop, paint_badge};
+use alpymist_splash_scene::{PICTURE, Scene};
+use alpymist_ui::picture::Picture;
 use alpymist_ui::typeface;
 use denise::PixelFormat;
-use denise::geom::{Point, Size};
-use denise::painter::Pen;
+use denise::geom::Size;
 use denise_render::Canvas;
 
 // The scene module lives in the binary crate, so the example includes it
@@ -25,6 +27,10 @@ fn main() {
     let path = args.next().unwrap_or_else(|| "splash.png".into());
     let width: u32 = args.next().and_then(|v| v.parse().ok()).unwrap_or(1280);
     let height: u32 = args.next().and_then(|v| v.parse().ok()).unwrap_or(800);
+    let picture = args.next().unwrap_or_else(|| PICTURE.into());
+    let picture = Picture::load(std::path::Path::new(&picture))
+        .map_err(|e| eprintln!("no picture, drawing the mountains ({e})"))
+        .ok();
 
     let mut pixels = vec![0u32; (width as usize) * (height as usize)];
     let mut canvas = Canvas::from_pixels(
@@ -35,39 +41,12 @@ fn main() {
     )
     .expect("buffer large enough for the requested size");
 
-    let scene = Scene::new(width, height);
-    paint_backdrop(&mut canvas, &scene.backdrop);
-
-    paint_badge(
-        &mut canvas,
-        scene.layout.badge_at,
-        scene.layout.badge_size,
-        &scene.palette,
-    );
+    let scene = Scene::new(width, height, picture.as_ref());
+    scene.paint_background(&mut canvas);
 
     let mut face = typeface::load();
     eprintln!("{}", face.status.describe());
-
-    // Bitmap scales are glyph-cell multiples; a real font wants pixel heights.
-    let wordmark_px = u16::try_from(scene.layout.wordmark_scale * 8).unwrap_or(96);
-    let tagline_px = u16::try_from(scene.layout.tagline_scale * 8).unwrap_or(16);
-
-    let mut pen = Pen::new(&mut canvas);
-    face.draw(
-        &mut pen,
-        Point::new(scene.layout.wordmark_at.0, scene.layout.wordmark_at.1),
-        wordmark_px,
-        WORDMARK,
-        colour(scene.palette.ink),
-    );
-    face.draw(
-        &mut pen,
-        Point::new(scene.layout.tagline_at.0, scene.layout.tagline_at.1),
-        tagline_px,
-        TAGLINE,
-        colour(scene.palette.ink_dim),
-    );
-    drop(pen);
+    scene.paint_marks(&mut canvas, &mut face);
 
     // ARGB8888 words out, RGBA bytes in.
     let mut rgba = Vec::with_capacity(pixels.len() * 4);

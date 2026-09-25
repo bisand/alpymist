@@ -31,8 +31,9 @@ splash. The geometry lives in `crates/alpymist-ui/src/badge.rs`, traced from
   the peaks. The `alpymist-desktop` aport does this at build time.
 - **The boot splash** — `alpymist_ui::render::paint_badge` fills it opaquely in
   four flat palette colours, above the wordmark.
-- **The boot menus** — `alpymist-wallpaper --boot` draws the backdrop with the
-  badge above the space the menu uses. The `alpymist-splash-boot` subpackage
+- **The boot menus** — `alpymist-wallpaper --boot` puts the badge over the
+  boot picture (`wallpapers/milky-way.jpg`, the same one the splash shows),
+  above the space the menu uses. The `alpymist-splash-boot` subpackage
   carries the result, and `profiles/mkimg.alpymist.sh` puts it behind both the
   syslinux and the GRUB menu. Two files: a 640x480 PNG for syslinux's fixed
   VESA mode, and a 1280x800 JPEG that GRUB stretches to the panel — GRUB on
@@ -97,3 +98,9 @@ The wordmark is set in Fira Sans SemiBold, falling back through Avenir Next,
 Avenir, Helvetica and Arial. It is live text rather than outlines, so a
 renderer without Fira Sans will set it slightly differently — which is why the
 lockup viewBox leaves room to the right of the word.
+
+## Wallpapers
+
+`wallpapers/` holds the photographs and paintings Alpymist ships as desktop
+backgrounds, and the one the boot shows. Its README says where they came
+from, how they were cropped, and what a new one has to be.

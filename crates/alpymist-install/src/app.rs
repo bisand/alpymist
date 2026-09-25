@@ -103,7 +103,8 @@ fn px_for(scale: i32) -> u16 {
     u16::try_from(scale * 8).unwrap_or(16)
 }
 
-/// Same seed as the splash, so the mountains do not change at the handover.
+/// Same seed as the login screen, so the installed machine opens on the same
+/// mountains, and as the splash when it has no picture to show.
 pub const SCENE_SEED: u64 = 0x_A1B2_C3D4_E5F6;
 
 /// What a key press asked for, once the key itself is out of the way.

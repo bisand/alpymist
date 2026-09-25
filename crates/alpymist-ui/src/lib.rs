@@ -20,6 +20,8 @@ pub mod convert;
 pub mod display;
 pub mod logo;
 pub mod palette;
+#[cfg(feature = "picture")]
+pub mod picture;
 #[cfg(feature = "render")]
 pub mod render;
 pub mod terrain;

@@ -303,3 +303,30 @@ somewhere else: a different program, a different protocol, and a different
 surface, started by the same watch. "If the mountains ask you for anything,
 something is wrong" is as true as it was — and now there is a real lock screen
 to compare them with, which is what makes it checkable.
+
+---
+
+## Addendum, 2026-09-25 — the default wallpaper is a photograph
+
+**Status:** accepted · amends §3 above.
+
+§3's title is no longer true for anyone who installs from now on. The default
+wallpaper for new accounts is `blue-hour.jpg`, one of the photographs and
+paintings in `alpymist-wallpapers` (see `brand/wallpapers/README.md`), and the
+boot splash and boot menus now show `milky-way.jpg`. The drawn mountains are
+still what the login screen, the lock and the installer show, and still ship
+as `alpymist.png`, which is what every account made before this points at.
+
+So the mountains screensaver no longer opens on the ranges that were on the
+desktop. It opens on the ranges the lock screen will show when it is
+dismissed, which is the one screen it sits in front of that matters, and its
+description now says "the login screen" rather than "the wallpaper". Nothing
+about how it draws them changed: same seed, same code, still a sixth of the
+screen blown up in blocks.
+
+What this gives up is one continuous picture from the boot menu to the
+desktop, drawn by one piece of code with one seed. The boot now shows a
+photograph until greetd starts, and the login screen draws the mountains;
+there is a cut between them where there was none, and another at the desktop
+for anyone who keeps the default. The drawn scene stays where it is part of a
+program rather than a background: the installer, the login and the lock.

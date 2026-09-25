@@ -17,6 +17,9 @@ denise-ui = { workspace = true, optional = true }
 denise-drm = { workspace = true, optional = true }
 denise-fbdev = { workspace = true, optional = true }
 denise-winit = { workspace = true, optional = true }
+# Decoding the boot picture. Pure Rust, and only for what shows one.
+zune-core = { version = "0.5", optional = true }
+zune-jpeg = { version = "0.5", optional = true }
 
 [features]
 default = []
@@ -27,6 +30,12 @@ winit = ["render", "dep:denise-winit"]
 # The real targets: KMS where there is a DRM device, framebuffer where not.
 drm = ["render", "dep:denise-drm"]
 fbdev = ["render", "dep:denise-fbdev"]
+# A photograph instead of the drawn mountains: the boot menus and the splash.
+picture = ["dep:zune-core", "dep:zune-jpeg"]
+
+[dev-dependencies]
+# Only to make a JPEG for the decoder to read back.
+jpeg-encoder = { version = "0.7.1", default-features = false, features = ["std"] }
 
 [lints]
 workspace = true

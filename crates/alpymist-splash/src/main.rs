@@ -22,23 +22,28 @@
 mod handover;
 mod scene;
 
-use alpymist_ui::render::{colour, paint_backdrop, paint_badge};
+use alpymist_ui::picture::Picture;
 use alpymist_ui::typeface::{self, Typeface};
-use denise::geom::Point;
-use denise::painter::Pen;
 use denise_render::Canvas;
-use scene::{Scene, TAGLINE, WORDMARK};
+use scene::Scene;
+use std::path::Path;
 
 /// The splash application.
 struct Splash {
     scene: Scene,
+    /// Decoded once; the scene scales it again only if the screen changes.
+    picture: Option<Picture>,
     face: Typeface,
 }
 
 impl Splash {
-    fn new(width: u32, height: u32) -> Self {
+    fn new(width: u32, height: u32, picture: &Path) -> Self {
+        let picture = Picture::load(picture)
+            .map_err(|e| eprintln!("splash: no picture, drawing the mountains ({e})"))
+            .ok();
         Self {
-            scene: Scene::new(width, height),
+            scene: Scene::new(width, height, picture.as_ref()),
+            picture,
             face: typeface::load(),
         }
     }
@@ -46,41 +51,20 @@ impl Splash {
     /// Draw the whole splash into `canvas`.
     fn draw(&mut self, canvas: &mut Canvas<'_>) {
         let size = canvas.size();
-        self.scene.resize(size.width, size.height);
-        paint_backdrop(canvas, &self.scene.backdrop);
-
-        let layout = self.scene.layout;
-        let palette = self.scene.palette;
-        // Bitmap scales are glyph-cell multiples; a real font wants pixel
-        // heights, and a cell is eight pixels tall.
-        let wordmark_px = u16::try_from(layout.wordmark_scale * 8).unwrap_or(96);
-        let tagline_px = u16::try_from(layout.tagline_scale * 8).unwrap_or(16);
-
-        paint_badge(canvas, layout.badge_at, layout.badge_size, &palette);
-
-        let mut pen = Pen::new(canvas);
-        self.face.draw(
-            &mut pen,
-            Point::new(layout.wordmark_at.0, layout.wordmark_at.1),
-            wordmark_px,
-            WORDMARK,
-            colour(palette.ink),
-        );
-        self.face.draw(
-            &mut pen,
-            Point::new(layout.tagline_at.0, layout.tagline_at.1),
-            tagline_px,
-            TAGLINE,
-            colour(palette.ink_dim),
-        );
+        self.scene
+            .resize(size.width, size.height, self.picture.as_ref());
+        self.scene.paint_background(canvas);
+        self.scene.paint_marks(canvas, &mut self.face);
     }
 }
 
 #[cfg(all(feature = "winit", not(feature = "drm")))]
 mod window {
     use super::Splash;
+    use crate::scene::PICTURE;
     use denise::{Color, DamageTracker, Frame, InputEvent, Rect};
     use denise_render::Canvas;
+    use std::path::Path;
 
     impl denise_winit::DeniseApp for Splash {
         fn update(&mut self, _events: &[InputEvent], _damage: &mut DamageTracker) {}
@@ -96,13 +80,19 @@ mod window {
         use denise::geom::Size;
         use denise_winit::{WindowConfig, run};
 
+        // A picture to try it with, since a development machine will not
+        // have the installed one: `cargo run -p alpymist-splash -- x.jpg`.
+        let picture = std::env::args().nth(1).unwrap_or_else(|| PICTURE.into());
         let size = Size::new(1280, 800);
         let config = WindowConfig {
             title: "Alpymist".into(),
             size,
             ..WindowConfig::default()
         };
-        run(config, Splash::new(size.width, size.height))?;
+        run(
+            config,
+            Splash::new(size.width, size.height, Path::new(&picture)),
+        )?;
         Ok(())
     }
 }
@@ -112,6 +102,7 @@ mod window {
 mod console {
     use super::Splash;
     use crate::handover::{self, Reason};
+    use crate::scene::PICTURE;
     use alpymist_ui::display::Screen;
     use denise_drm::SurfaceConfig;
     use denise_evdev::Console;
@@ -220,8 +211,9 @@ mod console {
             }
             if shown.is_none() {
                 // Composed once the size is known, which is once there is a
-                // display; loading the font is the slow part on old machines.
-                let splash = splash.get_or_insert_with(|| Splash::new(1, 1));
+                // display; loading the font and decoding the picture are the
+                // slow parts on old machines.
+                let splash = splash.get_or_insert_with(|| Splash::new(1, 1, Path::new(PICTURE)));
                 shown = show(splash);
             }
             std::thread::sleep(LOOK_EVERY);
