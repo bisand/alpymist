@@ -105,6 +105,9 @@ mod lock {
             UNTIL_CONFIGURED.1,
         );
         app.purpose = Purpose::Unlock;
+        // Before the lock is asked for, so the first frame is the picture
+        // rather than the mountains and then the picture.
+        app.load_picture(std::path::Path::new(alpymist_greeter::app::PICTURE));
         app.hostname = std::fs::read_to_string("/etc/hostname")
             .map(|name| name.trim().to_owned())
             .unwrap_or_default();

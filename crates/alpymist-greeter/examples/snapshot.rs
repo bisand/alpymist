@@ -5,6 +5,8 @@
 //! Draws the real [`App`] in each state worth reviewing: waiting, checking,
 //! and after a wrong password. Set `ALPYMIST_FONT` to a Fira Mono TTF to see
 //! the real typeface.
+//! Set `ALPYMIST_PICTURE` to a JPEG to see it behind the screen, as the
+//! installed picture would be.
 
 use alpymist_greeter::app::{Action, App, Authenticator};
 use alpymist_greeter::login::Outcome;
@@ -39,6 +41,9 @@ fn app(width: u32, height: u32, delay: Duration) -> App {
     app.hostname = "alpymist".into();
     app.keyboard = "no".into();
     app.set_time("07:42".into(), "Monday 14 September".into());
+    if let Some(path) = std::env::var_os("ALPYMIST_PICTURE") {
+        app.load_picture(path.as_ref());
+    }
     app
 }
 

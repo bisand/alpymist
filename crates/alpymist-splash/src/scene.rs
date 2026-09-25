@@ -21,12 +21,10 @@ use denise_render::Canvas;
 /// so then the picture does not change when the splash hands over to it.
 pub const SCENE_SEED: u64 = 0x_A1B2_C3D4_E5F6;
 
-/// The picture behind the splash, installed by the `alpymist-splash` package.
-///
-/// Also what the boot menus are made from, so the splash follows them with the
-/// same picture. If it is missing or will not decode, the splash draws the
-/// mountains instead: a boot never waits on a photograph.
-pub const PICTURE: &str = "/usr/share/alpymist/boot/splash.jpg";
+/// The picture behind the splash: Alpymist's own, which the boot menus are
+/// made from and the login screen shows next, so the boot is one picture from
+/// the bootloader to the password.
+pub const PICTURE: &str = alpymist_ui::picture::SYSTEM;
 
 /// The wordmark, spaced out because the built-in font is tight at large scales.
 pub const WORDMARK: &str = "A L P Y M I S T";

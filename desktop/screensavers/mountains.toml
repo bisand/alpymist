@@ -7,7 +7,7 @@
 # program cannot disagree.
 
 name = "Mountains"
-description = "The ranges from the login screen, travelling past with the mist moving through them."
+description = "Alpymist's own mountain ranges, travelling past with the mist moving through them."
 exec = "alpymist-saver-mountains"
 icon = "󰔎"
 

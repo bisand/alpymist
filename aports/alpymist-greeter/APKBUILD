@@ -10,8 +10,10 @@ license="MIT OR Apache-2.0"
 # greetd does the logging in; doas carries out Restart and Power off, for
 # exactly those two commands. The font is a runtime suggestion: without it the
 # screen falls back to Denise's built-in bitmap and still reads correctly.
+# alpymist-splash-picture is the picture behind it, the one the splash has just
+# shown; without it the screen draws the mountains.
 makedepends="cargo"
-depends="greetd doas font-fira-ttf"
+depends="greetd doas font-fira-ttf alpymist-splash-picture"
 install="$pkgname.post-install"
 options="!check"  # the test suite runs in CI, not in the package build
 source="alpymist-greeter.doas.conf"

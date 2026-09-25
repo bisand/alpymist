@@ -14,8 +14,8 @@ use crate::logo::{Silhouette, UNIT};
 /// A deterministic pseudo-random source.
 ///
 /// Deliberately not a general-purpose RNG: it exists so that a given seed always
-/// produces the same mountains. The installer and the login screen draw the
-/// same seed, so both show the same range.
+/// produces the same mountains. Everything that draws them uses the same seed,
+/// so they are the same range wherever they appear.
 struct Rng(u64);
 
 impl Rng {

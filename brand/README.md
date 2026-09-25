@@ -32,7 +32,8 @@ splash. The geometry lives in `crates/alpymist-ui/src/badge.rs`, traced from
 - **The boot splash** — `alpymist_ui::render::paint_badge` fills it opaquely in
   four flat palette colours, above the wordmark.
 - **The boot menus** — `alpymist-wallpaper --boot` puts the badge over the
-  boot picture (`wallpapers/milky-way.jpg`, the same one the splash shows),
+  system picture (`wallpapers/milky-way.jpg`, the one the splash and the login
+  screen show),
   above the space the menu uses. The `alpymist-splash-boot` subpackage
   carries the result, and `profiles/mkimg.alpymist.sh` puts it behind both the
   syslinux and the GRUB menu. Two files: a 640x480 PNG for syslinux's fixed

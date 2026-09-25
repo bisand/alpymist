@@ -3,8 +3,8 @@
 //! greetd does the part that has to be right — PAM, the session, the VT — and
 //! this only asks the questions and draws. It runs with no compositor, so it
 //! looks the same on every tier and cannot be broken by a desktop that does not
-//! start; and it is drawn with the same code as the installer, so the first
-//! boot looks like the thing that installed it.
+//! start; and it shows the picture the splash has just shown, so the boot has
+//! no cut between the two.
 
 #![forbid(unsafe_code)]
 

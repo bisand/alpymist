@@ -1,7 +1,7 @@
-//! A photograph behind the boot, instead of the drawn mountains.
+//! A photograph behind the boot and the login, instead of the drawn mountains.
 //!
-//! The boot menus and the splash show one of the wallpapers in
-//! `brand/wallpapers/`, which is a JPEG at 1920x1080. Screens are not, so
+//! The boot menus, the splash, the login screen and the lock show one of the
+//! wallpapers in `brand/wallpapers/`, which is a JPEG at 1920x1080. Screens are not, so
 //! [`Picture::cover`] scales it the way `swaybg -m fill` does: large enough to
 //! cover the screen, centred, with whatever overhangs cut off rather than bars
 //! left at the edges.
@@ -11,6 +11,14 @@
 //! screen the same way.
 
 use std::path::Path;
+
+/// Alpymist's own picture: behind the boot menus, the splash, the login
+/// screen and the lock. Each account's wallpaper is its own business; this is
+/// the machine's, and the `alpymist-splash-picture` package installs it.
+///
+/// Whatever shows it draws the mountains instead when it is missing or will
+/// not decode: nothing that has to appear waits on a photograph.
+pub const SYSTEM: &str = "/usr/share/alpymist/picture.jpg";
 
 /// A decoded picture, three bytes to a pixel.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -71,8 +71,8 @@ const SKY_BANDS: u32 = 64;
 impl Backdrop {
     /// Compose the scene.
     ///
-    /// `seed` fixes the mountains: the installer and the login screen pass the
-    /// same value, so both show the same range.
+    /// `seed` fixes the mountains: everything that draws them passes the same
+    /// value, so they are the same range wherever they appear.
     #[must_use]
     pub fn compose(width: u32, height: u32, palette: &Palette, seed: u64) -> Self {
         let width = width.max(1);

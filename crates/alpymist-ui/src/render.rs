@@ -161,6 +161,8 @@ pub struct Scenery {
     painted: Option<Vec<u32>>,
     /// The size both of those are for.
     size: Size,
+    /// Whether `painted` is a picture handed in rather than the mountains.
+    picture: bool,
 }
 
 impl Scenery {
@@ -175,7 +177,28 @@ impl Scenery {
             backdrop: Backdrop::compose(width, height, palette, seed),
             painted: None,
             size: Size::new(width, height),
+            picture: false,
         }
+    }
+
+    /// The scene with `pixels` shown in place of the mountains: a picture
+    /// already scaled to this size, as opaque `0xFFRRGGBB` words a row at a
+    /// time. A buffer of the wrong length is ignored and the mountains stay.
+    #[must_use]
+    pub fn with_picture(mut self, pixels: Vec<u32>) -> Self {
+        let len = u64::from(self.size.width) * u64::from(self.size.height);
+        if u64::try_from(pixels.len()).is_ok_and(|n| n == len) {
+            self.painted = Some(pixels);
+            self.picture = true;
+        }
+        self
+    }
+
+    /// Whether this is a picture rather than the drawn mountains: what goes
+    /// over it may need more help to stand out from an uneven background.
+    #[must_use]
+    pub fn is_picture(&self) -> bool {
+        self.picture
     }
 
     /// The composed scene, for anything that wants the layers themselves.
@@ -414,6 +437,23 @@ mod tests {
 
         assert_eq!(first, painted, "the first frame rasterises the scene");
         assert_eq!(second, painted, "every frame after it copies the same one");
+    }
+
+    /// A picture handed in is what is painted, every frame; one of the wrong
+    /// size is refused and the mountains stay.
+    #[test]
+    fn a_picture_replaces_the_mountains_only_when_it_fits() {
+        let size = Size::new(32, 20);
+        let palette = Palette::alpymist();
+        let flat = vec![0xFF20_4060_u32; 32 * 20];
+
+        let mut scenery = Scenery::compose(32, 20, &palette, 1).with_picture(flat.clone());
+        assert!(scenery.is_picture());
+        assert_eq!(pixels(size, |c| scenery.paint_onto(c)), flat);
+        assert_eq!(pixels(size, |c| scenery.paint_onto(c)), flat);
+
+        let refused = Scenery::compose(32, 20, &palette, 1).with_picture(vec![0; 7]);
+        assert!(!refused.is_picture());
     }
 
     #[test]

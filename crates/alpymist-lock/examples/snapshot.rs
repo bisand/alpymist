@@ -5,6 +5,8 @@
 //! The same screen the compositor would show, drawn by the same code, with a
 //! checker that stands in for PAM. Set `ALPYMIST_FONT` to a Fira Mono TTF to
 //! see the real typeface.
+//! Set `ALPYMIST_PICTURE` to a JPEG to see it behind the screen, as the
+//! installed picture would be.
 
 use alpymist_greeter::app::{Action, App, Authenticator, Purpose};
 use alpymist_greeter::login::Outcome;
@@ -33,6 +35,9 @@ fn screen(width: u32, height: u32, delay: Duration) -> App {
     app.purpose = Purpose::Unlock;
     app.hostname = "alpymist".into();
     app.set_time("23:11".into(), "Sunday 20 September".into());
+    if let Some(path) = std::env::var_os("ALPYMIST_PICTURE") {
+        app.load_picture(path.as_ref());
+    }
     app
 }
 

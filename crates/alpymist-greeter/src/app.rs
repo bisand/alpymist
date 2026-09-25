@@ -1,9 +1,8 @@
 //! The login screen: what it holds, what keys do, and how it is drawn.
 //!
-//! The same mountains as the installer, a clock in the sky, and
-//! one card low on the screen with the person and a password field. The first
-//! thing Alpymist shows after the first boot should look like the thing that
-//! installed it.
+//! The boot's picture, a clock in the sky, and one card low on the screen
+//! with the person and a password field: the screen follows the splash without
+//! a cut. Without the picture it draws the installer's mountains.
 //!
 //! The login itself runs on a thread. PAM deliberately waits a couple of
 //! seconds before admitting a password was wrong, and a screen that stops
@@ -12,6 +11,7 @@
 use crate::login::Outcome;
 use crate::users::User;
 use alpymist_ui::palette::{Palette, Rgb};
+use alpymist_ui::picture::Picture;
 use alpymist_ui::render::{
     ButtonStyle, Scenery, button_ink, colour, new_cursor, paint_button, paint_cursor,
 };
@@ -27,8 +27,13 @@ use denise_ui::cursor::Cursor;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
-/// The installer's seed, so the mountains are the same ones.
+/// The installer's seed, so when there is no picture the mountains are the
+/// same ones.
 pub const SCENE_SEED: u64 = 0x_A1B2_C3D4_E5F6;
+
+/// Where the login screen's and the lock's picture is installed: the same one
+/// the splash shows.
+pub const PICTURE: &str = alpymist_ui::picture::SYSTEM;
 
 /// Carries out one login attempt: `(username, password)` to how it went, with
 /// any notices PAM sent. Injected, so the screen can be driven with no greetd.
@@ -298,6 +303,8 @@ pub struct App {
     pub purpose: Purpose,
     power: Option<Power>,
     palette: Palette,
+    /// What is shown instead of the mountains, when there is one.
+    picture: Option<Picture>,
     scenery: Scenery,
     layout: Layout,
     size: (u32, u32),
@@ -339,6 +346,7 @@ impl App {
             started: false,
             purpose: Purpose::Login,
             power: None,
+            picture: None,
             scenery: Scenery::compose(width, height, &palette, SCENE_SEED),
             layout: Layout::for_screen(width, height),
             palette,
@@ -349,6 +357,32 @@ impl App {
             painted_pointer: None,
             clock_moved: true,
             recomposed: true,
+        }
+    }
+
+    /// Show the picture at `path` behind the screen instead of the
+    /// mountains. If it is missing or will not decode, say why and keep them.
+    pub fn load_picture(&mut self, path: &std::path::Path) {
+        match Picture::load(path) {
+            Ok(picture) => self.show_picture(picture),
+            Err(e) => eprintln!("no picture, drawing the mountains ({e})"),
+        }
+    }
+
+    /// Show `picture` behind the screen instead of the mountains.
+    pub fn show_picture(&mut self, picture: Picture) {
+        self.picture = Some(picture);
+        self.scenery = self.compose(self.size.0, self.size.1);
+        self.recomposed = true;
+    }
+
+    /// The background for a screen this size: the picture scaled to cover
+    /// it, or the mountains.
+    fn compose(&self, width: u32, height: u32) -> Scenery {
+        let scenery = Scenery::compose(width, height, &self.palette, SCENE_SEED);
+        match self.picture.as_ref().and_then(|p| p.cover(width, height)) {
+            Some(pixels) => scenery.with_picture(pixels),
+            None => scenery,
         }
     }
 
@@ -545,7 +579,7 @@ impl App {
     /// Recompose for a new screen size.
     pub fn resize(&mut self, width: u32, height: u32) {
         if self.size != (width, height) {
-            self.scenery = Scenery::compose(width, height, &self.palette, SCENE_SEED);
+            self.scenery = self.compose(width, height);
             self.layout = Layout::for_screen(width, height);
             self.size = (width, height);
             self.recomposed = true;

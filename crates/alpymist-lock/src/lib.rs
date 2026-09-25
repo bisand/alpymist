@@ -1,6 +1,6 @@
 //! The Alpymist lock screen.
 //!
-//! The screen is `alpymist-greeter`'s: the same mountains, the same clock, the
+//! The screen is `alpymist-greeter`'s: the same picture, the same clock, the
 //! same card with a name and a password field. What differs is what is behind
 //! it and what holds it up.
 //!

@@ -330,3 +330,22 @@ photograph until greetd starts, and the login screen draws the mountains;
 there is a cut between them where there was none, and another at the desktop
 for anyone who keeps the default. The drawn scene stays where it is part of a
 program rather than a background: the installer, the login and the lock.
+
+---
+
+## Addendum, 2026-09-25 (later) — the login screen and the lock show it too
+
+**Status:** accepted · amends the addendum above.
+
+The addendum above kept the drawn mountains on the login screen and the lock,
+and put the cut between the boot's photograph and them at greetd. That cut is
+gone: the login screen and the lock now show the same picture as the boot, as
+`/usr/share/alpymist/picture.jpg` from `alpymist-splash-picture`. From the
+boot menu to the password it is one picture again, a photograph rather than a
+drawing. The mountains are left to the installer, to `alpymist.png` for the
+accounts that still point at it, and to anything that has to show something
+when the picture is missing.
+
+So the mountains screensaver no longer matches any screen it sits in front of,
+on a machine that keeps the defaults. It now describes itself as Alpymist's
+own ranges rather than as some other screen's. How it draws them is unchanged.

@@ -9,7 +9,7 @@
 pkgname=alpymist-saver-mountains
 pkgver=0.1.0
 pkgrel=0
-pkgdesc="Alpymist screensaver: the ranges from the login screen, travelling past with the mist moving through them"
+pkgdesc="Alpymist screensaver: mountain ranges travelling past, with the mist moving through them"
 url="https://github.com/bisand/alpymist"
 arch="all"
 license="MIT OR Apache-2.0"
