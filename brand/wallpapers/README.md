@@ -1,13 +1,14 @@
 # Wallpapers
 
 The pictures Alpymist ships. The `alpymist-wallpapers` package installs every
-`*.jpg` here to `/usr/share/backgrounds/alpymist/`, and `alpymist-splash`
-carries its own copy of the one the boot shows.
+`*.jpg` here to `/usr/share/backgrounds/alpymist/`, and
+`alpymist-splash-picture` installs its own copy of the one the boot, the login
+screen and the lock show, as `/usr/share/alpymist/picture.jpg`.
 
 | File | Picture | Used as |
 | --- | --- | --- |
 | `blue-hour.jpg` | Teal night sky over a green valley and its peaks. | The desktop, on every tier, for new accounts. |
-| `milky-way.jpg` | The Milky Way over a dark ridge and a grassy crest. | The boot: the splash, and the syslinux and GRUB menus before it. |
+| `milky-way.jpg` | The Milky Way over a dark ridge and a grassy crest. | Alpymist's own picture: the syslinux and GRUB menus, the splash, the login screen and the lock. |
 | `morning-haze.jpg` | Blue ranges in haze under a peach sky, a wooded hill in front. | — |
 | `red-sun.jpg` | A peak in silhouette against a low red sun. | — |
 | `cloud-sea.jpg` | A lit summit above a sea of cloud. | — |
@@ -22,7 +23,7 @@ The desktop default is set in each tier's skel: `$wallpaper` in
 `desktop/skel/full/.config/hypr/hyprland.conf`, the `swaybg` line in
 `desktop/skel/lite/.config/labwc/autostart`, and the `feh` line in
 `desktop/skel/legacy/.config/i3/config`. Changing it reaches new accounts only.
-Their home directories are theirs. The boot picture is `_picture` in
+Their home directories are theirs. Alpymist's own picture is `_picture` in
 `aports/alpymist-splash/APKBUILD`, and nothing else names it.
 
 `alpymist.png`, the drawn mountains, is not here: `alpymist-desktop` renders it

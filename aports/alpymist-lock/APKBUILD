@@ -16,7 +16,9 @@ makedepends="cargo libxkbcommon-dev linux-pam-dev"
 # setuid unix_chkpwd is what lets this read a password as the account itself
 # rather than as root. The font is a suggestion: without it the screen falls
 # back to Denise's built-in bitmap and still reads correctly.
-depends="linux-pam font-fira-ttf"
+# alpymist-splash-picture is the picture behind it, as behind the login screen;
+# without it the screen draws the mountains.
+depends="linux-pam font-fira-ttf alpymist-splash-picture"
 options="!check"  # the test suite runs in CI, not in the package build
 source="alpymist-lock.pam"
 builddir="$srcdir"

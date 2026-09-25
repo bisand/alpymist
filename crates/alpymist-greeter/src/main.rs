@@ -143,6 +143,11 @@ mod preview {
         let mut app = App::new(users, authenticate, size.width, size.height);
         app.hostname = "alpymist".into();
         app.keyboard = "preview".into();
+        // A development machine will not have the installed picture:
+        // `ALPYMIST_PICTURE=brand/wallpapers/milky-way.jpg` shows one.
+        let picture = std::env::var_os("ALPYMIST_PICTURE")
+            .unwrap_or_else(|| alpymist_greeter::app::PICTURE.into());
+        app.load_picture(picture.as_ref());
         eprintln!("{}", app.face.status.describe());
         eprintln!("session: {}", super::session_command()?.join(" "));
         run(
@@ -192,6 +197,27 @@ mod console {
         result
     }
 
+    /// Each login attempt, as a conversation with greetd on `socket` that
+    /// starts `cmd` if the password is right.
+    fn through_greetd(socket: Option<String>, cmd: Vec<String>) -> Authenticator {
+        Arc::new(move |user: &str, password: &str| {
+            let Some(path) = socket.as_deref() else {
+                return (
+                    Outcome::Failed("Not started by greetd, so nobody can log in.".into()),
+                    Vec::new(),
+                );
+            };
+            let mut notices = Vec::new();
+            let outcome = match UnixStream::connect(path) {
+                Ok(stream) => {
+                    login::attempt(&mut Stream(stream), user, password, &cmd, &mut notices)
+                }
+                Err(e) => Outcome::Failed(format!("Could not reach greetd: {e}")),
+            };
+            (outcome, notices)
+        })
+    }
+
     fn run(cmd: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         let stop = Arc::new(AtomicBool::new(false));
         for signal in [SIGTERM, SIGINT, SIGHUP] {
@@ -199,25 +225,7 @@ mod console {
         }
 
         let socket = std::env::var("GREETD_SOCK").ok();
-        let authenticate: Authenticator = {
-            let socket = socket.clone();
-            Arc::new(move |user: &str, password: &str| {
-                let Some(path) = socket.as_deref() else {
-                    return (
-                        Outcome::Failed("Not started by greetd, so nobody can log in.".into()),
-                        Vec::new(),
-                    );
-                };
-                let mut notices = Vec::new();
-                let outcome = match UnixStream::connect(path) {
-                    Ok(stream) => {
-                        login::attempt(&mut Stream(stream), user, password, &cmd, &mut notices)
-                    }
-                    Err(e) => Outcome::Failed(format!("Could not reach greetd: {e}")),
-                };
-                (outcome, notices)
-            })
-        };
+        let authenticate = through_greetd(socket.clone(), cmd);
 
         // The boot splash lets go of the display as greetd starts; wait for it.
         //
@@ -238,6 +246,7 @@ mod console {
             size.height,
         );
         app.hostname = super::hostname();
+        app.load_picture(std::path::Path::new(alpymist_greeter::app::PICTURE));
         if let Ok(last) = std::fs::read_to_string(super::LAST_USER) {
             app.select(last.trim());
         }

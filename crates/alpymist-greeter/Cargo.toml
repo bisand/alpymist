@@ -16,7 +16,7 @@ name = "alpymist-greeter"
 path = "src/main.rs"
 
 [dependencies]
-alpymist-ui = { workspace = true, features = ["render"] }
+alpymist-ui = { workspace = true, features = ["render", "picture"] }
 denise = { workspace = true }
 denise-render = { workspace = true }
 denise-ui = { workspace = true }

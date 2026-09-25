@@ -1,4 +1,4 @@
-//! The mountains: the login screen's own ranges, travelling past.
+//! The mountains: Alpymist's own ranges, travelling past.
 //!
 //! The first version of this drew the ranges once and moved only the mist over
 //! them. It was a nice picture and a poor screensaver: the skyline sat in the
@@ -33,9 +33,9 @@ use denise::geom::Size;
 
 /// The seed that fixes the mountains.
 ///
-/// The login screen, the installer and the drawn wallpaper all use this same
-/// value, so the screensaver shows the ranges the lock screen will show when it
-/// is dismissed, and carries them away.
+/// The installer and the drawn wallpaper use this same value, and so do the
+/// splash, the login screen and the lock when they have no picture to show:
+/// these are the ranges Alpymist draws wherever it draws any.
 pub const SCENE_SEED: u64 = 0x_A1B2_C3D4_E5F6;
 
 /// What the settings make of this picture.

@@ -10,15 +10,16 @@ license="MIT OR Apache-2.0"
 makedepends="cargo"
 # The font is a runtime suggestion: without it the splash falls back to
 # Denise's built-in bitmap and still reads correctly.
-depends="font-fira-ttf"
-subpackages="$pkgname-openrc $pkgname-boot:boot:noarch"
+depends="font-fira-ttf $pkgname-picture=$pkgver-r$pkgrel"
+subpackages="$pkgname-openrc $pkgname-boot:boot:noarch $pkgname-picture:picture:noarch"
 options="!check"  # the test suite runs in CI, not in the package build
 source="alpymist-splash.initd alpymist-splash-done.initd"
 builddir="$srcdir"
 
-# What the boot shows: the splash, and the boot menus before it. Any of the
-# photographs in brand/wallpapers/ will do; the splash reads it from a path of
-# its own, so which one it is is decided here and nowhere else.
+# Alpymist's own picture: the boot menus, the splash, the login screen and the
+# lock. Any of the photographs in brand/wallpapers/ will do; everything that
+# shows it reads it from a path of its own, so which one it is is decided here
+# and nowhere else.
 _picture="$builddir"/brand/wallpapers/milky-way.jpg
 
 prepare() {
@@ -36,9 +37,8 @@ build() {
 	# something that runs this early in boot.
 	cargo build --release --locked \
 		-p alpymist-splash --no-default-features --features drm
-	# The boot menus' backgrounds: the splash's picture with the badge on it,
-	# so the machine shows one picture from the bootloader until the login
-	# screen. Two sizes because syslinux draws at a fixed 640x480 VESA mode
+	# The boot menus' backgrounds: the picture with the badge on it, so the
+	# machine shows one picture from the bootloader to the password. Two sizes because syslinux draws at a fixed 640x480 VESA mode
 	# and GRUB stretches to the panel, and two formats because Alpine's
 	# grub-efi for arm64 ships no PNG decoder at all; see write_image in
 	# alpymist-wallpaper.
@@ -50,13 +50,20 @@ build() {
 package() {
 	install -Dm755 "$builddir"/target/release/alpymist-splash \
 		"$pkgdir"/usr/bin/alpymist-splash
-	# Its own copy rather than a dependency on alpymist-wallpapers: the splash
-	# is on the install image, where the desktop's wallpapers are not needed.
-	install -Dm644 "$_picture" "$pkgdir"/usr/share/alpymist/boot/splash.jpg
 	install -Dm755 "$srcdir"/alpymist-splash.initd \
 		"$pkgdir"/etc/init.d/alpymist-splash
 	install -Dm755 "$srcdir"/alpymist-splash-done.initd \
 		"$pkgdir"/etc/init.d/alpymist-splash-done
+}
+
+# The picture on its own, because the login screen and the lock show it too
+# and neither needs the splash to. Not a dependency on alpymist-wallpapers:
+# the splash is on the install image, where the desktop's wallpapers are not
+# needed.
+picture() {
+	pkgdesc="Alpymist's picture behind the boot, the login screen and the lock"
+	depends=""
+	install -Dm644 "$_picture" "$subpkgdir"/usr/share/alpymist/picture.jpg
 }
 
 boot() {
