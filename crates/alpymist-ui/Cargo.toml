@@ -20,6 +20,8 @@ denise-winit = { workspace = true, optional = true }
 # Decoding the boot picture. Pure Rust, and only for what shows one.
 zune-core = { version = "0.5", optional = true }
 zune-jpeg = { version = "0.5", optional = true }
+# The drawn wallpaper is a PNG, and the wallpaper picker shows it too.
+png = { version = "0.17", optional = true }
 
 [features]
 default = []
@@ -31,7 +33,7 @@ winit = ["render", "dep:denise-winit"]
 drm = ["render", "dep:denise-drm"]
 fbdev = ["render", "dep:denise-fbdev"]
 # A photograph instead of the drawn mountains: the boot menus and the splash.
-picture = ["dep:zune-core", "dep:zune-jpeg"]
+picture = ["dep:zune-core", "dep:zune-jpeg", "dep:png"]
 
 [dev-dependencies]
 # Only to make a JPEG for the decoder to read back.

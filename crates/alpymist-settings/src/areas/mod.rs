@@ -6,6 +6,7 @@ pub mod keyboard;
 pub mod power;
 pub mod screensaver;
 pub mod updates;
+pub mod wallpaper;
 pub mod wifi;
 
 use crate::env::Env;
@@ -24,9 +25,16 @@ pub const AREAS: &[Area] = &[
     Area {
         id: "appearance",
         title: "Appearance",
-        description: "Light or dark, the accent colour and the text size",
+        description: "Light or dark, the accent colour, the text size and the wallpaper",
         icon: "\u{f03d8}",
-        keywords: &["theme", "look", "colours", "dark mode"],
+        keywords: &[
+            "theme",
+            "look",
+            "colours",
+            "dark mode",
+            "wallpaper",
+            "background",
+        ],
     },
     Area {
         id: "keyboard",
@@ -115,6 +123,7 @@ pub const fn pages() -> &'static [Area] {
 pub fn all() -> Vec<Setting> {
     [
         appearance::settings(),
+        wallpaper::settings(),
         keyboard::settings(),
         input::settings(),
         wifi::settings(),
@@ -128,6 +137,7 @@ pub fn all() -> Vec<Setting> {
 /// A setting's current value.
 pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
     match s.area() {
+        "appearance" if s.id == wallpaper::ID => Ok(wallpaper::get(env)),
         "appearance" => Ok(appearance::get(env, s)),
         "keyboard" if s.id == "keyboard.layout" => keyboard::get(env, s),
         "keyboard" | "touchpad" | "mouse" => input::get(env, s),
@@ -148,6 +158,7 @@ pub fn set(
 ) -> Result<Vec<String>, String> {
     let none = |r: Result<(), String>| r.map(|()| Vec::new());
     match s.area() {
+        "appearance" if s.id == wallpaper::ID => wallpaper::set(env, s, value),
         "appearance" => none(appearance::set(env, s, value)),
         "keyboard" if s.id == "keyboard.layout" => keyboard::set(env, s, value, force),
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
@@ -162,6 +173,7 @@ pub fn set(
 /// Show a change in the running session, from the person's own process.
 pub fn live(env: &Env, s: &Setting, value: &Value) -> Result<(), String> {
     match s.area() {
+        "appearance" if s.id == wallpaper::ID => wallpaper::live(env),
         "keyboard" if s.id == "keyboard.layout" => keyboard::live(env, value),
         "keyboard" | "touchpad" | "mouse" => input::live(env, s, value),
         _ => Ok(()),

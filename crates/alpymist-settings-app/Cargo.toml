@@ -19,6 +19,8 @@ alpymist-core = { workspace = true }
 # Fonts parsed lazily, as the menu's are.
 alpymist-menu = { path = "../alpymist-menu" }
 alpymist-settings = { workspace = true }
+# The wallpapers' thumbnails.
+alpymist-ui = { workspace = true, features = ["picture"] }
 alpymist-theme = { workspace = true }
 # The window.
 alpymist-widget = { workspace = true }

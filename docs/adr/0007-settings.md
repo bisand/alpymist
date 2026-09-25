@@ -136,3 +136,33 @@ in Alpymist.
   once.
 - The menu gains a general mechanism it did not have, and parses a few more
   entries at start: a small TOML file, well inside a frame.
+
+---
+
+## Addendum, 2026-09-25 — the wallpaper, and the one line of an account's own file it changes
+
+**Status:** accepted · makes an exception to §3.
+
+Settings › Appearance › Wallpaper chooses the desktop's picture from those
+installed in `/usr/share/backgrounds/alpymist/`. The choice is the account's,
+in `~/.config/alpymist/wallpaper.toml`, and `alpymist wallpaper` puts it on
+the screen: a new `swaybg` on the picture, and then the old one stopped, or
+`feh` on X11. Each tier's configuration runs that at login, and Settings runs
+it after a change.
+
+§3 says a setting reaches a program through a file of Alpymist's own that the
+account's configuration includes, "never an edit to `hyprland.conf`". The
+wallpaper cannot keep to that for the accounts that already exist. They start
+`swaybg` or `feh` themselves, from `hyprland.conf`, labwc's `autostart` or
+i3's `config`, and labwc and i3 include nothing of Alpymist's. A setting that
+could not reach them would change the picture until the next login and then
+silently put the old one back.
+
+So the first time an account's wallpaper is changed, the line in those files
+that starts `swaybg` or `feh` is replaced by the one that runs `alpymist
+wallpaper`. That one line and nothing else: comments, binds and every other
+program are left alone. The file as it was is kept beside it, as `….bak-wallpaper`,
+and the change is said in a note when it is made. It happens only because the
+person changed their wallpaper, never on an upgrade, and once it is done there
+is nothing left for it to find. Accounts made from now on start with the line
+already there.

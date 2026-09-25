@@ -238,6 +238,7 @@ dependencies = [
  "alpymist-menu",
  "alpymist-settings",
  "alpymist-theme",
+ "alpymist-ui",
  "alpymist-widget",
  "denise",
  "denise-text",
@@ -297,6 +298,7 @@ dependencies = [
  "denise-ui",
  "denise-winit",
  "jpeg-encoder",
+ "png",
  "zune-core",
  "zune-jpeg",
 ]

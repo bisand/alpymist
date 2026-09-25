@@ -23,7 +23,8 @@ exec --no-startup-id xrdb -merge ~/.Xresources
 # Services D-Bus starts on demand, the portals among them, need the display.
 exec --no-startup-id dbus-update-activation-environment DISPLAY XAUTHORITY
 exec --no-startup-id xsetroot -cursor_name left_ptr
-exec --no-startup-id feh --no-fehbg --bg-fill /usr/share/backgrounds/alpymist/blue-hour.jpg
+# The wallpaper chosen with `alpymist set appearance.wallpaper`.
+exec --no-startup-id alpymist wallpaper
 # xrender, not glx: machines on this tier are the ones without usable GL.
 exec --no-startup-id picom --backend xrender
 exec --no-startup-id dunst
