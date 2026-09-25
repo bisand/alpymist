@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-splash
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=0
 pkgdesc="Alpymist boot splash, drawn straight to DRM/KMS"
 url="https://github.com/bisand/alpymist"

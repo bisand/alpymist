@@ -7,7 +7,7 @@
 # Settings and run by alpymist-screensaver exactly the same way, with nothing
 # in Alpymist knowing it exists.
 pkgname=alpymist-saver-mountains
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=0
 pkgdesc="Alpymist screensaver: mountain ranges travelling past, with the mist moving through them"
 url="https://github.com/bisand/alpymist"

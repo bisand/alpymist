@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-core",
  "alpymist-hwprobe",
@@ -50,7 +50,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-about"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-core",
  "alpymist-ui",
@@ -63,7 +63,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-auth"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-widget",
  "blocking",
@@ -79,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "thiserror 2.0.20",
@@ -87,7 +87,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-glesprobe"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-core",
  "khronos-egl",
@@ -97,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-greeter"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-ui",
  "denise",
@@ -115,7 +115,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-hwprobe"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-core",
  "alpymist-glesprobe",
@@ -123,7 +123,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-install"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-core",
  "alpymist-hwprobe",
@@ -142,7 +142,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-lock"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-greeter",
  "bytemuck",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-menu"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-theme",
  "bytemuck",
@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-power"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-widget",
  "denise",
@@ -185,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-saver-mountains"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-screensaver",
  "alpymist-ui",
@@ -196,7 +196,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-saver-starfield"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-screensaver",
  "alpymist-ui",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-screensaver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-ui",
  "alpymist-widget",
@@ -218,7 +218,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-settings"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-core",
  "alpymist-power",
@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-settings-app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-about",
  "alpymist-core",
@@ -248,7 +248,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-splash"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-ui",
  "denise",
@@ -262,7 +262,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-store"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-auth",
  "alpymist-widget",
@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-theme"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "denise",
  "serde",
@@ -288,7 +288,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-ui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "denise",
  "denise-drm",
@@ -305,7 +305,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-wallpaper"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-ui",
  "denise",
@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-widget"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-menu",
  "bytemuck",
@@ -329,7 +329,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-wifi"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-widget",
  "denise",
@@ -3278,7 +3278,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alpymist-core",
  "anyhow",

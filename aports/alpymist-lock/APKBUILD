@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-lock
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=0
 pkgdesc="Alpymist lock screen: the login screen again, on an ext-session-lock-v1 surface"
 url="https://github.com/bisand/alpymist"

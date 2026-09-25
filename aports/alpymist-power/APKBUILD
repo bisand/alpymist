@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-power
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=0
 pkgdesc="Alpymist power: the bar's battery, power modes, the lid and the power button, and a popup under the bar"
 url="https://github.com/bisand/alpymist"
