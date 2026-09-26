@@ -8,7 +8,7 @@ The name is Alpine plus mist — the haze on the mountains — and a pun on
 *alchemist*, which is roughly what turning a fifteen-year-old laptop back into
 a usable desktop amounts to.
 
-Two things make it different from the curated-desktop projects it takes
+Three things make it different from the curated-desktop projects it takes
 inspiration from:
 
 - **It scales down.** One desktop definition, rendered onto Hyprland, labwc
@@ -16,6 +16,9 @@ inspiration from:
   [ADR 0001](docs/adr/0001-hardware-tiers.md).
 - **It ships as signed packages.** No `curl | bash`, no root install scripts,
   no unpinned third-party repos. See [ADR 0002](docs/adr/0002-supply-chain.md).
+- **It is secure by default.** Nothing unsafe is on unless its owner turns it
+  on, knowing what it gives up. See
+  [ADR 0011](docs/adr/0011-secure-by-default.md).
 
 All first-party code is Rust with `unsafe` forbidden. Packaging metadata
 (`APKBUILD`) is shell because Alpine's build system requires it; it contains no

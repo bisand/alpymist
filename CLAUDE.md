@@ -23,6 +23,13 @@ cargo run -q -p xtask -- version          # every pkgver must equal the workspac
 
 ## Invariants
 
+**Nothing unsafe ships on by default.** No passwordless privilege escalation,
+no automatic login, no listening service, no auto-authorized device, no secret
+kept in the clear, in the image, installer, packages or skel files. The means
+to weaken any of it may ship, as an explicit, reversible opt-in. A convenience
+set up by hand on a developer's machine is not a default. See
+[ADR 0011](docs/adr/0011-secure-by-default.md).
+
 **Never hand-edit a `pkgver` or a `pkgrel`.** One version lives in
 `Cargo.toml`'s `[workspace.package]`, and `cargo xtask version <v>` writes it
 to every `aports/*/APKBUILD`. `cargo xtask version` with no argument fails if
