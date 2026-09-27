@@ -3,6 +3,7 @@
 pub mod appearance;
 pub mod input;
 pub mod keyboard;
+pub mod notifications;
 pub mod power;
 pub mod screensaver;
 pub mod updates;
@@ -72,6 +73,13 @@ pub const AREAS: &[Area] = &[
         keywords: &["battery", "suspend", "sleep", "laptop"],
     },
     Area {
+        id: "notifications",
+        title: "Notifications",
+        description: "Do not disturb, and where and for how long notifications show",
+        icon: "\u{f009a}",
+        keywords: &["mako", "popups", "alerts", "dnd", "do not disturb"],
+    },
+    Area {
         id: "screensaver",
         title: "Screensaver",
         description: "Which screensaver appears when nobody is there, and when the screen turns off",
@@ -128,6 +136,7 @@ pub fn all() -> Vec<Setting> {
         input::settings(),
         wifi::settings(),
         power::settings(),
+        notifications::settings(),
         screensaver::settings(),
         updates::settings(),
     ]
@@ -143,6 +152,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "keyboard" | "touchpad" | "mouse" => input::get(env, s),
         "wifi" => wifi::get(env),
         "power" => power::get(env, s),
+        "notifications" => notifications::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
         "updates" => updates::get(env),
         other => Err(format!("no area `{other}`")),
@@ -164,6 +174,7 @@ pub fn set(
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
         "wifi" => none(wifi::set(env, value)),
         "power" => none(power::set(env, s, value)),
+        "notifications" => notifications::set(env, s, value, force),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
         "updates" => none(updates::set(env, value)),
         other => Err(format!("no area `{other}`")),
@@ -176,6 +187,7 @@ pub fn live(env: &Env, s: &Setting, value: &Value) -> Result<(), String> {
         "appearance" if s.id == wallpaper::ID => wallpaper::live(env),
         "keyboard" if s.id == "keyboard.layout" => keyboard::live(env, value),
         "keyboard" | "touchpad" | "mouse" => input::live(env, s, value),
+        "notifications" => notifications::live(env, s),
         _ => Ok(()),
     }
 }
