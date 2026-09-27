@@ -39,7 +39,7 @@ build_alpymist_boot() {
 profile_alpymist() {
 	profile_base
 	title="Alpymist"
-	desc="Alpymist smoke-test image: probes the machine and reports its desktop tier"
+	desc="Alpymist smoke-test image: probes the machine and reports how Hyprland will do"
 	profile_abbrev="alpymist"
 	# Without this mkimage names the file alpine-alpymist-*; the image is
 	# Alpymist, and says so.
@@ -80,9 +80,8 @@ profile_alpymist() {
 	apks="$apks linux-firmware-rtlwifi linux-firmware-rtw88 linux-firmware-rtw89"
 	apks="$apks linux-firmware-brcm linux-firmware-cypress"
 	apks="$apks linux-firmware-ath9k_htc linux-firmware-ath10k linux-firmware-i915"
-	# Every desktop tier, so the installer can put any of them on a machine
-	# with no network. About 170 MiB more on the image.
-	apks="$apks alpymist-desktop-full alpymist-desktop-lite alpymist-desktop-legacy"
+	# The desktop, so the installer can put it on a machine with no network.
+	apks="$apks alpymist-desktop"
 	case "$ARCH" in
 		x86*) apks="$apks grub-bios";;
 	esac

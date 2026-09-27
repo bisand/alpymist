@@ -113,10 +113,9 @@ mod tests {
     /// defined, and the ones Alpymist runs are Alpymist's.
     #[test]
     fn an_accounts_bar_is_the_packaged_bar() {
-        for (compositor, launcher, session) in [
-            ("hyprland", "alpymist-menu", "alpymist-menu system"),
-            ("labwc", "fuzzel", "labwc --exit"),
-        ] {
+        for (compositor, launcher, session) in
+            [("hyprland", "alpymist-menu", "alpymist-menu system")]
+        {
             let bar = resolve(&PathBuf::from(SKEL).join(format!("{compositor}.jsonc")));
             let listed: Vec<&str> = ["modules-left", "modules-center", "modules-right"]
                 .iter()

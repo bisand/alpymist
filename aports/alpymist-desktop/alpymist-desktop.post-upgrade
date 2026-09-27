@@ -1,6 +1,6 @@
 #!/bin/sh
 # Hyprland's keyboard layout: the US default, where the installer or the user
-# has not already written one. See _full in the APKBUILD for why the file in
+# has not already written one. See package() in the APKBUILD for why the file in
 # /etc is not the package's own.
 conf=/etc/alpymist/hyprland-keyboard.conf
 if [ ! -e "$conf" ]; then
@@ -44,12 +44,20 @@ if command -v alpymist >/dev/null 2>&1; then
 	done
 fi
 
+# greetd's configuration for the desktop was alpymist-full.toml while there
+# were tiers, and is alpymist.toml now there is one; the old file goes with
+# the old package. Point greetd at the new one where the line is still exactly
+# what the installer wrote, before the next boot looks for it.
+conf=/etc/conf.d/greetd
+if [ -f "$conf" ]; then
+	sed -i 's|^cfgfile="/etc/greetd/alpymist-full.toml"$|cfgfile="/etc/greetd/alpymist.toml"|' "$conf"
+fi
+
 # The desktop opens its screen and keyboard through seatd, and the login screen
 # does not, so greetd has to wait for seatd or a boot that never starts it
 # shows a login screen that every login falls straight back to. The installer
 # now writes this; add it where an earlier installer's file lacks it.
-conf=/etc/conf.d/greetd
-if [ -f "$conf" ] && grep -Eq '^cfgfile=.*alpymist-(full|lite|potato)' "$conf" &&
+if [ -f "$conf" ] && grep -q '^cfgfile=.*alpymist\.toml' "$conf" &&
 	! grep -q '^rc_need=' "$conf"; then
 	printf '# The desktop opens its screen and keyboard through seatd.\nrc_need="seatd"\n' >>"$conf"
 fi

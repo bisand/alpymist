@@ -3,7 +3,8 @@
 //! The value is a console keymap from Alpine's `kbd-bkeymaps`, as the installer
 //! offers them (`no-mac`). Setting it writes `/etc/alpymist/settings.toml`, and
 //! from it the files the installer wrote: `hyprland-keyboard.conf` for
-//! Hyprland, `session.env` for labwc and i3, and the console's keymap through
+//! Hyprland, `session.env`, which the login's PAM puts in the session for
+//! whatever reads `XKB_DEFAULT_*`, and the console's keymap through
 //! `setup-keymap`. The person's running Hyprland is told with
 //! `hyprctl keyword`.
 
