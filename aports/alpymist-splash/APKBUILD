@@ -16,6 +16,11 @@ options="!check"  # the test suite runs in CI, not in the package build
 source="alpymist-splash.initd alpymist-splash-done.initd"
 builddir="$srcdir"
 
+# Where cargo leaves what it builds. build-packages.sh points every package at
+# one directory, so a dependency compiled for one is not compiled again for the
+# next; each still builds only its own crates with their own features.
+_release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
+
 # Alpymist's own picture: the boot menus, the splash, the login screen and the
 # lock. Any of the photographs in brand/wallpapers/ will do; everything that
 # shows it reads it from a path of its own, so which one it is is decided here
@@ -43,12 +48,12 @@ build() {
 	# grub-efi for arm64 ships no PNG decoder at all; see write_image in
 	# alpymist-wallpaper.
 	cargo build --release --locked -p alpymist-wallpaper
-	./target/release/alpymist-wallpaper --boot menu-640.png 640 480 "$_picture"
-	./target/release/alpymist-wallpaper --boot menu-1280.jpg 1280 800 "$_picture"
+	"$_release"/alpymist-wallpaper --boot menu-640.png 640 480 "$_picture"
+	"$_release"/alpymist-wallpaper --boot menu-1280.jpg 1280 800 "$_picture"
 }
 
 package() {
-	install -Dm755 "$builddir"/target/release/alpymist-splash \
+	install -Dm755 "$_release"/alpymist-splash \
 		"$pkgdir"/usr/bin/alpymist-splash
 	install -Dm755 "$srcdir"/alpymist-splash.initd \
 		"$pkgdir"/etc/init.d/alpymist-splash

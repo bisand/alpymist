@@ -22,6 +22,11 @@ options="!check"  # the test suite runs in CI, not in the package build
 source="alpymist-power.initd"
 builddir="$srcdir"
 
+# Where cargo leaves what it builds. build-packages.sh points every package at
+# one directory, so a dependency compiled for one is not compiled again for the
+# next; each still builds only its own crates with their own features.
+_release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
+
 prepare() {
 	# Same as alpymist: the workspace is bind-mounted at /src.
 	tar -C /src -cf - \
@@ -37,9 +42,9 @@ build() {
 }
 
 package() {
-	install -Dm755 "$builddir"/target/release/alpymist-power \
+	install -Dm755 "$_release"/alpymist-power \
 		"$pkgdir"/usr/bin/alpymist-power
-	install -Dm755 "$builddir"/target/release/alpymist-power-helper \
+	install -Dm755 "$_release"/alpymist-power-helper \
 		"$pkgdir"/usr/libexec/alpymist-power-helper
 	install -Dm644 "$builddir"/desktop/polkit/org.alpymist.power.policy \
 		"$pkgdir"/usr/share/polkit-1/actions/org.alpymist.power.policy

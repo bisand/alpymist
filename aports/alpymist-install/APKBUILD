@@ -18,6 +18,11 @@ options="!check"  # the test suite runs in CI, not in the package build
 source="alpymist-install.initd"
 builddir="$srcdir"
 
+# Where cargo leaves what it builds. build-packages.sh points every package at
+# one directory, so a dependency compiled for one is not compiled again for the
+# next; each still builds only its own crates with their own features.
+_release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
+
 prepare() {
 	# The workspace is bind-mounted at /src by the builder container. Copy the
 	# whole tree rather than a list of members: cargo needs every workspace
@@ -40,7 +45,7 @@ build() {
 }
 
 package() {
-	install -Dm755 "$builddir"/target/release/alpymist-install \
+	install -Dm755 "$_release"/alpymist-install \
 		"$pkgdir"/usr/bin/alpymist-install
 	install -Dm755 "$srcdir"/alpymist-install.initd \
 		"$pkgdir"/etc/init.d/alpymist-install

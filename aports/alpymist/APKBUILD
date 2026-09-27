@@ -18,6 +18,11 @@ install="$pkgname-openrc.post-install"
 source="alpymist-firmware.initd"
 builddir="$srcdir"
 
+# Where cargo leaves what it builds. build-packages.sh points every package at
+# one directory, so a dependency compiled for one is not compiled again for the
+# next; each still builds only its own crates with their own features.
+_release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
+
 prepare() {
 	# The workspace is bind-mounted at /src by the builder container. Copy the
 	# whole tree rather than a list of members: cargo needs every workspace
@@ -36,7 +41,7 @@ build() {
 }
 
 package() {
-	install -Dm755 "$builddir"/target/release/alpymist \
+	install -Dm755 "$_release"/alpymist \
 		"$pkgdir"/usr/bin/alpymist
 	# System settings run `alpymist set` through pkexec; what that asks.
 	install -Dm644 "$builddir"/desktop/polkit/org.alpymist.settings.policy \
