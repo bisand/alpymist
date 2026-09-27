@@ -42,6 +42,8 @@ mod tests {
 
     /// Where the packaged bar lives on a system, and where it is in the tree.
     const INSTALLED: &str = "/usr/share/alpymist/waybar/";
+    /// What Settings writes for the bar, which a system may not have yet.
+    const GENERATED: &str = "/etc/alpymist/waybar/";
     const TREE: &str = "../../desktop/waybar/";
     const SKEL: &str = "../../desktop/skel/wayland/.config/waybar/";
 
@@ -70,7 +72,9 @@ mod tests {
 
     /// A config with its includes merged in, as Waybar 0.15 merges them: what
     /// is already set wins, objects merge key by key, and an include's own
-    /// includes come first. Installed paths are read from the tree.
+    /// includes come first. Installed paths are read from the tree; generated
+    /// ones are left out, as on a system where Settings has not written them,
+    /// which Waybar only warns about.
     fn resolve(path: &Path) -> Value {
         let mut config = jsonc(path);
         let includes: Vec<String> = match &config["include"] {
@@ -82,6 +86,9 @@ mod tests {
             _ => Vec::new(),
         };
         for include in includes {
+            if include.starts_with(GENERATED) {
+                continue;
+            }
             let name = include.strip_prefix(INSTALLED).unwrap_or_else(|| {
                 panic!(
                     "{}: includes {include}, not a packaged file",
@@ -113,10 +120,9 @@ mod tests {
     /// defined, and the ones Alpymist runs are Alpymist's.
     #[test]
     fn an_accounts_bar_is_the_packaged_bar() {
-        for (compositor, launcher, session) in [
-            ("hyprland", "alpymist-menu", "alpymist-menu system"),
-            ("labwc", "fuzzel", "labwc --exit"),
-        ] {
+        for (compositor, launcher, session) in
+            [("hyprland", "alpymist-menu", "alpymist-menu system")]
+        {
             let bar = resolve(&PathBuf::from(SKEL).join(format!("{compositor}.jsonc")));
             let listed: Vec<&str> = ["modules-left", "modules-center", "modules-right"]
                 .iter()
@@ -147,6 +153,26 @@ mod tests {
                 "{compositor}: session runs {click}"
             );
         }
+    }
+
+    /// Settings' clock comes before the packaged modules, so it wins over
+    /// their clock, and after nothing else.
+    #[test]
+    fn the_clock_from_settings_wins_over_the_packaged_one() {
+        let bar = jsonc(&PathBuf::from(TREE).join("hyprland.jsonc"));
+        let includes: Vec<&str> = bar["include"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        assert_eq!(
+            includes,
+            [
+                "/etc/alpymist/waybar/clock.jsonc",
+                "/usr/share/alpymist/waybar/modules.jsonc"
+            ]
+        );
     }
 
     /// An account's own setting wins, and leaves the rest of the module to

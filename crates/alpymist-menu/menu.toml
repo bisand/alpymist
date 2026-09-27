@@ -66,14 +66,16 @@ title = "Toggle"
 items = [
   { name = "Top bar", icon = "󰍜", exec = "pkill -x waybar || waybar -c ~/.config/waybar/hyprland.jsonc -s ~/.config/waybar/style.css", keywords = ["waybar", "panel"] },
   { name = "Do not disturb", icon = "󰂛", exec = "makoctl mode -t do-not-disturb", keywords = ["notifications", "silence"] },
-  # Off when it is running, on when it is not: installed if missing, started now and at every boot, and the address to reach it printed.
-  { name = "SSH server", icon = "󰣀", exec = "if pgrep -x sshd >/dev/null; then doas /sbin/rc-service sshd stop && doas /sbin/rc-update del sshd default && echo 'SSH server off'; else { [ -x /usr/sbin/sshd ] || doas apk add openssh-server; } && doas /sbin/rc-update add sshd default && doas /sbin/rc-service sshd start && printf '\\nSSH server on: ssh %s@%s\\n' \"$USER\" \"$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == \"src\") { print $(i + 1); exit }}')\"; fi", terminal = true, hold = true, keywords = ["sshd", "openssh", "remote"] },
+  # Off when it is on, on when it is not: the ssh.server setting, which installs the server the first time and says where to reach it.
+  { name = "SSH server", icon = "󰣀", exec = "if [ \"$(alpymist get ssh.server)\" = true ]; then alpymist set ssh.server off; else alpymist set ssh.server on; fi", terminal = true, hold = true, keywords = ["sshd", "openssh", "remote"] },
 ]
 
 [menu.setup]
 title = "Setup"
 items = [
   { name = "Audio", icon = "󰕾", exec = "pavucontrol", keywords = ["sound", "volume", "speakers", "microphone"] },
+  # Pairing and connecting; Settings › Bluetooth turns it on first.
+  { name = "Bluetooth", icon = "󰂯", exec = "bluetuith", terminal = true, keywords = ["pair", "headphones", "bluez", "devices"] },
   { name = "Wi-Fi", icon = "󰖩", exec = "alpymist-wifi", keywords = ["wireless", "network", "wlan", "iwd"] },
   { name = "Power", icon = "\U000F0084", exec = "alpymist-power", keywords = ["battery", "power mode", "performance", "lid", "suspend", "charge"] },
   { name = "Config", icon = "", menu = "config", keywords = ["edit", "dotfiles"] },
@@ -140,7 +142,7 @@ title = "System"
 items = [
   { name = "Lock", icon = "", exec = "alpymist-lock", keywords = ["screen", "password"] },
   { name = "Suspend", icon = "\U000F04B2", exec = "alpymist-power suspend", keywords = ["sleep"] },
-  { name = "Log out", icon = "󰍃", exec = "case \"$XDG_CURRENT_DESKTOP\" in Hyprland) hyprctl dispatch exit ;; *) labwc --exit ;; esac", keywords = ["exit", "session", "sign out"] },
+  { name = "Log out", icon = "󰍃", exec = "hyprctl dispatch exit", keywords = ["exit", "session", "sign out"] },
   { name = "Restart", icon = "󰜉", exec = "alpymist-power restart", keywords = ["reboot"] },
   { name = "Shut down", icon = "󰐥", exec = "alpymist-power power-off", keywords = ["poweroff", "halt", "turn off"] },
 ]

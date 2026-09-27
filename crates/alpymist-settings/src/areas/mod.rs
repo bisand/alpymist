@@ -1,11 +1,16 @@
 //! Every area, and which one answers for a setting.
 
 pub mod appearance;
+pub mod bluetooth;
+pub mod datetime;
 pub mod input;
 pub mod keyboard;
+pub mod language;
+pub mod notifications;
 pub mod power;
 pub mod screensaver;
 pub mod sound;
+pub mod ssh;
 pub mod updates;
 pub mod wallpaper;
 pub mod wifi;
@@ -45,6 +50,13 @@ pub const AREAS: &[Area] = &[
         keywords: &["typing", "language", "keymap"],
     },
     Area {
+        id: "language",
+        title: "Language",
+        description: "The language programs speak, and their translations",
+        icon: "\u{f05ca}",
+        keywords: &["locale", "translation", "region", "lang"],
+    },
+    Area {
         id: "touchpad",
         title: "Touchpad",
         description: "Tapping, scrolling and typing with a touchpad",
@@ -73,6 +85,20 @@ pub const AREAS: &[Area] = &[
         keywords: &["network", "wireless", "internet"],
     },
     Area {
+        id: "bluetooth",
+        title: "Bluetooth",
+        description: "Headphones, keyboards and other wireless devices",
+        icon: "\u{f00af}",
+        keywords: &["bluez", "pair", "headphones", "wireless"],
+    },
+    Area {
+        id: "ssh",
+        title: "SSH",
+        description: "Logging in to this computer from another one",
+        icon: "\u{f08c0}",
+        keywords: &["sshd", "openssh", "remote", "server"],
+    },
+    Area {
         id: "power",
         title: "Power",
         description: "The lid, the power button, the battery and power modes",
@@ -80,11 +106,25 @@ pub const AREAS: &[Area] = &[
         keywords: &["battery", "suspend", "sleep", "laptop"],
     },
     Area {
+        id: "notifications",
+        title: "Notifications",
+        description: "Do not disturb, and where and for how long notifications show",
+        icon: "\u{f009a}",
+        keywords: &["mako", "popups", "alerts", "dnd", "do not disturb"],
+    },
+    Area {
         id: "screensaver",
         title: "Screensaver",
         description: "Which screensaver appears when nobody is there, and when the screen turns off",
         icon: "\u{f0594}",
         keywords: &["screen saver", "idle", "blank", "lock", "timeout"],
+    },
+    Area {
+        id: "datetime",
+        title: "Date & time",
+        description: "The time zone, and keeping the clock right",
+        icon: "\u{f0150}",
+        keywords: &["time zone", "timezone", "clock", "ntp", "date"],
     },
     Area {
         id: "updates",
@@ -133,11 +173,16 @@ pub fn all() -> Vec<Setting> {
         appearance::settings(),
         wallpaper::settings(),
         keyboard::settings(),
+        language::settings(),
         input::settings(),
         sound::settings(),
         wifi::settings(),
+        bluetooth::settings(),
+        ssh::settings(),
         power::settings(),
+        notifications::settings(),
         screensaver::settings(),
+        datetime::settings(),
         updates::settings(),
     ]
     .concat()
@@ -149,11 +194,16 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "appearance" if s.id == wallpaper::ID => Ok(wallpaper::get(env)),
         "appearance" => Ok(appearance::get(env, s)),
         "keyboard" if s.id == "keyboard.layout" => keyboard::get(env, s),
+        "language" => language::get(env, s),
         "keyboard" | "touchpad" | "mouse" => input::get(env, s),
         "sound" => sound::get(env, s),
         "wifi" => wifi::get(env),
+        "bluetooth" => Ok(bluetooth::get(env)),
+        "ssh" => Ok(ssh::get(env)),
         "power" => power::get(env, s),
+        "notifications" => notifications::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
+        "datetime" => datetime::get(env, s),
         "updates" => updates::get(env),
         other => Err(format!("no area `{other}`")),
     }
@@ -171,11 +221,16 @@ pub fn set(
         "appearance" if s.id == wallpaper::ID => wallpaper::set(env, s, value),
         "appearance" => none(appearance::set(env, s, value)),
         "keyboard" if s.id == "keyboard.layout" => keyboard::set(env, s, value, force),
+        "language" => language::set(env, s, value),
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
         "sound" => none(sound::set(env, s, value)),
         "wifi" => none(wifi::set(env, value)),
+        "bluetooth" => none(bluetooth::set(env, value)),
+        "ssh" => ssh::set(env, value),
         "power" => none(power::set(env, s, value)),
+        "notifications" => notifications::set(env, s, value, force),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
+        "datetime" => none(datetime::set(env, s, value, force)),
         "updates" => none(updates::set(env, value)),
         other => Err(format!("no area `{other}`")),
     }
@@ -187,6 +242,11 @@ pub fn live(env: &Env, s: &Setting, value: &Value) -> Result<(), String> {
         "appearance" if s.id == wallpaper::ID => wallpaper::live(env),
         "keyboard" if s.id == "keyboard.layout" => keyboard::live(env, value),
         "keyboard" | "touchpad" | "mouse" => input::live(env, s, value),
+        "notifications" => notifications::live(env, s),
+        "datetime" => {
+            datetime::live(env, s);
+            Ok(())
+        }
         _ => Ok(()),
     }
 }

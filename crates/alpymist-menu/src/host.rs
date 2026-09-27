@@ -104,8 +104,8 @@ struct Host {
 /// Connect, and ask for the surface.
 ///
 /// # Errors
-/// No Wayland session, or a compositor without the layer shell — labwc and
-/// Hyprland both have it; GNOME does not.
+/// No Wayland session, or a compositor without the layer shell — Hyprland
+/// has it; GNOME does not.
 pub fn connect(appearance: Appearance, trace: Option<Instant>) -> Result<Pending, String> {
     let conn = Connection::connect_to_env().map_err(|e| format!("no Wayland session: {e}"))?;
     let (globals, event_queue) =

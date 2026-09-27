@@ -1,13 +1,13 @@
-// Alpymist: the top bar's modules, shared by every Wayland desktop.
+// Alpymist: the top bar's modules.
 //
 // Slim, solid and icon-led: the desktop is the wallpaper, not the bar. Details
 // live in tooltips rather than on screen, and every icon comes from the Nerd
 // Font symbols, with Fira Mono for text.
 //
-// This file belongs to the alpymist-desktop-wayland package and is replaced on
-// every upgrade: change nothing here. hyprland.jsonc and labwc.jsonc beside it
-// add what differs between the compositors, and ~/.config/waybar includes
-// those, so anything set there wins over what is set here.
+// This file belongs to the alpymist-desktop package and is replaced on every
+// upgrade: change nothing here. hyprland.jsonc beside it adds the modules that
+// are Hyprland's own, and ~/.config/waybar includes that, so anything set
+// there wins over what is set here.
 {
   "layer": "top",
   "position": "top",
@@ -38,7 +38,10 @@
     "format-off": "",
     "format-no-controller": "",
     "tooltip-format": "{controller_alias}",
-    "tooltip-format-connected": "{device_enumerate}"
+    "tooltip-format-connected": "{device_enumerate}",
+    // Pairing and connecting, in a terminal. The icon is only there while
+    // Bluetooth is on: Settings › Bluetooth turns it on.
+    "on-click": "foot --title Bluetooth bluetuith"
   },
 
   // Wi-Fi is alpymist-wifi: it prints the icon and tooltip whenever iwd

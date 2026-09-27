@@ -2,7 +2,7 @@
 //!
 //! Everything here is best-effort: a field we cannot read becomes `None` or a
 //! conservative default, never a panic and never an optimistic guess. The
-//! interesting decisions all live in [`alpymist_core::select_tier`].
+//! interesting decisions all live in [`alpymist_core::hyprland::check`].
 
 #![forbid(unsafe_code)]
 

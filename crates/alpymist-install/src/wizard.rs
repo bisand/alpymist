@@ -8,6 +8,7 @@ use crate::answers::{
     Answers, DiskPlan, Field, Issue, MIN_PASSWORD, Network, gateway_is_local, validate_hostname,
     validate_ipv4, validate_username,
 };
+use alpymist_core::hyprland::Verdict;
 
 /// The screens, in order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -27,7 +28,7 @@ pub enum Step {
     Encryption,
     /// User account and hostname.
     Account,
-    /// Detected desktop tier, with an override.
+    /// How Hyprland will do on this machine, and why.
     Desktop,
     /// Review everything before anything is written.
     Confirm,
@@ -84,7 +85,7 @@ impl Step {
                 "Keeps what is on the disk private if the machine is lost or stolen."
             }
             Self::Account => "The first account, which will be able to use doas.",
-            Self::Desktop => "Chosen from what this machine can actually drive.",
+            Self::Desktop => "Alpymist's desktop is Hyprland. This is how it will do here.",
             Self::Confirm => {
                 "Check this over. This is the last point at which nothing has changed."
             }
@@ -324,12 +325,7 @@ impl Wizard {
                     issues.push(issue(Field::PasswordConfirm, "The passwords do not match."));
                 }
             }
-            Step::Desktop => {
-                if a.effective_tier().is_none() {
-                    issues.push(issue(Field::Disk, "Choose which desktop to install."));
-                }
-            }
-            Step::Welcome | Step::Confirm | Step::Install | Step::Done => {}
+            Step::Welcome | Step::Desktop | Step::Confirm | Step::Install | Step::Done => {}
         }
         issues
     }
@@ -393,12 +389,21 @@ impl Wizard {
                     ));
                 }
             }
-            Step::Desktop if a.tier_was_overridden() => {
+            // Said, never refused: the check is cautious, and a machine it
+            // doubts may well run Hyprland (ADR 0001's addendum).
+            Step::Desktop if a.hyprland.as_ref().map(|c| c.verdict) == Some(Verdict::Unlikely) => {
                 notes.push(note(
                     Field::Disk,
-                    "You have overridden what this machine reported it can drive. \
-                         If the desktop will not start, this screen is why."
+                    "Hyprland will probably not start on this machine, for the reasons above. \
+                     You can install anyway: if it does not start, the login screen says so \
+                     and offers a text console."
                         .into(),
+                ));
+            }
+            Step::Desktop if a.hyprland.as_ref().map(|c| c.verdict) == Some(Verdict::Slow) => {
+                notes.push(note(
+                    Field::Disk,
+                    "Hyprland will run here, but slowly, for the reasons above.".into(),
                 ));
             }
             _ => {}
@@ -438,7 +443,7 @@ impl Wizard {
 mod tests {
     use super::{Step, Wizard};
     use crate::answers::{Answers, DiskPlan, Field, Network};
-    use alpymist_core::Tier;
+    use alpymist_core::hyprland::{Check, Verdict};
 
     /// A wizard with every question answered acceptably.
     fn complete() -> Wizard {
@@ -460,7 +465,6 @@ mod tests {
             password_confirm: "correct horse battery".into(),
             hostname: "alpymist".into(),
             disks: crate::disks::sample(),
-            detected_tier: Some(Tier::Lite),
             ..Answers::default()
         })
     }
@@ -711,17 +715,23 @@ mod tests {
     }
 
     #[test]
-    fn overriding_the_detected_tier_advises_why_the_desktop_might_not_start() {
+    fn a_machine_hyprland_may_not_run_on_is_warned_about_and_let_through() {
         let mut w = at(Step::Desktop);
-        w.answers.tier_override = Some(Tier::Full);
-        assert!(w.blockers().is_empty(), "the override is allowed");
-        assert!(!w.advisories().is_empty(), "but it should be flagged");
+        w.answers.hyprland = Some(Check {
+            verdict: Verdict::Unlikely,
+            reasons: vec!["no DRM/KMS device found".into()],
+        });
+        assert!(w.blockers().is_empty(), "nothing is refused");
+        assert!(!w.advisories().is_empty(), "but it is said");
     }
 
     #[test]
-    fn agreeing_with_the_probe_produces_no_advisory() {
+    fn a_machine_that_runs_hyprland_well_has_nothing_to_say() {
         let mut w = at(Step::Desktop);
-        w.answers.tier_override = Some(Tier::Lite); // same as detected
+        w.answers.hyprland = Some(Check {
+            verdict: Verdict::Runs,
+            reasons: vec!["GL ES 3.2".into()],
+        });
         assert!(w.advisories().is_empty());
     }
 
