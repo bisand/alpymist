@@ -5,6 +5,7 @@ pub mod input;
 pub mod keyboard;
 pub mod power;
 pub mod screensaver;
+pub mod sound;
 pub mod updates;
 pub mod wallpaper;
 pub mod wifi;
@@ -56,6 +57,13 @@ pub const AREAS: &[Area] = &[
         description: "Pointer speed, acceleration and buttons",
         icon: "\u{f037d}",
         keywords: &["cursor", "pointer", "wheel"],
+    },
+    Area {
+        id: "sound",
+        title: "Sound",
+        description: "Speakers, headphones and microphones, and how loud",
+        icon: "\u{f057e}",
+        keywords: &["audio", "volume", "speakers", "microphone", "pipewire"],
     },
     Area {
         id: "wifi",
@@ -126,6 +134,7 @@ pub fn all() -> Vec<Setting> {
         wallpaper::settings(),
         keyboard::settings(),
         input::settings(),
+        sound::settings(),
         wifi::settings(),
         power::settings(),
         screensaver::settings(),
@@ -141,6 +150,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "appearance" => Ok(appearance::get(env, s)),
         "keyboard" if s.id == "keyboard.layout" => keyboard::get(env, s),
         "keyboard" | "touchpad" | "mouse" => input::get(env, s),
+        "sound" => sound::get(env, s),
         "wifi" => wifi::get(env),
         "power" => power::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
@@ -162,6 +172,7 @@ pub fn set(
         "appearance" => none(appearance::set(env, s, value)),
         "keyboard" if s.id == "keyboard.layout" => keyboard::set(env, s, value, force),
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
+        "sound" => none(sound::set(env, s, value)),
         "wifi" => none(wifi::set(env, value)),
         "power" => none(power::set(env, s, value)),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
