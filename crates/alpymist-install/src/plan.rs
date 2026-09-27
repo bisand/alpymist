@@ -25,6 +25,7 @@
 //! passphrase prompt at boot types the way the user chose.
 
 use crate::answers::{Answers, DiskPlan, Firmware, Network};
+use alpymist_core::SessionBackend;
 use std::fmt::Write as _;
 
 /// Bytes a step is given on standard input.
@@ -186,6 +187,14 @@ impl PlanError {
 
 /// Where the new system is mounted while it is being built.
 const ROOT: &str = "/mnt";
+/// Added to `/etc/conf.d/greetd` on the Wayland tiers, whose desktops open the
+/// screen and keyboard through seatd. The login screen needs no seat, so
+/// without this it starts regardless, and when seatd has not, every login goes
+/// straight back to it with no word of why. With it, greetd waits for seatd,
+/// and a seatd that never starts leaves the text consoles instead. Legacy's X
+/// server runs as root and needs no seat.
+const GREETD_NEEDS_SEATD: &str =
+    "# The desktop opens its screen and keyboard through seatd.\nrc_need=\"seatd\"\n";
 /// The device-mapper name of the unlocked root, which `setup-disk` expects.
 const CRYPT_NAME: &str = "root";
 /// Boot partition size in MiB. Holds kernels and initramfs, so not the bare
@@ -644,8 +653,13 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         )
         .with_input(Input::Text(format!(
             "# Written by the Alpymist installer: the {tier:?} tier's session.\n\
-             cfgfile=\"{}\"\n",
-            tier.greeter_config()
+             cfgfile=\"{}\"\n{}",
+            tier.greeter_config(),
+            if matches!(tier.backend(), SessionBackend::I3) {
+                ""
+            } else {
+                GREETD_NEEDS_SEATD
+            }
         )))
         .may_fail(),
     );
@@ -1060,11 +1074,23 @@ mod tests {
             conf.contains("cfgfile=\"/etc/greetd/alpymist-potato.toml\""),
             "{conf}"
         );
+        assert!(conf.contains("rc_need=\"seatd\""), "{conf}");
         assert!(titles(&a).contains(&"Adding your account to seat".to_string()));
         assert!(
             !titles(&a).contains(&"Adding your account to input".to_string()),
             "input would let any program read every keystroke"
         );
+    }
+
+    #[test]
+    fn only_the_x11_tier_starts_its_login_screen_without_seatd() {
+        let mut a = answers();
+        a.tier_override = Some(Tier::Legacy);
+        let plan = build(&a).unwrap();
+        let Some(Input::Text(conf)) = &step(&plan, "desktop session").stdin else {
+            panic!("no greetd configuration");
+        };
+        assert!(!conf.contains("rc_need"), "{conf}");
     }
 
     #[test]
