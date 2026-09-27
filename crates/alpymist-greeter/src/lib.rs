@@ -12,5 +12,6 @@ pub mod app;
 pub mod clock;
 pub mod ipc;
 pub mod login;
+pub mod stopped;
 pub mod users;
 pub mod vt;
