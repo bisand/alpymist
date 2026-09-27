@@ -1,0 +1,6 @@
+#!/bin/sh
+# Start alpymist-thunderbolt at every boot. The installer does this too, but
+# only for a system it installs: one that gets this package by upgrading would
+# otherwise never run it, and a dock allowed always would wait for udev alone.
+rc-update add alpymist-thunderbolt default >/dev/null 2>&1
+exit 0
