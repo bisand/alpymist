@@ -13,3 +13,4 @@ pub mod clock;
 pub mod ipc;
 pub mod login;
 pub mod users;
+pub mod vt;

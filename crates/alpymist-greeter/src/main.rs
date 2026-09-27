@@ -56,11 +56,21 @@ fn hostname() -> String {
 
 /// The program a power action runs. Through doas, whose rule the package
 /// installs: greetd's user may run exactly these two and nothing else.
-fn power_command(power: Power) -> [&'static str; 3] {
-    match power {
-        Power::Restart => ["doas", "-n", "/sbin/reboot"],
-        Power::PowerOff => ["doas", "-n", "/sbin/poweroff"],
+///
+/// Asked plainly, they only signal init, which stops every service and then
+/// the machine. Forced, they sync the disks and stop it straight away: for when
+/// init never acts on the signal, which is what happens while a boot is stuck
+/// on a service that never finishes starting (busybox init reads signals only
+/// between inittab's `wait` actions, and Alpine's boot is one).
+fn power_command(power: Power, force: bool) -> Vec<&'static str> {
+    let mut command = match power {
+        Power::Restart => vec!["doas", "-n", "/sbin/reboot"],
+        Power::PowerOff => vec!["doas", "-n", "/sbin/poweroff"],
+    };
+    if force {
+        command.push("-f");
     }
+    command
 }
 
 #[cfg(all(feature = "winit", not(feature = "drm")))]
@@ -90,7 +100,10 @@ mod preview {
             let (clock, date) = alpymist_greeter::clock::now();
             changed |= self.app.set_time(clock, date);
             if let Some(power) = self.app.take_power() {
-                eprintln!("would run: {}", super::power_command(power).join(" "));
+                eprintln!(
+                    "would run: {}",
+                    super::power_command(power, false).join(" ")
+                );
             }
             if self.app.started {
                 eprintln!("logged in; greetd would start the session now");
@@ -165,8 +178,9 @@ mod preview {
 /// On the machine: KMS for output, evdev for input, greetd for everything else.
 #[cfg(feature = "drm")]
 mod console {
-    use alpymist_greeter::app::{App, Authenticator, Status, action_for};
+    use alpymist_greeter::app::{App, Authenticator, Power, Status, action_for};
     use alpymist_greeter::login::{self, Outcome, Stream};
+    use alpymist_greeter::vt;
     use denise::{InputEvent, InputSource};
     use denise_drm::SurfaceConfig;
     use denise_evdev::{Console, InputBackend};
@@ -176,6 +190,13 @@ mod console {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::{Duration, Instant};
 
+    /// How often to ask the kernel which console is showing. A switch back is
+    /// noticed within this, and the file is one short read.
+    const VT_CHECK: Duration = Duration::from_millis(250);
+
+    /// How long a restart or power off may take to begin before it is forced.
+    const FORCE_POWER_AFTER: Duration = Duration::from_secs(15);
+
     pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         let cmd = super::session_command()?;
 
@@ -183,11 +204,8 @@ mod console {
         // the VT from also receiving the password as terminal input — which,
         // left unmuted, is exactly the garbage a TUI greeter shows.
         let mut console = Console::open_if_present();
-        if let Some(console) = console.as_mut() {
-            console.graphics_mode()?;
-            console.mute_keyboard()?;
-        }
-        let result = run(cmd);
+        take_console(&mut console)?;
+        let result = run(cmd, &mut console);
         // Always hand the VT back before exiting: greetd starts the session
         // on this same terminal, and a compositor inheriting a muted keyboard
         // in graphics mode is a desktop nobody can type into.
@@ -195,6 +213,56 @@ mod console {
             let _ = console.restore();
         }
         result
+    }
+
+    /// Run a restart or power off, saying whether doas let it.
+    fn run_power(power: Power, force: bool) -> bool {
+        let command = super::power_command(power, force);
+        let (program, args) = command.split_first().expect("a command has a program");
+        std::process::Command::new(program)
+            .args(args)
+            .status()
+            .is_ok_and(|s| s.success())
+    }
+
+    /// Graphics mode and a muted keyboard, on whatever console there is.
+    fn take_console(console: &mut Option<Console>) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(console) = console.as_mut() {
+            console.graphics_mode()?;
+            console.mute_keyboard()?;
+        }
+        Ok(())
+    }
+
+    /// Show console `to`, having handed this one back first: the kernel ignores
+    /// a switch away from a console in graphics mode, and its keyboard has to
+    /// work over there. `chvt` waits for the switch to happen; if it has not in
+    /// a couple of seconds, it never will, and it is killed rather than waited
+    /// on for ever.
+    fn switch_to(to: u32, console: &mut Option<Console>) -> bool {
+        if let Some(console) = console.as_mut() {
+            let _ = console.restore();
+        }
+        let Ok(mut chvt) = std::process::Command::new("chvt")
+            .arg(to.to_string())
+            .spawn()
+        else {
+            return false;
+        };
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            match chvt.try_wait() {
+                Ok(Some(status)) => return status.success(),
+                Ok(None) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                _ => {
+                    let _ = chvt.kill();
+                    let _ = chvt.wait();
+                    return false;
+                }
+            }
+        }
     }
 
     /// Each login attempt, as a conversation with greetd on `socket` that
@@ -218,27 +286,30 @@ mod console {
         })
     }
 
-    fn run(cmd: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-        let stop = Arc::new(AtomicBool::new(false));
-        for signal in [SIGTERM, SIGINT, SIGHUP] {
-            signal_hook::flag::register(signal, Arc::clone(&stop))?;
-        }
-
-        let socket = std::env::var("GREETD_SOCK").ok();
-        let authenticate = through_greetd(socket.clone(), cmd);
-
-        // The boot splash lets go of the display as greetd starts; wait for it.
-        //
-        // A Screen rather than the surface itself: it draws into ordinary
-        // memory and copies the result over, which is about four times faster
-        // than rasterising into the scanout mapping. See its documentation.
-        let mut screen = alpymist_ui::display::Screen::open_patiently(
+    /// The display, once the boot splash has let go of it as greetd starts.
+    ///
+    /// A Screen rather than the surface itself: it draws into ordinary memory
+    /// and copies the result over, which is about four times faster than
+    /// rasterising into the scanout mapping. See its documentation.
+    fn open_screen() -> Result<alpymist_ui::display::Screen, denise_drm::DrmError> {
+        alpymist_ui::display::Screen::open_patiently(
             SurfaceConfig::default(),
             alpymist_ui::display::PATIENCE,
-        )?;
-        let size = screen.size();
-        eprintln!("display: {}x{} via DRM/KMS", size.width, size.height);
+        )
+    }
 
+    /// Every keyboard and pointer, read with the system's layout, if there are
+    /// any yet.
+    fn open_keyboard(size: denise::Size, app: &mut App) -> Option<InputBackend> {
+        let mut backend = InputBackend::open_all(size).ok()?;
+        let (layout, source) = backend.set_layout_from_system();
+        eprintln!("keyboard: {} (from {source})", layout.name);
+        app.keyboard = layout.name.to_string();
+        Some(backend)
+    }
+
+    /// The login screen itself, before anything is drawn.
+    fn new_app(socket: Option<&str>, authenticate: Authenticator, size: denise::Size) -> App {
         let mut app = App::new(
             alpymist_greeter::users::discover(),
             authenticate,
@@ -254,51 +325,180 @@ mod console {
             app.status = Status::Problem("Not started by greetd, so nobody can log in.".into());
         }
         eprintln!("{}", app.face.status.describe());
+        app
+    }
+
+    /// Whether another console is showing. See the vt module.
+    struct VtWatch {
+        /// This screen's own console; `None` for a greeter with none.
+        own: Option<u32>,
+        next: Instant,
+    }
+
+    impl VtWatch {
+        fn new() -> Self {
+            let own = std::fs::read_to_string("/proc/self/stat")
+                .ok()
+                .and_then(|stat| vt::own_vt(&stat));
+            Self {
+                own,
+                next: Instant::now(),
+            }
+        }
+
+        /// Asked at most every [`VT_CHECK`]: `None` in between, and always
+        /// when this screen has no console of its own.
+        fn away(&mut self) -> Option<bool> {
+            let own = self.own?;
+            if Instant::now() < self.next {
+                return None;
+            }
+            self.next = Instant::now() + VT_CHECK;
+            let active = std::fs::read_to_string(vt::ACTIVE)
+                .ok()
+                .and_then(|a| vt::active_vt(&a));
+            Some(active.is_some_and(|vt| vt != own))
+        }
+
+        /// Whether Ctrl+Alt+F`to` should switch: to a console that is not this one.
+        fn is_elsewhere(&self, to: u32) -> bool {
+            self.own.is_some_and(|own| own != to)
+        }
+    }
+
+    /// A restart or power off that has been asked of init, and when.
+    #[derive(Default)]
+    struct PowerRequest(Option<(Power, Instant)>);
+
+    impl PowerRequest {
+        /// Ask init, and say on screen that it has been asked.
+        fn ask(&mut self, power: Power, app: &mut App) {
+            if run_power(power, false) {
+                let doing = match power {
+                    Power::Restart => "Restarting…",
+                    Power::PowerOff => "Powering off…",
+                };
+                app.status = Status::Notice(doing.into());
+                self.0 = Some((power, Instant::now()));
+            } else {
+                app.status = Status::Problem("This screen is not allowed to do that.".into());
+            }
+        }
+
+        /// A shutdown in progress stops greetd, and this screen with it, well
+        /// within [`FORCE_POWER_AFTER`]. Still here means init never took the
+        /// request, so force it. Returns whether the screen has something new.
+        fn force_if_ignored(&mut self, app: &mut App) -> bool {
+            let Some((power, _)) = self.0.filter(|(_, at)| at.elapsed() >= FORCE_POWER_AFTER)
+            else {
+                return false;
+            };
+            eprintln!("{power:?} was not carried out; forcing it");
+            self.0 = None;
+            if run_power(power, true) {
+                return false;
+            }
+            app.status = Status::Problem("This screen is not allowed to do that.".into());
+            true
+        }
+    }
+
+    fn run(
+        cmd: Vec<String>,
+        console: &mut Option<Console>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let stop = Arc::new(AtomicBool::new(false));
+        for signal in [SIGTERM, SIGINT, SIGHUP] {
+            signal_hook::flag::register(signal, Arc::clone(&stop))?;
+        }
+        let socket = std::env::var("GREETD_SOCK").ok();
+        let authenticate = through_greetd(socket.clone(), cmd);
+
+        let first = open_screen()?;
+        let size = first.size();
+        let mut screen = Some(first);
+        eprintln!("display: {}x{} via DRM/KMS", size.width, size.height);
+        let mut app = new_app(socket.as_deref(), authenticate, size);
 
         let mut input: Option<InputBackend> = None;
         let mut next_look = Instant::now();
         let mut events: Vec<InputEvent> = Vec::new();
         let mut dirty = true;
+        let mut watch = VtWatch::new();
+        let mut asked = PowerRequest::default();
 
         loop {
+            // Another console is showing: let it have the display, and stop
+            // reading the keyboard, so what is typed there reaches only it.
+            match watch.away() {
+                Some(true) if screen.is_some() => {
+                    eprintln!("another console is showing; letting go of the display");
+                    screen = None;
+                    input = None;
+                }
+                Some(false) if screen.is_none() => {
+                    eprintln!("back on this console");
+                    take_console(console)?;
+                    screen = Some(open_screen()?);
+                    next_look = Instant::now();
+                    dirty = true;
+                }
+                _ => {}
+            }
+            if screen.is_none() {
+                if stop.load(Ordering::Relaxed) {
+                    return Ok(());
+                }
+                std::thread::sleep(VT_CHECK);
+                continue;
+            }
+
             // A keyboard that enumerates a moment after the greeter starts is
             // ordinary on this hardware; keep looking until there is one.
             if input.is_none() && Instant::now() >= next_look {
-                match InputBackend::open_all(size) {
-                    Ok(mut backend) => {
-                        let (layout, source) = backend.set_layout_from_system();
-                        eprintln!("keyboard: {} (from {source})", layout.name);
-                        app.keyboard = layout.name.to_string();
-                        input = Some(backend);
-                        dirty = true;
-                    }
-                    Err(_) => next_look = Instant::now() + Duration::from_secs(1),
-                }
+                input = open_keyboard(size, &mut app);
+                dirty |= input.is_some();
+                next_look = Instant::now() + Duration::from_secs(1);
             }
 
             events.clear();
             if let Some(backend) = input.as_mut() {
                 backend.poll(&mut events);
             }
+            let mut switch = None;
             for event in &events {
-                if let Some(action) = action_for(event) {
+                if let Some(to) = vt::console_for(event) {
+                    switch = Some(to).filter(|&to| watch.is_elsewhere(to));
+                } else if let Some(action) = action_for(event) {
                     dirty |= app.act(action);
                 }
+            }
+            if let Some(to) = switch {
+                // Let go of the display and the keyboard before the console,
+                // so the text console can draw and nothing typed there
+                // reaches this screen. Coming back takes all three again.
+                screen = None;
+                input = None;
+                if !switch_to(to, console) {
+                    take_console(console)?;
+                    screen = Some(open_screen()?);
+                    app.status = Status::Problem(format!("Could not switch to console {to}."));
+                    dirty = true;
+                }
+                watch.next = Instant::now();
+                continue;
             }
             dirty |= app.tick();
             let (clock, date) = alpymist_greeter::clock::now();
             dirty |= app.set_time(clock, date);
 
             if let Some(power) = app.take_power() {
-                let [program, args @ ..] = super::power_command(power);
-                let ran = std::process::Command::new(program).args(args).status();
-                if !ran.is_ok_and(|s| s.success()) {
-                    app.status = Status::Problem("This screen is not allowed to do that.".into());
-                    dirty = true;
-                }
+                asked.ask(power, &mut app);
+                dirty = true;
             }
+            dirty |= asked.force_if_ignored(&mut app);
 
-            if dirty {
+            if let (true, Some(screen)) = (dirty, screen.as_mut()) {
                 // The region `draw` reports is for a compositor that can be
                 // told to upload less than a screen. There is none here: this
                 // is the scanout mapping, and `present_with` copies the whole
@@ -337,5 +537,23 @@ fn main() {
     if let Err(e) = result {
         eprintln!("alpymist-greeter: {e}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::power_command;
+    use alpymist_greeter::app::Power;
+
+    #[test]
+    fn a_power_action_asks_init_first_and_forces_only_when_told() {
+        assert_eq!(
+            power_command(Power::PowerOff, false),
+            ["doas", "-n", "/sbin/poweroff"]
+        );
+        assert_eq!(
+            power_command(Power::Restart, true),
+            ["doas", "-n", "/sbin/reboot", "-f"]
+        );
     }
 }
