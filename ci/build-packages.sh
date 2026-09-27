@@ -51,6 +51,13 @@ BUILD="${BUILD:-}"
 INDEPENDENT=" squint alpymist-keys "
 
 export CARGO_HOME=/tmp/cargo
+# Where the first-party packages build, one directory for all of them. Each
+# copies the workspace into a directory of its own and builds only its own
+# crates, with its own features, so what one package gets never depends on
+# another's; but a dependency built once with the same features is not built
+# again, and without this each package compiled every one from scratch. squint
+# builds as upstream wrote it, in its own tree.
+TARGET=/tmp/cargo-target
 
 case "$CHANNEL" in
 stable | dev) ;;
@@ -149,9 +156,11 @@ else
 		# committed sha512 is the pin: `abuild checksum` would delete that block
 		# and write whatever was downloaded, so it is not run over it. abuild
 		# checks the sums itself while fetching, and stops if they disagree.
+		shared=()
+		[[ "$INDEPENDENT" == *" $pkg "* ]] || shared=(env CARGO_TARGET_DIR="$TARGET")
 		( cd ~/ap/"$pkg" \
 			&& { [ "$pkg" = squint ] || abuild checksum >/dev/null; } \
-			&& abuild -r >/dev/null )
+			&& "${shared[@]}" abuild -r >/dev/null )
 		if [ -n "$key" ]; then
 			# Whoever restored the cache may not be who builds here.
 			rm -rf "${CACHE:?}/$pkg" || {

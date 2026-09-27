@@ -79,6 +79,11 @@ install="$pkgname-full.post-install $pkgname-full.post-upgrade
 source=""
 builddir="$srcdir"
 
+# Where cargo leaves what it builds. build-packages.sh points every package at
+# one directory, so a dependency compiled for one is not compiled again for the
+# next; each still builds only its own crates with their own features.
+_release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
+
 prepare() {
 	# Same as alpymist: the workspace is bind-mounted at /src.
 	tar -C /src -cf - \
@@ -92,8 +97,8 @@ build() {
 	cargo build --release --locked -p alpymist-wallpaper
 	# The wallpaper and the mark come from the same code: the furthest range in
 	# the wallpaper is the mark, weathered.
-	./target/release/alpymist-wallpaper "$builddir"/alpymist.png 2560 1440
-	./target/release/alpymist-wallpaper --mark "$builddir"/mark.png 64
+	"$_release"/alpymist-wallpaper "$builddir"/alpymist.png 2560 1440
+	"$_release"/alpymist-wallpaper --mark "$builddir"/mark.png 64
 }
 
 # Copy one of desktop/skel's parts into a package's /etc/skel.

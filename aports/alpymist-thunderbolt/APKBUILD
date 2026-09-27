@@ -24,6 +24,11 @@ install="$pkgname-openrc.post-install"
 source="alpymist-thunderbolt.initd"
 builddir="$srcdir"
 
+# Where cargo leaves what it builds. build-packages.sh points every package at
+# one directory, so a dependency compiled for one is not compiled again for the
+# next; each still builds only its own crates with their own features.
+_release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
+
 prepare() {
 	# Same as alpymist: the workspace is bind-mounted at /src.
 	tar -C /src -cf - \
@@ -39,9 +44,9 @@ build() {
 }
 
 package() {
-	install -Dm755 "$builddir"/target/release/alpymist-thunderbolt \
+	install -Dm755 "$_release"/alpymist-thunderbolt \
 		"$pkgdir"/usr/bin/alpymist-thunderbolt
-	install -Dm755 "$builddir"/target/release/alpymist-thunderbolt-helper \
+	install -Dm755 "$_release"/alpymist-thunderbolt-helper \
 		"$pkgdir"/usr/libexec/alpymist-thunderbolt-helper
 	install -Dm644 "$builddir"/desktop/polkit/org.alpymist.thunderbolt.policy \
 		"$pkgdir"/usr/share/polkit-1/actions/org.alpymist.thunderbolt.policy

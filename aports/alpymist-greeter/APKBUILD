@@ -19,6 +19,11 @@ options="!check"  # the test suite runs in CI, not in the package build
 source="alpymist-greeter.doas.conf"
 builddir="$srcdir"
 
+# Where cargo leaves what it builds. build-packages.sh points every package at
+# one directory, so a dependency compiled for one is not compiled again for the
+# next; each still builds only its own crates with their own features.
+_release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
+
 prepare() {
 	# Same as alpymist: the workspace is bind-mounted at /src.
 	tar -C /src -cf - \
@@ -37,7 +42,7 @@ build() {
 }
 
 package() {
-	install -Dm755 "$builddir"/target/release/alpymist-greeter \
+	install -Dm755 "$_release"/alpymist-greeter \
 		"$pkgdir"/usr/bin/alpymist-greeter
 	install -Dm600 "$srcdir"/alpymist-greeter.doas.conf \
 		"$pkgdir"/etc/doas.d/alpymist-greeter.conf

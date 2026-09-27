@@ -27,6 +27,15 @@ Five workflows:
 squint is built from a pinned upstream release. It is kept in the Actions cache
 under a key of its aport and the builder, and built again only when one of
 those changes, or at least once a month so it follows Alpine's libraries.
+
+The first-party packages build one after another, each from its own copy of
+the workspace, but into one cargo target directory, so a dependency is
+compiled once for each set of features it is built with rather than once for
+each package. Each package still builds only its own crates, with
+`cargo build -p` and its own features. That is deliberate: a crate that only
+compiles with a feature some other crate turns on in the workspace build fails
+here, as Settings did when it used the screensaver's `paint` without `saver`.
+squint builds in its own tree, as upstream wrote it.
 The ISO jobs build no packages at all: they index and sign the ones the
 package jobs made. What is left of an image's time is mostly squashing the
 kernel's firmware.
