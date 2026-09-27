@@ -211,6 +211,15 @@ impl Settings {
         areas::live(env, s, value).map_err(Error::Failed)
     }
 
+    /// What the desktop's environment gets from the account's settings:
+    /// variables and their values, for `alpymist session` to start it with.
+    ///
+    /// # Errors
+    /// The account's values could not be read.
+    pub fn session_environment(&self, env: &Env) -> Result<Vec<(&'static str, String)>, Error> {
+        areas::language::session_environment(env).map_err(Error::Failed)
+    }
+
     /// What a session needs before its compositor reads its configuration.
     ///
     /// # Errors

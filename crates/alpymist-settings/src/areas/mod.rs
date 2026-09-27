@@ -3,6 +3,7 @@
 pub mod appearance;
 pub mod input;
 pub mod keyboard;
+pub mod language;
 pub mod power;
 pub mod screensaver;
 pub mod updates;
@@ -42,6 +43,13 @@ pub const AREAS: &[Area] = &[
         description: "The layout, and how held keys repeat",
         icon: "\u{f030c}",
         keywords: &["typing", "language", "keymap"],
+    },
+    Area {
+        id: "language",
+        title: "Language",
+        description: "The language programs speak, and their translations",
+        icon: "\u{f05ca}",
+        keywords: &["locale", "translation", "region", "lang"],
     },
     Area {
         id: "touchpad",
@@ -125,6 +133,7 @@ pub fn all() -> Vec<Setting> {
         appearance::settings(),
         wallpaper::settings(),
         keyboard::settings(),
+        language::settings(),
         input::settings(),
         wifi::settings(),
         power::settings(),
@@ -140,6 +149,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "appearance" if s.id == wallpaper::ID => Ok(wallpaper::get(env)),
         "appearance" => Ok(appearance::get(env, s)),
         "keyboard" if s.id == "keyboard.layout" => keyboard::get(env, s),
+        "language" => language::get(env, s),
         "keyboard" | "touchpad" | "mouse" => input::get(env, s),
         "wifi" => wifi::get(env),
         "power" => power::get(env, s),
@@ -161,6 +171,7 @@ pub fn set(
         "appearance" if s.id == wallpaper::ID => wallpaper::set(env, s, value),
         "appearance" => none(appearance::set(env, s, value)),
         "keyboard" if s.id == "keyboard.layout" => keyboard::set(env, s, value, force),
+        "language" => language::set(env, s, value),
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
         "wifi" => none(wifi::set(env, value)),
         "power" => none(power::set(env, s, value)),
