@@ -95,3 +95,33 @@ key still reaches only systems that ask for it. If the key is ever to go back
 offline, the shape is here: remove the environment's secrets and publish with
 `cargo xtask publish --run <id> --push` again, which is unchanged and still
 works.
+
+## Addendum, 2026-09-27: Jottacloud, fetched from Jottacloud
+
+Install › Jottacloud in the menu, or `alpymist-jottacloud install`, downloads
+the latest jotta-cli tarball from `repo.jotta.us` and installs its two static
+binaries into `/usr/local/bin`, with an OpenRC service for jottad. It is the
+first thing Alpymist offers to put on a system that is not an apk from Alpine,
+from Alpymist or from Flathub.
+
+**This goes against decisions 1, 2 and 5 as written.** A shell script run by
+the user, calling doas, puts unpackaged files on the system and fetches them
+from a third party. The checksum it verifies is published by the same server
+as the tarball, so it proves the download is intact, not that it is genuine:
+anyone who controls `repo.jotta.us` or its TLS certificate controls what gets
+installed. A pinned hash in this repository was considered and turned down,
+because it would have to be bumped for every Jottacloud release, and an old
+client falls behind a service that changes on its own schedule.
+
+Why, anyway: jotta-cli is closed-source and Jottacloud's to distribute, so it
+cannot be an Alpymist package, and there is no Alpine or Flathub one. Leaving
+people to copy the tarball over `/` by hand is worse on every count: that is
+how the machine this was written for came to hang at boot.
+
+What keeps it within [ADR 0011](0011-secure-by-default.md): nothing is fetched
+until a person chooses it and answers yes to a prompt that says what it is and
+what jottad can read. Every install and removal is logged to syslog as
+`alpymist-jottacloud`. jottad runs as the person who installed it, not root,
+and listens on 127.0.0.1 only. Remove › Jottacloud takes away everything the
+install put there, and offers to delete `~/.jottad` as well. No image,
+installer, tier or upgrade installs it.
