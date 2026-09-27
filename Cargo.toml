@@ -19,6 +19,7 @@ members = [
     "crates/alpymist-splash",
     "crates/alpymist-store",
     "crates/alpymist-theme",
+    "crates/alpymist-thunderbolt",
     "crates/alpymist-ui",
     "crates/alpymist-wallpaper",
     "crates/alpymist-widget",

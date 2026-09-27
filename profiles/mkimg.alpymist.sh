@@ -102,6 +102,13 @@ profile_alpymist() {
 	case "$ARCH" in
 		x86*) initfs_cmdline="$initfs_cmdline console=tty0 console=ttyS0,115200";;
 	esac
+	# Intel's IOMMU, which Alpine's kernel leaves off unless asked, so a
+	# Thunderbolt or USB4 device cannot reach all of memory by DMA; AMD's is
+	# on wherever it exists. The installed system gets the same from the
+	# installer (KERNELOPTS in alpymist-install's plan). See ADR 0012.
+	case "$ARCH" in
+		x86*) initfs_cmdline="$initfs_cmdline intel_iommu=on";;
+	esac
 	apkovl="genapkovl-alpymist.sh"
 
 	_alpymist_boot_menus

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+  Alpymist Thunderbolt: what alpymist-thunderbolt-helper may do, and who may
+  ask. See ADR 0012.
+
+  pkexec picks the action by the helper's path and first argument. Letting a
+  device in for the first time always takes an administrator's password: it
+  gives the device the run of the machine's memory. 50-alpymist-thunderbolt.rules
+  lets the seat group let in again, without one, a device an administrator
+  already allowed always, and forget one, which only takes trust away. The
+  helper's boot verb has no action here: udev and OpenRC run it as root.
+-->
+<policyconfig>
+  <vendor>Alpymist</vendor>
+  <vendor_url>https://github.com/bisand/alpymist</vendor_url>
+
+  <action id="org.alpymist.thunderbolt.allow">
+    <description>Allow a Thunderbolt or USB4 device</description>
+    <message>Authentication is needed to let a Thunderbolt or USB4 device connect to this computer</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-thunderbolt-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">allow</annotate>
+  </action>
+
+  <action id="org.alpymist.thunderbolt.reconnect">
+    <description>Reconnect a Thunderbolt or USB4 device allowed always</description>
+    <message>Authentication is needed to reconnect a Thunderbolt or USB4 device</message>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-thunderbolt-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">reconnect</annotate>
+  </action>
+
+  <action id="org.alpymist.thunderbolt.forget">
+    <description>Stop allowing a Thunderbolt or USB4 device always</description>
+    <message>Authentication is needed to forget a Thunderbolt or USB4 device</message>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alpymist-thunderbolt-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">forget</annotate>
+  </action>
+</policyconfig>

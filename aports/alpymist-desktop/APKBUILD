@@ -193,7 +193,9 @@ _wayland() {
 	# away and the rest still works, add another and it is offered beside them.
 	# alpymist-lock is what Super+L, the menu's Lock and a lid set to lock
 	# all run, and what the idle watch runs before the screen goes off or
-	# the machine sleeps.
+	# the machine sleeps. alpymist-thunderbolt asks before a Thunderbolt or
+	# USB4 dock is let in, without which nothing on the dock works, and lets
+	# in again one allowed always.
 	depends="
 		$pkgname=$pkgver-r$pkgrel
 		alpymist-about
@@ -204,6 +206,7 @@ _wayland() {
 		alpymist-saver-starfield
 		alpymist-screensaver
 		alpymist-store
+		alpymist-thunderbolt
 		alpymist-wifi
 		foot
 		fuzzel

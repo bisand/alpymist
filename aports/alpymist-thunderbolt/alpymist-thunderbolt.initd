@@ -1,0 +1,20 @@
+#!/sbin/openrc-run
+
+description="Let in the Thunderbolt and USB4 devices allowed always that prove who they are"
+
+# udev does this as devices arrive, and at boot for those already plugged in;
+# this is for certain, once /var is there to read the keys from. Nothing is
+# let in here that has not been allowed always and cannot answer a challenge
+# against its key. See ADR 0012.
+depend() {
+	need localmount udev
+	after udev-trigger udev-settle
+	keyword -containers -vserver -lxc -docker -podman
+}
+
+start() {
+	[ -d /sys/bus/thunderbolt ] || return 0
+	ebegin "Reconnecting Thunderbolt devices"
+	/usr/libexec/alpymist-thunderbolt-helper boot
+	eend $?
+}

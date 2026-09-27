@@ -195,6 +195,13 @@ const ROOT: &str = "/mnt";
 /// server runs as root and needs no seat.
 const GREETD_NEEDS_SEATD: &str =
     "# The desktop opens its screen and keyboard through seatd.\nrc_need=\"seatd\"\n";
+/// The kernel command line `setup-disk` writes, beside the modules and root it
+/// adds itself. `quiet` is its own default. `intel_iommu=on` because Alpine's
+/// kernel leaves Intel's IOMMU off unless asked (AMD's is on wherever it
+/// exists): without it, a Thunderbolt or USB4 device let in can read and write
+/// all of memory by DMA. See ADR 0012.
+pub const KERNELOPTS: &str = "quiet intel_iommu=on";
+
 /// The device-mapper name of the unlocked root, which `setup-disk` expects.
 const CRYPT_NAME: &str = "root";
 /// Boot partition size in MiB. Holds kernels and initramfs, so not the bare
@@ -423,7 +430,8 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
             "Installing the base system and bootloader",
             &["setup-disk", "-m", "sys", ROOT],
         )
-        .with_env("BOOTLOADER", "grub"),
+        .with_env("BOOTLOADER", "grub")
+        .with_env("KERNELOPTS", KERNELOPTS),
     ]);
 
     // setup-disk leaves the new system with only the install medium's
@@ -621,8 +629,10 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         );
     }
     // alpymist-power puts back the power mode and charge limit last chosen;
-    // the Legacy tier does not install it, and the step fails harmlessly.
-    for service in ["seatd", "greetd", "alpymist-power"] {
+    // alpymist-thunderbolt lets in the docks allowed always that prove who
+    // they are. The Legacy tier installs neither, and the steps fail
+    // harmlessly.
+    for service in ["seatd", "greetd", "alpymist-power", "alpymist-thunderbolt"] {
         steps.push(
             Step::new(
                 &format!("Starting {service} at boot"),
@@ -1064,7 +1074,13 @@ mod tests {
                 .windows(2)
                 .any(|w| w == ["--repositories-file", "/etc/apk/repositories"])
         );
-        for service in ["dbus", "seatd", "greetd", "alpymist-power"] {
+        for service in [
+            "dbus",
+            "seatd",
+            "greetd",
+            "alpymist-power",
+            "alpymist-thunderbolt",
+        ] {
             assert!(titles(&a).contains(&format!("Starting {service} at boot")));
         }
         let Some(Input::Text(conf)) = &step(&plan, "desktop session").stdin else {
@@ -1116,6 +1132,23 @@ mod tests {
     }
 
     /// The live image's root has an empty password and its /etc is copied.
+    #[test]
+    fn the_iommu_is_on_so_a_device_let_in_cannot_reach_all_of_memory() {
+        let plan = build(&answers()).unwrap();
+        let disk = step(&plan, "Installing the base system and bootloader");
+        let opts = disk
+            .env
+            .iter()
+            .find(|(k, _)| k == "KERNELOPTS")
+            .map(|(_, v)| v.as_str())
+            .expect("setup-disk is given the kernel options");
+        assert!(
+            opts.split_whitespace().any(|o| o == "intel_iommu=on"),
+            "{opts}"
+        );
+        assert!(opts.split_whitespace().any(|o| o == "quiet"), "{opts}");
+    }
+
     #[test]
     fn the_new_systems_root_account_is_locked() {
         for a in [answers(), encrypted()] {

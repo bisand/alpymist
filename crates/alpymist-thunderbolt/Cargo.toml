@@ -1,0 +1,48 @@
+[package]
+name = "alpymist-thunderbolt"
+description = "Alpymist's Thunderbolt and USB4 device approval: asks before a dock or any other device is let in, and lets in again those allowed always."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["dialog"]
+# The question on screen. Without it the crate is the bus, the store, the
+# rules and the helper, with no Wayland or fonts behind them: what the helper
+# and Settings use.
+dialog = [
+    "dep:alpymist-widget",
+    "dep:denise",
+    "dep:denise-render",
+    "dep:denise-text",
+]
+
+# Run in the session: watches for devices, asks, and lets in again those
+# allowed always.
+[[bin]]
+name = "alpymist-thunderbolt"
+path = "src/main.rs"
+required-features = ["dialog"]
+
+# Run as root through pkexec, udev and OpenRC: a closed set of writes under
+# /sys/bus/thunderbolt and /var/lib/alpymist/thunderbolt.
+[[bin]]
+name = "alpymist-thunderbolt-helper"
+path = "src/bin/helper.rs"
+
+[dependencies]
+alpymist-widget = { workspace = true, optional = true }
+denise = { workspace = true, optional = true }
+denise-render = { workspace = true, optional = true }
+denise-text = { workspace = true, optional = true }
+serde = { workspace = true }
+toml = { version = "0.9", default-features = false, features = ["parse", "display", "serde", "std"] }
+
+# Devices arriving are kernel uevents on a netlink socket any user may read.
+[target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.29", default-features = false, features = ["socket", "poll"] }
+
+[lints]
+workspace = true

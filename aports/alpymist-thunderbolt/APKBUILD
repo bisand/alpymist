@@ -1,0 +1,56 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-thunderbolt
+pkgver=0.2.0
+pkgrel=0
+pkgdesc="Alpymist Thunderbolt: asks before a dock or any other Thunderbolt or USB4 device is let in"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+# Where the firmware leaves it to the system (security level user or
+# secure), nothing on a Thunderbolt or USB4 dock works until it is let in: not
+# its keyboard, mouse, network or sound. The bus is sysfs and uevents, which
+# need nothing linked. What needs root goes through pkexec to
+# alpymist-thunderbolt-helper; letting a device in the first time takes an
+# administrator's password, which alpymist-auth asks for. The question is
+# drawn as alpymist-auth's prompt is, so it needs libxkbcommon and the same
+# fonts. udev and the OpenRC service let in again at once the devices allowed
+# always that prove who they are with a key. See ADR 0012.
+makedepends="cargo libxkbcommon-dev"
+depends="alpymist-auth eudev font-fira-ttf font-nerd-fonts-symbols polkit"
+subpackages="$pkgname-openrc"
+options="!check"  # the test suite runs in CI, not in the package build
+source="alpymist-thunderbolt.initd"
+builddir="$srcdir"
+
+prepare() {
+	# Same as alpymist: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	cargo build --release --locked -p alpymist-thunderbolt --bins
+}
+
+package() {
+	install -Dm755 "$builddir"/target/release/alpymist-thunderbolt \
+		"$pkgdir"/usr/bin/alpymist-thunderbolt
+	install -Dm755 "$builddir"/target/release/alpymist-thunderbolt-helper \
+		"$pkgdir"/usr/libexec/alpymist-thunderbolt-helper
+	install -Dm644 "$builddir"/desktop/polkit/org.alpymist.thunderbolt.policy \
+		"$pkgdir"/usr/share/polkit-1/actions/org.alpymist.thunderbolt.policy
+	install -Dm644 "$builddir"/desktop/polkit/50-alpymist-thunderbolt.rules \
+		"$pkgdir"/usr/share/polkit-1/rules.d/50-alpymist-thunderbolt.rules
+	install -Dm644 "$builddir"/desktop/udev/90-alpymist-thunderbolt.rules \
+		"$pkgdir"/usr/lib/udev/rules.d/90-alpymist-thunderbolt.rules
+	install -Dm755 "$srcdir"/alpymist-thunderbolt.initd \
+		"$pkgdir"/etc/init.d/alpymist-thunderbolt
+}
+
+# Filled in by `abuild checksum` at build time; see alpymist-install.
+sha512sums=""

@@ -287,6 +287,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpymist-thunderbolt"
+version = "0.2.0"
+dependencies = [
+ "alpymist-widget",
+ "denise",
+ "denise-render",
+ "denise-text",
+ "nix",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "alpymist-ui"
 version = "0.2.0"
 dependencies = [
