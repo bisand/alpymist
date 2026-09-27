@@ -12,7 +12,9 @@ mod settings;
 use alpymist_core::Channel;
 use alpymist_settings::{Env, Settings};
 use clap::{Parser, Subcommand, ValueEnum};
+use std::ffi::OsString;
 use std::os::unix::process::CommandExt as _;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
@@ -192,8 +194,38 @@ fn session(
         Desktop::Labwc => "labwc",
         Desktop::Prepare => return Ok(()),
     };
-    let e = std::process::Command::new(program).args(args).exec();
+    let mut command = std::process::Command::new(program);
+    command.args(args);
+    if let Some(log) = session_log()
+        && let Ok(err) = log.try_clone()
+    {
+        command.stdout(log).stderr(err);
+    }
+    let e = command.exec();
     Err(format!("{program}: {e}").into())
+}
+
+/// Where the compositor's own output goes: `session.log` in
+/// `$XDG_STATE_HOME/alpymist`, or `~/.local/state/alpymist`.
+fn session_log_path(state_home: Option<OsString>, home: Option<OsString>) -> Option<PathBuf> {
+    let state = state_home
+        .filter(|d| !d.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| home.map(|h| PathBuf::from(h).join(".local/state")))?;
+    Some(state.join("alpymist/session.log"))
+}
+
+/// The log of this login's desktop, the previous one kept beside it as
+/// `session.log.old`. A compositor that cannot start says why on its output
+/// and exits, and without this that went to the console behind the login
+/// screen, where it was gone before anyone could read it; the login screen
+/// now says the desktop stopped, and a text console login shows the end of
+/// this. `None` if it cannot be made, and the desktop starts anyway.
+fn session_log() -> Option<std::fs::File> {
+    let path = session_log_path(std::env::var_os("XDG_STATE_HOME"), std::env::var_os("HOME"))?;
+    std::fs::create_dir_all(path.parent()?).ok()?;
+    let _ = std::fs::rename(&path, path.with_extension("log.old"));
+    std::fs::File::create(&path).ok()
 }
 
 fn probe(format: Format) -> alpymist_core::Result<()> {
@@ -242,4 +274,32 @@ fn probe(format: Format) -> alpymist_core::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::session_log_path;
+    use std::path::PathBuf;
+
+    #[test]
+    fn the_session_log_is_in_the_accounts_state_directory() {
+        assert_eq!(
+            session_log_path(None, Some("/home/andre".into())),
+            Some(PathBuf::from(
+                "/home/andre/.local/state/alpymist/session.log"
+            ))
+        );
+        assert_eq!(
+            session_log_path(Some("/srv/state".into()), Some("/home/andre".into())),
+            Some(PathBuf::from("/srv/state/alpymist/session.log"))
+        );
+        assert_eq!(
+            session_log_path(Some("".into()), Some("/home/andre".into())),
+            Some(PathBuf::from(
+                "/home/andre/.local/state/alpymist/session.log"
+            )),
+            "an empty XDG_STATE_HOME is unset"
+        );
+        assert_eq!(session_log_path(None, None), None);
+    }
 }

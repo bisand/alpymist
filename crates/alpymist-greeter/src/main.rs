@@ -180,7 +180,7 @@ mod preview {
 mod console {
     use alpymist_greeter::app::{App, Authenticator, Power, Status, action_for};
     use alpymist_greeter::login::{self, Outcome, Stream};
-    use alpymist_greeter::vt;
+    use alpymist_greeter::{stopped, vt};
     use denise::{InputEvent, InputSource};
     use denise_drm::SurfaceConfig;
     use denise_evdev::{Console, InputBackend};
@@ -323,9 +323,45 @@ mod console {
         }
         if socket.is_none() {
             app.status = Status::Problem("Not started by greetd, so nobody can log in.".into());
+        } else {
+            notice_a_stopped_desktop(&mut app);
         }
         eprintln!("{}", app.face.status.describe());
         app
+    }
+
+    fn uptime() -> Option<f64> {
+        stopped::uptime(&std::fs::read_to_string("/proc/uptime").ok()?)
+    }
+
+    /// Say so if the desktop this screen last handed over to stopped as soon
+    /// as it started, and record whose it was for a text-console login to
+    /// explain. See the `stopped` module.
+    fn notice_a_stopped_desktop(app: &mut App) {
+        let Ok(record) = std::fs::read_to_string(stopped::HANDED_OVER) else {
+            return;
+        };
+        let _ = std::fs::remove_file(stopped::HANDED_OVER);
+        let Some(user) = uptime().and_then(|now| stopped::stopped_quickly(&record, now)) else {
+            return;
+        };
+        eprintln!("{user}'s desktop stopped as it started");
+        let boot = std::fs::read_to_string(stopped::BOOT_ID).unwrap_or_default();
+        let _ = std::fs::write(stopped::STOPPED, stopped::stopped(user, &boot));
+        app.desktop_stopped();
+    }
+
+    /// Remember who logged in, and when, before greetd starts their desktop.
+    fn hand_over(app: &App) {
+        if let Some(user) = app.user() {
+            let _ = std::fs::write(super::LAST_USER, format!("{}\n", user.name));
+            // A desktop being tried again has not stopped yet.
+            let _ = std::fs::remove_file(stopped::STOPPED);
+            if let Some(now) = uptime() {
+                let _ = std::fs::write(stopped::HANDED_OVER, stopped::handed_over(&user.name, now));
+            }
+        }
+        eprintln!("session accepted; handing the display to it");
     }
 
     /// Whether another console is showing. See the vt module.
@@ -512,10 +548,7 @@ mod console {
             }
 
             if app.started {
-                if let Some(user) = app.user() {
-                    let _ = std::fs::write(super::LAST_USER, format!("{}\n", user.name));
-                }
-                eprintln!("session accepted; handing the display to it");
+                hand_over(&app);
                 return Ok(());
             }
             if stop.load(Ordering::Relaxed) {

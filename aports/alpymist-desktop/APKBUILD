@@ -117,6 +117,10 @@ package() {
 	# XDG_RUNTIME_DIR; see the script.
 	install -Dm644 "$builddir"/desktop/profile/alpymist-runtime-dir.sh \
 		"$pkgdir"/etc/profile.d/alpymist-runtime-dir.sh
+	# Why the desktop stopped, at the text console the login screen sends
+	# people to when it does; see the script.
+	install -Dm644 "$builddir"/desktop/profile/alpymist-session.sh \
+		"$pkgdir"/etc/profile.d/alpymist-session.sh
 	# Dark by default, for GTK 3, GTK 4, libadwaita and whatever asks the
 	# portal. Defaults a user's own settings override; glib's trigger compiles
 	# the schema override when this is installed.

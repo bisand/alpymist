@@ -293,6 +293,9 @@ pub struct App {
     pub hostname: String,
     /// The keyboard layout keys are read with, for the footer.
     pub keyboard: String,
+    /// What the footer says instead of naming the machine: the way to a text
+    /// console, after a desktop stopped, since that is where it says why.
+    footer_hint: Option<&'static str>,
     clock: String,
     date: String,
     authenticate: Authenticator,
@@ -339,6 +342,7 @@ impl App {
             status,
             hostname: String::new(),
             keyboard: String::new(),
+            footer_hint: None,
             clock: String::new(),
             date: String::new(),
             authenticate,
@@ -414,6 +418,14 @@ impl App {
         self.date = date;
         self.clock_moved |= changed;
         changed
+    }
+
+    /// The last desktop stopped as soon as it started. Say so where the
+    /// password's problems go, and point at the text console, where logging in
+    /// shows why. See the `stopped` module.
+    pub fn desktop_stopped(&mut self) {
+        self.status = Status::Problem(DESKTOP_STOPPED.into());
+        self.footer_hint = Some(CONSOLE_HINT);
     }
 
     /// A restart or power off that was asked for, once.
@@ -820,6 +832,9 @@ impl App {
         if !self.keyboard.is_empty() {
             left = format!("{left}   Keyboard: {}", self.keyboard);
         }
+        if let Some(hint) = self.footer_hint {
+            left = hint.to_string();
+        }
         self.face.draw(
             pen,
             Point::new(l.margin, l.footer_y),
@@ -841,6 +856,13 @@ impl App {
         }
     }
 }
+
+/// What the status line says after a desktop stopped as it started. Short:
+/// the line is one line, and this fits it on a 640x480 screen.
+pub const DESKTOP_STOPPED: &str = "The desktop stopped as it started.";
+
+/// The footer's pointer to a text console, where logging in says why.
+pub const CONSOLE_HINT: &str = "Ctrl+Alt+F2  Console";
 
 /// Where character `index` starts, in bytes; the end for an index past it.
 fn byte_at(value: &str, index: usize) -> usize {
@@ -1055,6 +1077,21 @@ mod tests {
         }
         a.act(Action::Power(Power::PowerOff));
         assert!(a.take_power().is_none(), "not even when asked directly");
+    }
+
+    #[test]
+    fn a_stopped_desktop_is_said_until_someone_types() {
+        let (mut a, _) = app(&["andre"]);
+        a.desktop_stopped();
+        assert_eq!(a.status, Status::Problem(super::DESKTOP_STOPPED.into()));
+        assert_eq!(a.footer_hint, Some(super::CONSOLE_HINT));
+        type_text(&mut a, "x");
+        assert_eq!(a.status, Status::Idle);
+        assert_eq!(
+            a.footer_hint,
+            Some(super::CONSOLE_HINT),
+            "the way to the reason stays on screen"
+        );
     }
 
     #[test]
