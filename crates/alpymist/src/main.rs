@@ -88,7 +88,7 @@ enum Command {
         #[arg(long)]
         no_upgrade: bool,
     },
-    /// Inspect the machine and report which desktop tier it can run.
+    /// Inspect the machine and report how well it can run Hyprland, and why.
     Probe {
         /// Output format.
         #[arg(long, value_enum, default_value_t = Format::Human)]
@@ -97,7 +97,7 @@ enum Command {
     /// Start a desktop session: prepare the files it reads, then run it.
     /// greetd's configuration runs this.
     Session {
-        /// hyprland or labwc.
+        /// hyprland, or prepare to only write the files.
         desktop: Desktop,
         /// Passed on to the compositor.
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -138,8 +138,6 @@ enum Format {
 enum Desktop {
     /// Hyprland, through its `start-hyprland` launcher.
     Hyprland,
-    /// labwc.
-    Labwc,
     /// Prepare the files and start nothing: for package scripts, as the
     /// account whose files they are.
     Prepare,
@@ -212,7 +210,6 @@ fn session(
     }
     let program = match desktop {
         Desktop::Hyprland => "start-hyprland",
-        Desktop::Labwc => "labwc",
         Desktop::Prepare => return Ok(()),
     };
     let mut command = std::process::Command::new(program);
@@ -268,16 +265,14 @@ fn session_log() -> Option<std::fs::File> {
 
 fn probe(format: Format) -> alpymist_core::Result<()> {
     let caps = alpymist_hwprobe::probe()?;
-    let rationale = alpymist_core::select_tier(&caps);
+    let check = alpymist_core::hyprland::check(&caps);
 
     match format {
         Format::Json => {
             let doc = serde_json::json!({
                 "capabilities": caps,
-                "tier": rationale.tier,
-                "backend": rationale.tier.backend(),
-                "metapackage": rationale.tier.metapackage(),
-                "reasons": rationale.reasons,
+                "hyprland": check.verdict,
+                "reasons": check.reasons,
             });
             println!(
                 "{}",
@@ -285,9 +280,11 @@ fn probe(format: Format) -> alpymist_core::Result<()> {
             );
         }
         Format::Human => {
-            println!("tier:        {:?}", rationale.tier);
-            println!("backend:     {:?}", rationale.tier.backend());
-            println!("metapackage: {}", rationale.tier.metapackage());
+            println!(
+                "hyprland:    {:?} — {}",
+                check.verdict,
+                check.verdict.describe()
+            );
             println!("memory:      {} MiB", caps.memory_mib);
             println!("cpus:        {}", caps.cpus);
             match &caps.gles {
@@ -306,7 +303,7 @@ fn probe(format: Format) -> alpymist_core::Result<()> {
             }
             println!("virt:        {:?}", caps.virtualisation);
             println!("why:");
-            for reason in &rationale.reasons {
+            for reason in &check.reasons {
                 println!("  - {reason}");
             }
         }

@@ -10,7 +10,7 @@
 //!
 //! libEGL is loaded *dynamically*. Nothing links against it, so `alpymist`
 //! still runs on a system with no Mesa installed; the probe just reports
-//! [`None`], and the tier logic treats that as "assume no acceleration".
+//! [`None`], and the Hyprland check treats that as "assume no acceleration".
 
 #![deny(unsafe_code)]
 

@@ -25,7 +25,6 @@
 //! passphrase prompt at boot types the way the user chose.
 
 use crate::answers::{Answers, DiskPlan, Firmware, Network};
-use alpymist_core::SessionBackend;
 use std::fmt::Write as _;
 
 /// Bytes a step is given on standard input.
@@ -187,14 +186,17 @@ impl PlanError {
 
 /// Where the new system is mounted while it is being built.
 const ROOT: &str = "/mnt";
-/// Added to `/etc/conf.d/greetd` on the Wayland tiers, whose desktops open the
-/// screen and keyboard through seatd. The login screen needs no seat, so
-/// without this it starts regardless, and when seatd has not, every login goes
-/// straight back to it with no word of why. With it, greetd waits for seatd,
-/// and a seatd that never starts leaves the text consoles instead. Legacy's X
-/// server runs as root and needs no seat.
-const GREETD_NEEDS_SEATD: &str =
-    "# The desktop opens its screen and keyboard through seatd.\nrc_need=\"seatd\"\n";
+/// The desktop, which is Hyprland, and everything it needs.
+pub const DESKTOP: &str = "alpymist-desktop";
+/// What `/etc/conf.d/greetd` says: the configuration that starts Hyprland,
+/// and that greetd waits for seatd, through which the desktop opens the
+/// screen and keyboard. The login screen needs no seat, so without the wait
+/// it starts regardless, and when seatd has not, every login goes straight
+/// back to it with no word of why. With it, a seatd that never starts leaves
+/// the text consoles instead.
+pub const GREETD_SERVICE: &str = "# Written by the Alpymist installer: the desktop's session.\n\
+     cfgfile=\"/etc/greetd/alpymist.toml\"\n\
+     # The desktop opens its screen and keyboard through seatd.\nrc_need=\"seatd\"\n";
 /// The kernel command line `setup-disk` writes, beside the modules and root it
 /// adds itself. `quiet` is its own default. `intel_iommu=on` because Alpine's
 /// kernel leaves Intel's IOMMU off unless asked (AMD's is on wherever it
@@ -293,9 +295,6 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         .timezone
         .as_deref()
         .ok_or(PlanError::Missing("The timezone"))?;
-    let tier = a
-        .effective_tier()
-        .ok_or(PlanError::Missing("The desktop"))?;
 
     let (device, encrypt) = match disk {
         DiskPlan::WholeDisk { device, encrypt } => (device.clone(), *encrypt),
@@ -560,7 +559,7 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
                 "--repositories-file",
                 "/etc/apk/repositories",
                 "--no-progress",
-                tier.metapackage(),
+                DESKTOP,
             ],
         )
         .may_fail(),
@@ -630,8 +629,7 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
     }
     // alpymist-power puts back the power mode and charge limit last chosen;
     // alpymist-thunderbolt lets in the docks allowed always that prove who
-    // they are. The Legacy tier installs neither, and the steps fail
-    // harmlessly.
+    // they are.
     for service in ["seatd", "greetd", "alpymist-power", "alpymist-thunderbolt"] {
         steps.push(
             Step::new(
@@ -661,22 +659,13 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
             "Choosing the desktop session",
             &["chroot", ROOT, "tee", "/etc/conf.d/greetd"],
         )
-        .with_input(Input::Text(format!(
-            "# Written by the Alpymist installer: the {tier:?} tier's session.\n\
-             cfgfile=\"{}\"\n{}",
-            tier.greeter_config(),
-            if matches!(tier.backend(), SessionBackend::I3) {
-                ""
-            } else {
-                GREETD_NEEDS_SEATD
-            }
-        )))
+        .with_input(Input::Text(GREETD_SERVICE.into()))
         .may_fail(),
     );
 
-    // The console keymap does not reach a desktop: Wayland and X11 read xkb
-    // names. The login's PAM service loads this file into the session, where
-    // labwc reads it directly and the Hyprland and i3 configurations hand it on.
+    // The console keymap does not reach a desktop: Wayland reads xkb names.
+    // The login's PAM service loads this file into the session, for what
+    // reads XKB_DEFAULT_*; Hyprland reads its own file, written below.
     steps.push(Step::new(
         "Preparing the session settings",
         &["chroot", ROOT, "mkdir", "-p", "/etc/alpymist"],
@@ -788,7 +777,6 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
 mod tests {
     use super::{Input, PlanError, build, partition};
     use crate::answers::{Answers, DiskPlan, Firmware, Network};
-    use alpymist_core::Tier;
 
     const PASSWORD: &str = "a good password";
     const PASSPHRASE: &str = "correct horse battery staple";
@@ -810,7 +798,6 @@ mod tests {
             password_confirm: PASSWORD.into(),
             hostname: "alpymist".into(),
             disks: crate::disks::sample(),
-            detected_tier: Some(Tier::Lite),
             ..Answers::default()
         }
     }
@@ -1064,10 +1051,10 @@ mod tests {
 
     #[test]
     fn the_desktop_comes_from_the_install_medium_and_starts_at_boot() {
-        let mut a = answers();
-        a.tier_override = Some(Tier::Potato);
+        let a = answers();
         let plan = build(&a).unwrap();
         let desktop = step(&plan, "Installing the desktop");
+        assert!(desktop.argv.contains(&super::DESKTOP.to_string()));
         assert!(
             desktop
                 .argv
@@ -1087,7 +1074,7 @@ mod tests {
             panic!("no greetd configuration");
         };
         assert!(
-            conf.contains("cfgfile=\"/etc/greetd/alpymist-potato.toml\""),
+            conf.contains("cfgfile=\"/etc/greetd/alpymist.toml\""),
             "{conf}"
         );
         assert!(conf.contains("rc_need=\"seatd\""), "{conf}");
@@ -1098,15 +1085,28 @@ mod tests {
         );
     }
 
+    /// The installer names a package and a greetd configuration that the
+    /// packaging must ship; a rename on either side would otherwise surface
+    /// only mid-install, or at the first boot after it.
     #[test]
-    fn only_the_x11_tier_starts_its_login_screen_without_seatd() {
-        let mut a = answers();
-        a.tier_override = Some(Tier::Legacy);
-        let plan = build(&a).unwrap();
-        let Some(Input::Text(conf)) = &step(&plan, "desktop session").stdin else {
-            panic!("no greetd configuration");
-        };
-        assert!(!conf.contains("rc_need"), "{conf}");
+    fn the_desktop_and_its_session_are_what_the_packaging_ships() {
+        let apkbuild = include_str!("../../../aports/alpymist-desktop/APKBUILD");
+        assert!(apkbuild.contains(&format!("pkgname={}\n", super::DESKTOP)));
+        let cfgfile = super::GREETD_SERVICE
+            .lines()
+            .find_map(|l| l.strip_prefix("cfgfile="))
+            .unwrap()
+            .trim_matches('"');
+        assert!(
+            apkbuild.contains(&format!("\"$pkgdir\"{cfgfile}")),
+            "{cfgfile} is not installed by the APKBUILD"
+        );
+        let upgrade =
+            include_str!("../../../aports/alpymist-desktop/alpymist-desktop.post-upgrade");
+        assert!(
+            upgrade.contains(&format!("cfgfile=\"{cfgfile}\"")),
+            "upgrades are not moved to it"
+        );
     }
 
     #[test]
@@ -1330,25 +1330,6 @@ mod tests {
                 .argv
                 .contains(&"André Biseth".to_string()),
         );
-    }
-
-    #[test]
-    fn the_chosen_desktop_tier_is_the_package_installed() {
-        for (tier, package) in [
-            (Tier::Full, "alpymist-desktop-full"),
-            (Tier::Potato, "alpymist-desktop-lite"),
-            (Tier::Legacy, "alpymist-desktop-legacy"),
-        ] {
-            let mut a = answers();
-            a.tier_override = Some(tier);
-            let plan = build(&a).unwrap();
-            assert!(
-                plan.steps
-                    .iter()
-                    .any(|s| s.argv.contains(&package.to_string())),
-                "{tier:?} should install {package}"
-            );
-        }
     }
 
     #[test]
