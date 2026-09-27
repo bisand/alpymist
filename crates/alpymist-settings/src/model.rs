@@ -79,6 +79,39 @@ impl Choice {
     }
 }
 
+/// What a text setting's text has to be, beyond its length.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextRule {
+    /// A host name, as Alpine's `setup-hostname` takes one: letters, digits,
+    /// `-` and `.`, and not starting with either of those two.
+    Hostname,
+}
+
+impl TextRule {
+    /// Whether `text` keeps to the rule, and why not.
+    ///
+    /// # Errors
+    /// What is wrong with it.
+    pub fn check(self, text: &str) -> Result<(), String> {
+        match self {
+            Self::Hostname => {
+                if let Some(c) = text
+                    .chars()
+                    .find(|c| !(c.is_ascii_alphanumeric() || *c == '-' || *c == '.'))
+                {
+                    return Err(format!(
+                        "a host name is letters, digits, `-` and `.`, not `{c}`"
+                    ));
+                }
+                if text.starts_with(['-', '.']) {
+                    return Err("a host name starts with a letter or a digit".into());
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 /// What values a setting takes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Kind {
@@ -91,6 +124,13 @@ pub enum Kind {
     Action {
         /// What the button says.
         label: &'static str,
+    },
+    /// A line of text.
+    Text {
+        /// The most characters it may have.
+        max: usize,
+        /// What else it has to be.
+        rule: TextRule,
     },
     /// A whole number in a range.
     Number {
@@ -208,6 +248,16 @@ impl Setting {
             // Anything at all: an action is done, not set, and `alpymist set
             // <id>` with no value is how it is asked for.
             Kind::Action { .. } => Ok(Value::Text(text.to_owned())),
+            Kind::Text { max, rule } => {
+                if text.is_empty() {
+                    return Err(format!("{} cannot be empty", self.id));
+                }
+                if text.chars().count() > *max {
+                    return Err(format!("{} is at most {max} characters", self.id));
+                }
+                rule.check(text).map_err(|e| format!("{}: {e}", self.id))?;
+                Ok(Value::Text(text.to_owned()))
+            }
             Kind::Switch => match text.to_ascii_lowercase().as_str() {
                 "true" | "on" | "yes" | "1" => Ok(Value::Bool(true)),
                 "false" | "off" | "no" | "0" => Ok(Value::Bool(false)),
@@ -274,7 +324,7 @@ impl Setting {
 
 #[cfg(test)]
 mod tests {
-    use super::{Applies, Choice, Kind, Scope, Setting, Value};
+    use super::{Applies, Choice, Kind, Scope, Setting, TextRule, Value};
 
     fn setting(kind: Kind, default: Value) -> Setting {
         Setting {
@@ -316,6 +366,26 @@ mod tests {
         assert!(s.parse("660").is_err());
         assert!(s.parse("2000").is_err());
         assert_eq!(s.describe(&Value::Number(600)), "600 ms");
+    }
+
+    #[test]
+    fn a_host_name_is_what_setup_hostname_takes() {
+        let s = setting(
+            Kind::Text {
+                max: 63,
+                rule: TextRule::Hostname,
+            },
+            Value::Text("alpymist".into()),
+        );
+        assert_eq!(s.parse(" laptop-2 "), Ok(Value::Text("laptop-2".into())));
+        assert_eq!(
+            s.parse("x1.home.lan"),
+            Ok(Value::Text("x1.home.lan".into()))
+        );
+        for bad in ["", "-x", ".x", "my laptop", "café", "a_b", &"x".repeat(64)] {
+            assert!(s.parse(bad).is_err(), "{bad:?}");
+        }
+        assert_eq!(s.describe(&Value::Text("laptop".into())), "laptop");
     }
 
     #[test]

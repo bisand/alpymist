@@ -30,7 +30,7 @@ pub mod values;
 
 pub use areas::wallpaper;
 pub use env::Env;
-pub use model::{Applies, Area, Choice, Kind, Scope, Setting, Value};
+pub use model::{Applies, Area, Choice, Kind, Scope, Setting, TextRule, Value};
 
 use std::fmt;
 use std::path::Path;

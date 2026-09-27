@@ -5,6 +5,7 @@ pub mod input;
 pub mod keyboard;
 pub mod power;
 pub mod screensaver;
+pub mod system;
 pub mod updates;
 pub mod wallpaper;
 pub mod wifi;
@@ -85,6 +86,13 @@ pub const AREAS: &[Area] = &[
         icon: "\u{f06b0}",
         keywords: &["upgrade", "channel", "packages"],
     },
+    Area {
+        id: "system",
+        title: "System",
+        description: "What this computer is called",
+        icon: "\u{f01c4}",
+        keywords: &["computer", "hostname", "name", "device"],
+    },
 ];
 
 /// Every area: those written here, and one for each screensaver installed.
@@ -130,6 +138,7 @@ pub fn all() -> Vec<Setting> {
         power::settings(),
         screensaver::settings(),
         updates::settings(),
+        system::settings(),
     ]
     .concat()
 }
@@ -145,6 +154,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "power" => power::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
         "updates" => updates::get(env),
+        "system" => system::get(env),
         other => Err(format!("no area `{other}`")),
     }
 }
@@ -166,6 +176,7 @@ pub fn set(
         "power" => none(power::set(env, s, value)),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
         "updates" => none(updates::set(env, value)),
+        "system" => none(system::set(env, s, value)),
         other => Err(format!("no area `{other}`")),
     }
 }

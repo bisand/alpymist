@@ -56,7 +56,7 @@ fn main() {
     // A screensaver's own area opens the Screensaver page with that
     // screensaver's dialog over it, which is the only place it is drawn — so
     // point XDG_DATA_HOME at a directory of definition files to see one.
-    let scenes: [(&str, Scheme, &str, &str); 8] = [
+    let scenes: [(&str, Scheme, &str, &str); 9] = [
         ("touchpad", Scheme::Dark, "touchpad", ""),
         ("keyboard", Scheme::Dark, "keyboard.layout", ""),
         ("search", Scheme::Dark, "", "scroll"),
@@ -68,6 +68,7 @@ fn main() {
             "screensaver-mountains",
             "",
         ),
+        ("system", Scheme::Dark, "system", ""),
         ("about", Scheme::Dark, "about", ""),
         ("appearance-light", Scheme::Light, "appearance", ""),
     ];
