@@ -1042,14 +1042,12 @@ mod tests {
     use crate::answers::{Answers, DiskPlan, Network};
     use crate::screens::{self, TextTarget};
     use crate::wizard::Step;
-    use alpymist_core::Tier;
     use denise::geom::Point;
     use denise::input::{ElementState, InputEvent, KeyCode, Modifiers};
 
     fn app() -> App {
         App::new(
             Answers {
-                detected_tier: Some(Tier::Lite),
                 disks: crate::disks::sample(),
                 ..Answers::default()
             },
@@ -1442,7 +1440,6 @@ mod tests {
                 device: "/dev/sda".into(),
                 encrypt: false,
             }),
-            detected_tier: Some(Tier::Lite),
             disks: crate::disks::sample(),
             ..Answers::default()
         };
@@ -1499,7 +1496,6 @@ mod tests {
             disk_confirmed: true,
             passphrase: "a disk passphrase".into(),
             passphrase_confirm: "a disk passphrase".into(),
-            detected_tier: Some(Tier::Lite),
             disks: crate::disks::sample(),
             ..Answers::default()
         };
@@ -1549,7 +1545,6 @@ mod tests {
             password: "a password".into(),
             password_confirm: "a password".into(),
             hostname: "alpymist".into(),
-            detected_tier: Some(Tier::Lite),
             disks: crate::disks::sample(),
             ..Answers::default()
         };
@@ -1804,7 +1799,6 @@ mod tests {
             password: "a good passphrase".into(),
             password_confirm: "a good passphrase".into(),
             hostname: "alpymist".into(),
-            detected_tier: Some(Tier::Lite),
             disks: crate::disks::sample(),
             ..Answers::default()
         };

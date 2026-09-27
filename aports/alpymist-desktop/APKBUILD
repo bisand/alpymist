@@ -1,10 +1,11 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 #
-# The Alpymist desktop: which Alpine packages make up each tier, and the
-# configuration that makes them look and behave as one system. The only thing
-# compiled is the drawn wallpaper, rendered by the same code that draws the
-# installer and the login screen. Configuration lives in the repository under
+# The Alpymist desktop, which is Hyprland on Wayland (ADR 0001's addendum of
+# 2026-09-27): the Alpine packages that make it up, and the configuration that
+# makes them look and behave as one system. The only thing compiled is the
+# drawn wallpaper, rendered by the same code that draws the installer and the
+# login screen. Configuration lives in the repository under
 # desktop/, and the photographs in brand/wallpapers/.
 #
 # User-facing configuration is installed to /etc/skel, which adduser copies into
@@ -13,7 +14,7 @@
 pkgname=alpymist-desktop
 pkgver=0.2.0
 pkgrel=0
-pkgdesc="Alpymist desktop: what every tier shares"
+pkgdesc="Alpymist desktop: Hyprland, and everything around it"
 url="https://github.com/bisand/alpymist"
 arch="noarch"
 license="MIT OR Apache-2.0"
@@ -27,60 +28,99 @@ license="MIT OR Apache-2.0"
 # dev (ADR 0006). LibreWolf is the browser: Firefox with the
 # tracking and telemetry taken out, built for musl and kept patched by Alpine.
 # Wi-Fi is iwd; the installer adds the account to netdev, which iwd lets manage
-# networks. On the Wayland tiers alpymist-wifi is the bar's icon and popup;
-# impala stays for a terminal, and for the Legacy tier, which has neither.
+# networks. alpymist-wifi is the bar's icon and popup; impala stays for a
+# terminal.
 # Terminals use FiraCode Nerd Font: Fira Code's ligatures, with the prompt's
 # icons at the size and place they were made for, which a separate symbols
 # font gets wrong. Bluetooth is bluez, with PipeWire's plugin for headphones and
 # bluetuith to pair from a terminal; bluetoothd is not started at boot until
 # Settings › Bluetooth turns it on (ADR 0011).
+# Beside those, the desktop itself: Hyprland; alpymist-menu, the launcher and
+# system menu hyprland.conf binds; foot, the terminal; squint, the editor, as
+# $VISUAL and for text files. alpymist-wifi and alpymist-power are the bar's
+# Wi-Fi and battery icons and popups, and alpymist-power what the lid and the
+# power button do. alpymist-store is where software is installed from,
+# alpymist-about says which Alpymist is running, and alpymist-settings is where
+# settings are changed. alpymist-screensaver decides when an idle machine shows
+# a screensaver and when its screen goes off, and brings swayidle and wlopm with
+# it; alpymist-saver-mountains and alpymist-saver-starfield are the screensavers
+# Alpymist ships, and are named separately because they are packages like any
+# other. alpymist-lock is what Super+L, the menu's Lock and a lid set to lock
+# all run (ADR 0010). alpymist-thunderbolt asks before a Thunderbolt or USB4
+# dock is let in. Hyprland's own wallpaper and idle daemons are not packaged
+# for Alpine 3.24; swaybg and swayidle work under it.
 depends="
 	adwaita-icon-theme
-	bluetuith
-	bluez
+	alpymist
+	alpymist-about
 	alpymist-greeter
 	alpymist-keys
+	alpymist-lock
+	alpymist-menu
+	alpymist-power
+	alpymist-saver-mountains
+	alpymist-saver-starfield
+	alpymist-screensaver
+	alpymist-settings
 	alpymist-shell=$pkgver-r$pkgrel
 	alpymist-splash-openrc
+	alpymist-store
+	alpymist-thunderbolt
 	alpymist-wallpapers=$pkgver-r$pkgrel
-	alpymist
+	alpymist-wifi
+	bluetuith
+	bluez
+	breeze-cursors
 	brightnessctl
 	dbus
 	flatpak
-	breeze-cursors
 	font-dejavu
 	font-fira-code-nerd
 	font-fira-ttf
 	font-nerd-fonts-symbols
-	gsettings-desktop-schemas
+	foot
 	greetd
+	grim
+	gsettings-desktop-schemas
+	hyprland
 	impala
 	iwd
 	librewolf
+	mako
 	mesa-dri-gallium
 	pam-rundir
+	pavucontrol
 	pipewire
 	pipewire-pulse
 	pipewire-spa-bluez
 	polkit
 	seatd
+	slurp
+	squint
+	swaybg
+	waybar
 	wireplumber
+	wl-clipboard
 	xdg-desktop-portal
 	xdg-desktop-portal-gtk
+	xdg-desktop-portal-wlr
 	xdg-user-dirs
 	"
+# The Wayland tools and the Full tier were subpackages once, beside labwc's Lite
+# and Potato and i3's Legacy. Providing and replacing the two that were
+# Hyprland's moves an upgrade from them to this package, world and all. Lite
+# and Legacy are deliberately not provided: those installs stay on their last
+# release, which their exact-version dependencies hold them to while everything
+# else still upgrades (tried with apk 3.0.8 against local repositories).
+provides="$pkgname-wayland=$pkgver-r$pkgrel $pkgname-full=$pkgver-r$pkgrel"
+replaces="$pkgname-wayland $pkgname-full"
 makedepends="cargo"
 subpackages="
 	alpymist-shell:_shell
 	alpymist-wallpapers:_wallpapers
-	$pkgname-wayland:_wayland
-	$pkgname-full:_full
-	$pkgname-lite:_lite
-	$pkgname-legacy:_legacy
 	"
 options="!check"  # the test suite runs in CI, not in the package build
-install="$pkgname-full.post-install $pkgname-full.post-upgrade
-	$pkgname-lite.post-upgrade"
+install="$pkgname.post-install $pkgname.post-upgrade"
 source=""
 builddir="$srcdir"
 
@@ -119,7 +159,7 @@ package() {
 		"$pkgdir"/usr/share/backgrounds/alpymist/alpymist.png
 	install -Dm644 "$builddir"/mark.png "$pkgdir"/usr/share/alpymist/mark.png
 	# A PAM service of our own rather than an edit to greetd's, which belongs
-	# to the greetd package; each tier's configuration names it.
+	# to the greetd package; the desktop's greetd configuration names it.
 	install -Dm644 "$builddir"/desktop/alpymist-greetd.pam \
 		"$pkgdir"/etc/pam.d/alpymist-greetd
 	install -Dm644 "$builddir"/desktop/mimeapps.list "$pkgdir"/etc/xdg/mimeapps.list
@@ -148,14 +188,44 @@ package() {
 	install -Dm644 "$builddir"/desktop/flatpak/flathub.flatpakrepo \
 		"$pkgdir"/usr/share/alpymist/flathub.flatpakrepo
 	# Installs and removes Jottacloud's backup client, which is not a package;
-	# the menu runs it, and on a tier without the menu a terminal can.
+	# the menu runs it.
 	install -Dm755 "$builddir"/desktop/jottacloud/alpymist-jottacloud \
 		"$pkgdir"/usr/bin/alpymist-jottacloud
 	install -d "$pkgdir"/etc/alpymist
+	# The bar itself, which each account's ~/.config/waybar includes, so an
+	# upgrade reaches accounts made before it.
+	local conf
+	for conf in modules.jsonc hyprland.jsonc style.css; do
+		install -Dm644 "$builddir"/desktop/waybar/$conf \
+			"$pkgdir"/usr/share/alpymist/waybar/$conf
+	done
+	install -Dm644 "$builddir"/desktop/xdg-desktop-portal/hyprland-portals.conf \
+		"$pkgdir"/etc/xdg/xdg-desktop-portal/hyprland-portals.conf
+	# What greetd starts, named by /etc/conf.d/greetd, which the installer
+	# writes and the post-upgrade script moves on from alpymist-full.toml.
+	install -Dm644 "$builddir"/desktop/greetd/alpymist.toml \
+		"$pkgdir"/etc/greetd/alpymist.toml
+	# hyprland.conf sources /etc/alpymist/hyprland-keyboard.conf, and the
+	# installer writes the chosen layout there. The package ships only the US
+	# default, which its install scripts copy into /etc where there is no file
+	# yet. A file of the package's own in /etc would be one the installer had
+	# changed, and every upgrade would leave a .apk-new beside it.
+	install -Dm644 "$builddir"/desktop/hypr/hyprland-keyboard.conf \
+		"$pkgdir"/usr/share/alpymist/hyprland-keyboard.conf
+	# Permissions and Ctrl+Alt+Delete, which hyprland.conf sources; see the
+	# file.
+	install -Dm644 "$builddir"/desktop/hypr/hyprland-security.conf \
+		"$pkgdir"/usr/share/alpymist/hyprland-security.conf
+	# Text files open in squint: XDG reads hyprland-mimeapps.list when
+	# XDG_CURRENT_DESKTOP is Hyprland, which it always is.
+	install -Dm644 "$builddir"/desktop/hypr/hyprland-mimeapps.list \
+		"$pkgdir"/etc/xdg/hyprland-mimeapps.list
 	_skel common "$pkgdir"
+	_skel wayland "$pkgdir"
+	_skel full "$pkgdir"
 }
 
-# The photographs: every tier's default wallpaper is one of them, and the rest
+# The photographs: the default wallpaper is one of them, and the rest
 # sit beside it for whoever wants another. All 16:9 at 1920x1080, so each
 # desktop's fill mode crops a little off a 16:10 or 4:3 screen and nothing is
 # stretched. See brand/wallpapers/README.md.
@@ -183,130 +253,4 @@ _shell() {
 		zsh-syntax-highlighting
 		"
 	_skel shell "$subpkgdir"
-}
-
-# The Wayland tools the Full and Lite tiers share. Hyprland's own wallpaper
-# and idle daemons are not packaged for Alpine 3.24; the sway ones work under
-# any wlroots-style compositor, Hyprland included. The lock is neither: it is
-# alpymist-lock, which is the login screen again (ADR 0010).
-_wayland() {
-	pkgdesc="Alpymist desktop: tools shared by the Wayland tiers"
-	# alpymist-wifi and alpymist-power are the bar's Wi-Fi and battery icons
-	# and popups under both compositors, and alpymist-power what the lid and
-	# the power button do. alpymist-store is where software is installed from,
-	# alpymist-about says which Alpymist is running, and alpymist-settings is
-	# where settings are changed. alpymist-screensaver decides when an idle
-	# machine shows a screensaver and when its screen goes off, and brings
-	# swayidle and wlopm with it; alpymist-saver-mountains and
-	# alpymist-saver-starfield are the screensavers Alpymist ships, and are
-	# named separately because they are packages like any other — take one
-	# away and the rest still works, add another and it is offered beside them.
-	# alpymist-lock is what Super+L, the menu's Lock and a lid set to lock
-	# all run, and what the idle watch runs before the screen goes off or
-	# the machine sleeps. alpymist-thunderbolt asks before a Thunderbolt or
-	# USB4 dock is let in, without which nothing on the dock works, and lets
-	# in again one allowed always.
-	depends="
-		$pkgname=$pkgver-r$pkgrel
-		alpymist-about
-		alpymist-lock
-		alpymist-settings
-		alpymist-power
-		alpymist-saver-mountains
-		alpymist-saver-starfield
-		alpymist-screensaver
-		alpymist-store
-		alpymist-thunderbolt
-		alpymist-wifi
-		foot
-		fuzzel
-		grim
-		mako
-		pavucontrol
-		slurp
-		swaybg
-		waybar
-		wl-clipboard
-		xdg-desktop-portal-wlr
-		"
-	# The bar itself, which each account's ~/.config/waybar includes, so an
-	# upgrade reaches accounts made before it.
-	local conf
-	for conf in modules.jsonc hyprland.jsonc labwc.jsonc style.css; do
-		install -Dm644 "$builddir"/desktop/waybar/$conf \
-			"$subpkgdir"/usr/share/alpymist/waybar/$conf
-	done
-	for conf in hyprland labwc; do
-		install -Dm644 "$builddir"/desktop/xdg-desktop-portal/$conf-portals.conf \
-			"$subpkgdir"/etc/xdg/xdg-desktop-portal/$conf-portals.conf
-	done
-	_skel wayland "$subpkgdir"
-}
-
-_full() {
-	pkgdesc="Alpymist desktop, Full tier: Hyprland"
-	# The terminal is foot, from the Wayland tools, as on the other tiers:
-	# Ghostty was the terminal here once, at ten times foot's memory, and a Zig
-	# build of our own to maintain. alpymist-menu is the launcher and system
-	# menu hyprland.conf binds; squint is the editor, as $VISUAL and for text
-	# files.
-	depends="$pkgname-wayland=$pkgver-r$pkgrel alpymist-menu hyprland squint"
-	install -Dm644 "$builddir"/desktop/greetd/alpymist-full.toml \
-		"$subpkgdir"/etc/greetd/alpymist-full.toml
-	# hyprland.conf sources /etc/alpymist/hyprland-keyboard.conf, and the
-	# installer writes the chosen layout there. The package ships only the US
-	# default, which its install scripts copy into /etc where there is no file
-	# yet. A file of the package's own in /etc would be one the installer had
-	# changed, and every upgrade would leave a .apk-new beside it.
-	install -Dm644 "$builddir"/desktop/hypr/hyprland-keyboard.conf \
-		"$subpkgdir"/usr/share/alpymist/hyprland-keyboard.conf
-	# Permissions and Ctrl+Alt+Delete, which hyprland.conf sources; see the
-	# file.
-	install -Dm644 "$builddir"/desktop/hypr/hyprland-security.conf \
-		"$subpkgdir"/usr/share/alpymist/hyprland-security.conf
-	# Text files open in squint under Hyprland only: XDG reads
-	# hyprland-mimeapps.list when XDG_CURRENT_DESKTOP is Hyprland.
-	install -Dm644 "$builddir"/desktop/hypr/hyprland-mimeapps.list \
-		"$subpkgdir"/etc/xdg/hyprland-mimeapps.list
-	_skel full "$subpkgdir"
-}
-
-# Lite and Potato are the same packages; Potato's session only tells labwc to
-# render on the CPU, so both greetd files ship here.
-_lite() {
-	pkgdesc="Alpymist desktop, Lite and Potato tiers: labwc"
-	depends="$pkgname-wayland=$pkgver-r$pkgrel labwc"
-	install -Dm644 "$builddir"/desktop/greetd/alpymist-lite.toml \
-		"$subpkgdir"/etc/greetd/alpymist-lite.toml
-	install -Dm644 "$builddir"/desktop/greetd/alpymist-potato.toml \
-		"$subpkgdir"/etc/greetd/alpymist-potato.toml
-	_skel lite "$subpkgdir"
-}
-
-# The X11 tier, made to feel like the Hyprland one: i3 with gaps, polybar as
-# the top bar, rofi as the launcher, picom for rounded corners and fades.
-_legacy() {
-	pkgdesc="Alpymist desktop, Legacy tier: X11 with i3"
-	depends="
-		$pkgname=$pkgver-r$pkgrel
-		dunst
-		eudev
-		feh
-		i3lock
-		i3wm
-		picom
-		polybar
-		rofi
-		setxkbmap
-		xf86-input-libinput
-		xinit
-		xorg-server
-		xrdb
-		xterm
-		"
-	install -Dm644 "$builddir"/desktop/greetd/alpymist-legacy.toml \
-		"$subpkgdir"/etc/greetd/alpymist-legacy.toml
-	install -Dm644 "$builddir"/desktop/xorg/Xwrapper.config \
-		"$subpkgdir"/etc/X11/Xwrapper.config
-	_skel legacy "$subpkgdir"
 }

@@ -1,9 +1,7 @@
 //! Shared domain model for Alpymist.
 //!
-//! The central idea of Alpymist is that the *user-facing desktop* (keybindings, theme,
-//! panel, launcher, lock screen) is defined once, and rendered onto whichever
-//! session backend the machine can actually drive. [`Tier`] is the decision, and
-//! [`select_tier`] is the pure function that makes it.
+//! Alpymist is one desktop, Hyprland on Wayland. [`hyprland::check`] is the
+//! pure function that says how well it will run on a machine, and why.
 
 #![forbid(unsafe_code)]
 
@@ -11,11 +9,10 @@ mod capabilities;
 pub mod catalog;
 mod channel;
 pub mod firmware;
-mod tier;
+pub mod hyprland;
 
 pub use capabilities::{Capabilities, GlesInfo, GpuDevice, Virtualisation};
 pub use channel::Channel;
-pub use tier::{Rationale, SessionBackend, Tier, select_tier};
 
 /// Errors produced by Alpymist libraries.
 #[derive(Debug, thiserror::Error)]
