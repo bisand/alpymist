@@ -96,10 +96,75 @@ pub type Compose = dyn FnMut(Size) -> Box<dyn Painting>;
 ///
 /// One name for all of them, not one each: only one screensaver is ever up, and
 /// `alpymist-screensaver stop` has to be able to take away whichever it is
-/// without knowing which it is.
+/// without knowing which it is. A copy drawing on one screen of several runs as
+/// `alpymist-screensaver@DP-3`; see [`start`].
 pub const NAME: &str = "alpymist-screensaver";
 
-/// Cover the screen with what `compose` draws, until somebody comes back.
+/// The variable that puts a screensaver on one screen, by name.
+///
+/// Set by [`start`] for each copy it starts in [`crate::config::Config::every_screen`]
+/// mode, never by hand. A screensaver program needs to know nothing about it.
+pub const OUTPUT: &str = "ALPYMIST_SCREENSAVER_OUTPUT";
+
+/// What a copy on the screen `output` runs as.
+#[must_use]
+pub fn name_on(output: &str) -> String {
+    format!("{NAME}@{output}")
+}
+
+/// The compositor's screens, by name, first first; empty where there is no
+/// session or they have no names.
+#[must_use]
+pub fn screens() -> Vec<Screen> {
+    #[cfg(target_os = "linux")]
+    {
+        alpymist_widget::outputs::screens()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|s| Screen {
+                name: s.name,
+                description: s.description,
+            })
+            .collect()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        Vec::new()
+    }
+}
+
+/// A screen the picture can be put on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Screen {
+    /// What the compositor calls it: `eDP-1`, `DP-3`.
+    pub name: String,
+    /// What it is, where the compositor says so.
+    pub description: String,
+}
+
+/// The main screen: the one `configured` names if it is connected, or else the
+/// first the compositor numbers. `None` with no screens to name.
+#[must_use]
+pub fn main_screen<'a>(configured: &str, screens: &'a [Screen]) -> Option<&'a Screen> {
+    screens
+        .iter()
+        .find(|s| !configured.is_empty() && s.name == configured)
+        .or_else(|| screens.first())
+}
+
+/// Cover the screens with what `compose` draws, until somebody comes back.
+///
+/// On the main screen, with the others dark: the first screen the compositor
+/// numbers (Hyprland's monitor 0, the laptop's own panel while it is on), or
+/// the one `main-screen` in `screensaver.toml` names while that one is
+/// connected. A picture costs a frame clock on each screen it is on, and the
+/// others only need to stop showing the desktop.
+///
+/// With `every-screen` the picture is on all of them instead. Then this
+/// process starts one copy of the same program per screen, each told its
+/// screen in [`OUTPUT`] and each drawing at that screen's own size, and takes
+/// them all away together, when any of them is left or when [`stop`] asks.
+/// With one screen there is only ever the one.
 ///
 /// # Errors
 /// No Wayland session, or a compositor without the layer shell.
@@ -107,12 +172,35 @@ pub const NAME: &str = "alpymist-screensaver";
 pub fn start(compose: impl FnMut(Size) -> Box<dyn Painting> + 'static) -> Result<(), String> {
     use alpymist_widget::host;
 
-    alpymist_widget::instance::toggle(NAME, |listener| {
+    let copy = std::env::var(OUTPUT).ok().filter(|o| !o.is_empty());
+    let output = if let Some(output) = &copy {
+        Some(output.clone())
+    } else {
+        let config = crate::config::Config::load().unwrap_or_default();
+        let all = screens();
+        if config.every_screen && all.len() > 1 {
+            let names: Vec<String> = all.into_iter().map(|s| s.name).collect();
+            return alpymist_widget::instance::toggle(NAME, |listener| {
+                everywhere(&names, listener);
+                Ok(false)
+            });
+        }
+        // A compositor that does not name its screens: wherever it puts the
+        // picture, which is the screen with focus.
+        main_screen(&config.main_screen, &all).map(|s| s.name.clone())
+    };
+
+    let name = copy.as_deref().map_or_else(|| NAME.to_owned(), name_on);
+    alpymist_widget::instance::toggle(&name, |listener| {
         let mut options = host::Options::new(NAME);
         options.placement = host::Placement::FullScreen;
         // Under the first frame, and under the edges of a screen the blocks do
         // not quite divide.
         options.backdrop = crate::saver::backdrop();
+        // One copy of several has a screen of its own; the main one darkens
+        // the rest.
+        options.cover_others = copy.is_none();
+        options.output = output;
         let (_sender, events) = host::events::<()>();
         host::run(
             crate::saver::Saver::new(Box::new(compose)),
@@ -121,6 +209,40 @@ pub fn start(compose: impl FnMut(Size) -> Box<dyn Painting> + 'static) -> Result
             listener,
         )
     })
+}
+
+/// Run a copy of this program on each of `screens`, and take them all away
+/// when one of them goes or `listener` hears from [`stop`].
+///
+/// Blocked, not polling: a thread waits on each copy and one on the socket,
+/// and the first to finish says so. A screensaver's whole job is to let the
+/// machine idle.
+#[cfg(target_os = "linux")]
+fn everywhere(screens: &[String], listener: Option<std::os::unix::net::UnixListener>) {
+    use std::sync::mpsc;
+
+    let Ok(me) = std::env::current_exe() else {
+        return;
+    };
+    let (done, finished) = mpsc::channel::<()>();
+    for screen in screens {
+        let Ok(mut copy) = std::process::Command::new(&me).env(OUTPUT, screen).spawn() else {
+            continue;
+        };
+        let done = done.clone();
+        std::thread::spawn(move || {
+            copy.wait().ok();
+            done.send(()).ok();
+        });
+    }
+    if let Some(listener) = listener {
+        std::thread::spawn(move || {
+            listener.accept().ok();
+            done.send(()).ok();
+        });
+    }
+    finished.recv().ok();
+    stop_copies();
 }
 
 /// There is no layer shell off Linux; a screensaver's own logic still builds.
@@ -140,5 +262,82 @@ pub fn stop() {
     if let Some(path) = alpymist_widget::instance::socket_path(NAME) {
         // Connecting is what closes it; there is nothing to say afterwards.
         std::os::unix::net::UnixStream::connect(path).ok();
+    }
+    // Copies on each screen go when the one that started them does; this is
+    // for any left behind by one that did not get to.
+    stop_copies();
+}
+
+/// Take away every copy on a screen of its own.
+fn stop_copies() {
+    let Some(ours) = alpymist_widget::instance::socket_path(&name_on("")) else {
+        return;
+    };
+    // `alpymist-screensaver@-wayland-1.sock`: each copy's socket is this with
+    // its screen's name after the `@`.
+    let Some(file) = ours.file_name().and_then(|f| f.to_str()) else {
+        return;
+    };
+    let Some((prefix, suffix)) = file.split_once('@') else {
+        return;
+    };
+    let (prefix, suffix) = (format!("{prefix}@"), suffix.to_owned());
+    let Some(dir) = ours.parent() else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if name.starts_with(&prefix) && name.ends_with(&suffix) && name != file {
+            std::os::unix::net::UnixStream::connect(entry.path()).ok();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Screen, main_screen, name_on};
+
+    fn screens(names: &[&str]) -> Vec<Screen> {
+        names
+            .iter()
+            .map(|n| Screen {
+                name: (*n).to_owned(),
+                description: String::new(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_main_screen_is_the_first_unless_another_is_named() {
+        let all = screens(&["eDP-1", "DP-3", "DP-5"]);
+        assert_eq!(
+            main_screen("", &all).map(|s| s.name.as_str()),
+            Some("eDP-1")
+        );
+        assert_eq!(
+            main_screen("DP-5", &all).map(|s| s.name.as_str()),
+            Some("DP-5")
+        );
+    }
+
+    #[test]
+    fn a_named_screen_that_is_not_connected_falls_back_to_the_first() {
+        let undocked = screens(&["eDP-1"]);
+        assert_eq!(
+            main_screen("DP-5", &undocked).map(|s| s.name.as_str()),
+            Some("eDP-1")
+        );
+        assert_eq!(main_screen("DP-5", &[]), None);
+    }
+
+    #[test]
+    fn a_copy_on_a_screen_is_named_after_it() {
+        assert_eq!(name_on("DP-3"), "alpymist-screensaver@DP-3");
     }
 }

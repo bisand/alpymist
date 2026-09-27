@@ -53,6 +53,12 @@ pub struct Config {
     /// Which screensaver, by name, or `random`.
     #[serde(deserialize_with = "read_show")]
     pub show: Show,
+    /// The picture on every screen. Off, it is on the main screen, and the
+    /// others go dark; see [`crate::paint::start`].
+    pub every_screen: bool,
+    /// The main screen, by the compositor's name for it (`DP-3`). Empty, or a
+    /// screen not connected, is the first screen the compositor numbers.
+    pub main_screen: String,
 
     /// How chunky the picture was, when there was only ever one picture.
     ///
@@ -89,6 +95,8 @@ impl Default for Config {
             blank_after: 10,
             lock: false,
             show: Show::default(),
+            every_screen: false,
+            main_screen: String::new(),
             block: None,
         }
     }
@@ -146,6 +154,8 @@ impl Config {
             blank_after,
             lock,
             show,
+            every_screen,
+            main_screen,
             ..
         } = self;
         let show = show.id();
@@ -161,7 +171,12 @@ impl Config {
              lock = {lock}\n\
              # Which screensaver, by name, or \"random\" for a different one each\n\
              # time. Each has its own settings, in its own file beside this one.\n\
-             show = \"{show}\"\n"
+             show = \"{show}\"\n\
+             # The picture on every screen; off, on the main screen alone and\n\
+             # the others go dark.\n\
+             every-screen = {every_screen}\n\
+             # The main screen, by name, or \"\" for the first one.\n\
+             main-screen = {main_screen:?}\n"
         )
     }
 }
@@ -190,6 +205,8 @@ mod tests {
         assert_eq!(c.blank_after, 15);
         assert!(c.lock);
         assert_eq!(c.show, Show::One("aquarium".into()));
+        assert!(!c.every_screen, "the screen in use, unless asked");
+        assert!(Config::parse("every-screen = true\n").unwrap().every_screen);
     }
 
     #[test]
@@ -230,6 +247,8 @@ mod tests {
             blank_after: 7,
             lock: true,
             show: Show::One("mountains".into()),
+            every_screen: true,
+            main_screen: "DP-3".into(),
             block: None,
         };
         assert_eq!(Config::parse(&c.to_toml()).unwrap(), c);

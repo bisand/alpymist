@@ -55,6 +55,8 @@ pub mod focus;
 #[cfg(target_os = "linux")]
 pub mod host;
 pub mod instance;
+#[cfg(target_os = "linux")]
+pub mod outputs;
 pub mod waybar;
 #[cfg(target_os = "linux")]
 pub mod window;

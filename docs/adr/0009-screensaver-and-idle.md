@@ -349,3 +349,67 @@ when the picture is missing.
 So the mountains screensaver no longer matches any screen it sits in front of,
 on a machine that keeps the defaults. It now describes itself as Alpymist's
 own ranges rather than as some other screen's. How it draws them is unchanged.
+
+---
+
+## Addendum, 2026-09-27 — every screen is covered, and the picture is on one
+
+**Status:** accepted · closes #23.
+
+With several screens, the screensaver covered only the one with focus. The
+layer surface was asked for with no output, and a compositor puts one like
+that on the focused output. The others went on showing the desktop until
+`wlopm --off '*'` turned all of them off. That was seen on the dev machine: a
+ThinkPad X1 Carbon on its dock, with three screens.
+
+**What it does now.** The picture is on the *main screen*, and every other
+screen is covered in black until somebody comes back.
+
+- The main screen is the first one the compositor numbers: Hyprland's
+  monitor 0, the laptop's own panel while it is on, and the first external
+  screen when the lid is shut. Wayland has no primary display. The order the
+  compositor announces its outputs in is the nearest thing it has, and it is
+  the order Hyprland numbers them in.
+- `main-screen` in `screensaver.toml` (Settings › Screensaver › Main screen)
+  names another. A screen named there that is not connected, say on a dock
+  left at the office, leaves the picture on the first.
+- `every-screen` puts the picture on all of them instead, each drawn at its
+  own screen's size.
+
+Blank the rest was chosen over the picture everywhere as the default, because
+the picture is for the screen somebody looks at. The rest only need to stop
+showing the desktop. A black cover is drawn once and never again, so it costs
+nothing, and on OLED black is as good as off.
+
+**How.** `alpymist_widget::host` gained two options: the output to be on, by
+name, and `cover_others`, which puts a black layer surface on every other
+output, including one plugged in while the screensaver is up. `paint::start`
+chooses between them, so the screensaver packages did not change.
+Mountains and starfield cover every screen as they are, and so will any other
+screensaver.
+
+In `every-screen` mode the first process becomes a coordinator:
+
+- It starts one copy of the same program per screen, each told its screen
+  in `ALPYMIST_SCREENSAVER_OUTPUT`, and each with its own socket,
+  `alpymist-screensaver@DP-3`.
+- When any copy goes, or `stop` asks, it takes the rest away.
+- It waits on threads, not a timer, so it adds no wakeups.
+- `stop` also reaches the copies directly, in case a coordinator died.
+
+A full-screen widget no longer closes when it loses the keyboard. With a copy
+on each screen, each takes the keyboard from the last as it comes up, and
+only a key or the pointer should take them away. For a cover, only a real
+move of the pointer counts: one appearing under a still pointer is told
+where the pointer is, which is not someone coming back.
+
+**Cost, measured on the X1** (i7, three 1920×1080 screens, mountains at the
+default settings):
+
+| Mode | CPU |
+|---|---|
+| Default: picture on one screen, black on the other two | 5% of a core, what one screen alone costs; the covers add nothing after their first frame |
+| `every-screen` | 5% of a core per screen, 15% in all; the coordinator 0% |
+
+The cost per screen is §3's, once per screen. That is why the picture on
+every screen is a choice and not the default.
