@@ -109,6 +109,8 @@ pub enum Action {
     CheckUpdates,
     /// Put the About details on the clipboard.
     CopyAbout,
+    /// Say what the probe makes of this computer, and why.
+    Probe,
 }
 
 /// What the window should do after input.
@@ -883,6 +885,10 @@ impl View {
                     "updates" => Some((
                         "Check for updates".to_owned(),
                         Msg::Action(Action::CheckUpdates),
+                    )),
+                    "desktop" => Some((
+                        "Check this computer…".to_owned(),
+                        Msg::Action(Action::Probe),
                     )),
                     // The one door to a screensaver's own settings. Nothing is
                     // behind it when nothing is installed, and the button is

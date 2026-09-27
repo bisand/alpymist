@@ -34,6 +34,8 @@ pub enum Applies {
     NextLogin,
     /// At the next update.
     NextUpdate,
+    /// When the computer starts again.
+    NextBoot,
 }
 
 impl Applies {
@@ -45,6 +47,7 @@ impl Applies {
             Self::NewWindows => "new-windows",
             Self::NextLogin => "next-login",
             Self::NextUpdate => "next-update",
+            Self::NextBoot => "next-boot",
         }
     }
 
@@ -56,6 +59,7 @@ impl Applies {
             Self::NewWindows => Some("Windows opened from now on show the change."),
             Self::NextLogin => Some("Takes effect at the next login."),
             Self::NextUpdate => Some("Takes effect at the next update."),
+            Self::NextBoot => Some("Takes effect when the computer starts again."),
         }
     }
 }

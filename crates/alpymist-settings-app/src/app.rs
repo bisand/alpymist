@@ -257,6 +257,16 @@ impl SettingsApp {
                 Effect::Action(Action::OpenWifi) => spawn(&["alpymist-wifi"]),
                 Effect::Action(Action::OpenPower) => spawn(&["alpymist-power"]),
                 Effect::Action(Action::CheckUpdates) => spawn(&["alpymist-store", "updates"]),
+                // The probe's own words, reasons and all, in a window that
+                // stays until it is closed.
+                Effect::Action(Action::Probe) => spawn(&[
+                    "foot",
+                    "--hold",
+                    "--title",
+                    "What this computer can run",
+                    "alpymist",
+                    "probe",
+                ]),
                 Effect::Action(Action::CopyAbout) => {
                     let sender = self.sender.clone();
                     std::thread::spawn(move || {

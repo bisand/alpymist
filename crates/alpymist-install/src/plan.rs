@@ -25,7 +25,6 @@
 //! passphrase prompt at boot types the way the user chose.
 
 use crate::answers::{Answers, DiskPlan, Firmware, Network};
-use alpymist_core::SessionBackend;
 use std::fmt::Write as _;
 
 /// Bytes a step is given on standard input.
@@ -187,14 +186,6 @@ impl PlanError {
 
 /// Where the new system is mounted while it is being built.
 const ROOT: &str = "/mnt";
-/// Added to `/etc/conf.d/greetd` on the Wayland tiers, whose desktops open the
-/// screen and keyboard through seatd. The login screen needs no seat, so
-/// without this it starts regardless, and when seatd has not, every login goes
-/// straight back to it with no word of why. With it, greetd waits for seatd,
-/// and a seatd that never starts leaves the text consoles instead. Legacy's X
-/// server runs as root and needs no seat.
-const GREETD_NEEDS_SEATD: &str =
-    "# The desktop opens its screen and keyboard through seatd.\nrc_need=\"seatd\"\n";
 /// The kernel command line `setup-disk` writes, beside the modules and root it
 /// adds itself. `quiet` is its own default. `intel_iommu=on` because Alpine's
 /// kernel leaves Intel's IOMMU off unless asked (AMD's is on wherever it
@@ -662,14 +653,8 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
             &["chroot", ROOT, "tee", "/etc/conf.d/greetd"],
         )
         .with_input(Input::Text(format!(
-            "# Written by the Alpymist installer: the {tier:?} tier's session.\n\
-             cfgfile=\"{}\"\n{}",
-            tier.greeter_config(),
-            if matches!(tier.backend(), SessionBackend::I3) {
-                ""
-            } else {
-                GREETD_NEEDS_SEATD
-            }
+            "# Written by the Alpymist installer: the {tier:?} tier's session.\n{}",
+            tier.greetd_service()
         )))
         .may_fail(),
     );

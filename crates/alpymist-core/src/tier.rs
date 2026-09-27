@@ -41,7 +41,30 @@ pub enum Tier {
     Full,
 }
 
+/// What `/etc/conf.d/greetd` adds on the Wayland tiers, whose desktops open
+/// the screen and keyboard through seatd. The login screen needs no seat, so
+/// without this it starts regardless, and when seatd has not, every login goes
+/// straight back to it with no word of why. With it, greetd waits for seatd,
+/// and a seatd that never starts leaves the text consoles instead. Legacy's X
+/// server runs as root and needs no seat.
+const GREETD_NEEDS_SEATD: &str =
+    "# The desktop opens its screen and keyboard through seatd.\nrc_need=\"seatd\"\n";
+
 impl Tier {
+    /// Every tier, from the most capable down.
+    pub const ALL: [Self; 4] = [Self::Full, Self::Lite, Self::Potato, Self::Legacy];
+
+    /// As the command line and the files write it: `full`.
+    #[must_use]
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Lite => "lite",
+            Self::Potato => "potato",
+            Self::Legacy => "legacy",
+        }
+    }
+
     /// The session backend this tier runs.
     #[must_use]
     pub fn backend(self) -> SessionBackend {
@@ -80,6 +103,22 @@ impl Tier {
             Self::Potato => "/etc/greetd/alpymist-potato.toml",
             Self::Legacy => "/etc/greetd/alpymist-legacy.toml",
         }
+    }
+
+    /// What `/etc/conf.d/greetd` says for this tier, below its first line:
+    /// the configuration greetd starts with, and on the Wayland tiers, that it
+    /// waits for seatd.
+    #[must_use]
+    pub fn greetd_service(self) -> String {
+        format!(
+            "cfgfile=\"{}\"\n{}",
+            self.greeter_config(),
+            if matches!(self.backend(), SessionBackend::I3) {
+                ""
+            } else {
+                GREETD_NEEDS_SEATD
+            }
+        )
     }
 }
 
