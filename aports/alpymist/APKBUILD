@@ -10,9 +10,12 @@ license="MIT OR Apache-2.0"
 makedepends="cargo"
 # libEGL is loaded at runtime, not linked, so it is deliberately not a depend:
 # alpymist must work on a system with no Mesa and simply report less.
-subpackages=""
+# alpymist-firmware, in the -openrc package, installs firmware that a driver
+# asks for after installation; see its init script.
+subpackages="$pkgname-openrc"
 options="!check"  # the test suite runs in CI, not in the package build
-source=""
+install="$pkgname-openrc.post-install"
+source="alpymist-firmware.initd"
 builddir="$srcdir"
 
 prepare() {
@@ -38,4 +41,9 @@ package() {
 	# System settings run `alpymist set` through pkexec; what that asks.
 	install -Dm644 "$builddir"/desktop/polkit/org.alpymist.settings.policy \
 		"$pkgdir"/usr/share/polkit-1/actions/org.alpymist.settings.policy
+	install -Dm755 "$srcdir"/alpymist-firmware.initd \
+		"$pkgdir"/etc/init.d/alpymist-firmware
 }
+
+# Filled in by `abuild checksum` at build time; see alpymist-install.
+sha512sums=""

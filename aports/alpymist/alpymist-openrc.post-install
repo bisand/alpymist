@@ -1,0 +1,6 @@
+#!/bin/sh
+# Start alpymist-firmware at every boot. Here rather than in the installer, so
+# that systems installed before it existed get it too: this package is pulled
+# in by install_if wherever alpymist and OpenRC are, the first time it exists.
+rc-update add alpymist-firmware default >/dev/null 2>&1
+exit 0
