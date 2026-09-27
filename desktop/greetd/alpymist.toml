@@ -1,4 +1,4 @@
-# greetd configuration for the Alpymist lite tier: labwc, drawn with the GPU.
+# greetd configuration for the Alpymist desktop: Hyprland.
 # The installer selects this file through cfgfile in /etc/conf.d/greetd.
 
 [general]
@@ -12,5 +12,5 @@ vt = 7
 [default_session]
 # `alpymist session` writes the files the desktop reads from Settings, then
 # becomes the compositor (ADR 0007).
-command = "alpymist-greeter --cmd 'dbus-run-session alpymist session labwc'"
+command = "alpymist-greeter --cmd 'dbus-run-session alpymist session hyprland'"
 user = "greetd"

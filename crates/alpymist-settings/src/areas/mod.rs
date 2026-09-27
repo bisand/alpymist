@@ -1,6 +1,7 @@
 //! Every area, and which one answers for a setting.
 
 pub mod appearance;
+pub mod datetime;
 pub mod input;
 pub mod keyboard;
 pub mod notifications;
@@ -87,6 +88,13 @@ pub const AREAS: &[Area] = &[
         keywords: &["screen saver", "idle", "blank", "lock", "timeout"],
     },
     Area {
+        id: "datetime",
+        title: "Date & time",
+        description: "The time zone, and keeping the clock right",
+        icon: "\u{f0150}",
+        keywords: &["time zone", "timezone", "clock", "ntp", "date"],
+    },
+    Area {
         id: "updates",
         title: "Updates",
         description: "The release channel Alpymist follows",
@@ -138,6 +146,7 @@ pub fn all() -> Vec<Setting> {
         power::settings(),
         notifications::settings(),
         screensaver::settings(),
+        datetime::settings(),
         updates::settings(),
     ]
     .concat()
@@ -154,6 +163,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "power" => power::get(env, s),
         "notifications" => notifications::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
+        "datetime" => datetime::get(env, s),
         "updates" => updates::get(env),
         other => Err(format!("no area `{other}`")),
     }
@@ -176,6 +186,7 @@ pub fn set(
         "power" => none(power::set(env, s, value)),
         "notifications" => notifications::set(env, s, value, force),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
+        "datetime" => none(datetime::set(env, s, value, force)),
         "updates" => none(updates::set(env, value)),
         other => Err(format!("no area `{other}`")),
     }
@@ -188,6 +199,10 @@ pub fn live(env: &Env, s: &Setting, value: &Value) -> Result<(), String> {
         "keyboard" if s.id == "keyboard.layout" => keyboard::live(env, value),
         "keyboard" | "touchpad" | "mouse" => input::live(env, s, value),
         "notifications" => notifications::live(env, s),
+        "datetime" => {
+            datetime::live(env, s);
+            Ok(())
+        }
         _ => Ok(()),
     }
 }

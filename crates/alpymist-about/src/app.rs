@@ -89,8 +89,8 @@ impl AboutApp {
     }
 }
 
-/// Put `text` on the Wayland clipboard with wl-copy, which the Wayland tiers
-/// install.
+/// Put `text` on the Wayland clipboard with wl-copy, which the desktop
+/// installs.
 fn copy(text: &str) -> Copied {
     let mut child = Command::new("wl-copy")
         .stdin(Stdio::piped())
