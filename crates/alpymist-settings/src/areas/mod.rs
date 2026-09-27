@@ -175,7 +175,7 @@ pub fn set(
         "wifi" => none(wifi::set(env, value)),
         "power" => none(power::set(env, s, value)),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
-        "datetime" => none(datetime::set(env, s, value)),
+        "datetime" => none(datetime::set(env, s, value, force)),
         "updates" => none(updates::set(env, value)),
         other => Err(format!("no area `{other}`")),
     }
@@ -187,6 +187,10 @@ pub fn live(env: &Env, s: &Setting, value: &Value) -> Result<(), String> {
         "appearance" if s.id == wallpaper::ID => wallpaper::live(env),
         "keyboard" if s.id == "keyboard.layout" => keyboard::live(env, value),
         "keyboard" | "touchpad" | "mouse" => input::live(env, s, value),
+        "datetime" => {
+            datetime::live(env, s);
+            Ok(())
+        }
         _ => Ok(()),
     }
 }
