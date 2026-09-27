@@ -20,6 +20,7 @@ makedepends="cargo libxkbcommon-dev"
 depends="alpymist-auth eudev font-fira-ttf font-nerd-fonts-symbols polkit"
 subpackages="$pkgname-openrc"
 options="!check"  # the test suite runs in CI, not in the package build
+install="$pkgname-openrc.post-install"
 source="alpymist-thunderbolt.initd"
 builddir="$srcdir"
 
