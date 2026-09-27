@@ -202,7 +202,7 @@ impl Settings {
     }
 
     /// Show a change in the person's running session, where it can be shown
-    /// at once: Hyprland's input settings and keyboard layout.
+    /// at once: Hyprland's input settings and keyboard layout, and mako's file.
     ///
     /// # Errors
     /// An unknown id, or the session refused.
@@ -216,8 +216,11 @@ impl Settings {
     /// # Errors
     /// A file could not be written.
     pub fn prepare_session(&self, env: &Env) -> Result<(), Error> {
+        // Each is tried whatever became of the others.
         areas::themed::prepare_session(env, &areas::appearance::load(env));
-        areas::input::prepare_session(env).map_err(Error::Failed)
+        let input = areas::input::prepare_session(env);
+        let notifications = areas::notifications::prepare_session(env);
+        input.and(notifications).map_err(Error::Failed)
     }
 }
 
