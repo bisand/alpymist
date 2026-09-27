@@ -1,0 +1,178 @@
+#!/bin/sh
+# Install, update or remove Jottacloud's backup client: the menu's Install ›
+# Jottacloud and Remove › Jottacloud, or `alpymist-jottacloud install|remove`.
+#
+# Jottacloud publishes jotta-cli for Linux as a tarball of two static binaries
+# and no Alpine package. This fetches the latest from repo.jotta.us, checks it
+# against the checksum published beside it, and puts the binaries in
+# /usr/local/bin, which no package owns. jottad, the daemon that does the
+# backing up, runs at every boot as the person who installed it, with its data
+# in ~/.jottad, listening on 127.0.0.1 only. Installing again updates it.
+# Why this is not a package: ADR 0002's addendum of 2026-09-27.
+set -eu
+
+REPO=https://repo.jotta.us/archives
+BIN=/usr/local/bin
+DATA=$HOME/.jottad
+USER_NAME=$(id -un)
+
+die() {
+	printf '%s\n' "$*" >&2
+	exit 1
+}
+
+# Anything but y or yes is no.
+ask() {
+	printf '%s [y/N] ' "$1"
+	read -r answer || answer=
+	case $answer in
+	[yY] | [yY][eE][sS]) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+# The OpenRC service. supervise-daemon keeps jottad in the background and
+# restarts it if it dies; a plain start-stop-daemon would wait for jottad to
+# exit, which a daemon never does, and hold up the rest of the boot.
+init_script() {
+	cat <<'EOF'
+#!/sbin/openrc-run
+# Written by alpymist-jottacloud; removed by `alpymist-jottacloud remove`.
+# JOTTAD_USER, in /etc/conf.d/jottad, is who jottad runs as.
+
+name="jottad"
+description="Jottacloud backup daemon"
+command="/usr/local/bin/jottad"
+command_user="${JOTTAD_USER:-}"
+supervisor="supervise-daemon"
+respawn_delay=10
+
+depend() {
+	need localmount
+	use net
+	after net
+}
+
+start_pre() {
+	[ -n "$command_user" ] || {
+		eerror "Set JOTTAD_USER in /etc/conf.d/jottad"
+		return 1
+	}
+}
+EOF
+}
+
+# Jottacloud's tarball copied over / by hand leaves its files in /usr, and its
+# daemon run as root logs to /var/log. Take those away too, but only ones no
+# package owns.
+forget_hand_install() {
+	for path in /usr/bin/jottad /usr/bin/jotta-cli /usr/share/jottad \
+		/var/log/jottabackup.log; do
+		[ -e "$path" ] || continue
+		apk info -q --who-owns "$path" >/dev/null 2>&1 && continue
+		doas rm -rf "$path"
+	done
+}
+
+stop_service() {
+	[ -e /etc/init.d/jottad ] || return 0
+	doas rc-service jottad stop >/dev/null 2>&1 || true
+	# A jottad started by hand, or by an init script that lost track of it, is
+	# still running where OpenRC cannot see it.
+	pids=$(pidof jottad) || return 0
+	# shellcheck disable=SC2086 # one word per process
+	doas kill $pids 2>/dev/null || true
+}
+
+do_install() {
+	case $(uname -m) in
+	x86_64) arch=amd64 ;;
+	aarch64) arch=arm64 ;;
+	*) die "Jottacloud publishes jotta-cli for x86_64 and aarch64, not $(uname -m)." ;;
+	esac
+	version=$(wget -qO- "$REPO/VERSION") || die "Could not reach $REPO."
+	case $version in
+	'' | *[!0-9.]*) die "$REPO/VERSION says \"$version\", which is not a version." ;;
+	esac
+
+	cat <<EOF
+Jottacloud $version, from $REPO.
+
+jotta-cli is closed-source software from Jottacloud, not an Alpine or
+Alpymist package: it is checked only against a checksum from the same server.
+Its daemon, jottad, will run as $USER_NAME at every boot, can read every file
+$USER_NAME can, and uploads the folders you add to your Jottacloud account.
+
+EOF
+	ask "Install it?" || {
+		echo "Nothing changed."
+		exit 0
+	}
+
+	tmp=$(mktemp -d)
+	trap 'rm -rf "$tmp"' EXIT
+	tarball=jotta-cli-${version}_linux_$arch.tar.gz
+	wget -O "$tmp/$tarball" "$REPO/linux/$arch/$tarball"
+	wget -qO "$tmp/sum" "$REPO/linux/$arch/$tarball.sha256sum"
+	expected=$(cut -d ' ' -f 1 "$tmp/sum")
+	actual=$(sha256sum "$tmp/$tarball" | cut -d ' ' -f 1)
+	[ "$actual" = "$expected" ] ||
+		die "$tarball does not match its checksum; nothing was installed."
+	tar -xzf "$tmp/$tarball" -C "$tmp"
+
+	stop_service
+	doas install -d "$BIN" /etc/jottad
+	doas install -m 755 "$tmp/usr/bin/jottad" "$tmp/usr/bin/jotta-cli" "$BIN/"
+	forget_hand_install
+	mkdir -p "$DATA"
+	chmod 700 "$DATA"
+	printf '[settings]\nDatadir=%s\nListenAddr=127.0.0.1\nLogfileDir=%s\n' \
+		"$DATA" "$DATA" | doas tee /etc/jottad/config.ini >/dev/null
+	printf 'JOTTAD_USER=%s\n' "$USER_NAME" | doas tee /etc/conf.d/jottad >/dev/null
+	init_script | doas tee /etc/init.d/jottad >/dev/null
+	doas chmod 755 /etc/init.d/jottad
+	doas rc-update add jottad default >/dev/null
+	doas rc-service jottad start
+	logger -t alpymist-jottacloud \
+		"installed jotta-cli $version from $REPO, running as $USER_NAME"
+
+	cat <<EOF
+
+Jottacloud $version is installed, and jottad is running.
+If this machine is not logged in yet, log in, then choose what to back up:
+
+  jotta-cli login
+  jotta-cli add ~/Documents
+
+Remove › Jottacloud in the menu takes it all away again.
+EOF
+}
+
+do_remove() {
+	ask "Remove Jottacloud from this machine? Your backups at Jottacloud are kept." || {
+		echo "Nothing changed."
+		exit 0
+	}
+	stop_service
+	doas rc-update del jottad default >/dev/null 2>&1 || true
+	doas rm -f "$BIN/jottad" "$BIN/jotta-cli" \
+		/etc/init.d/jottad /etc/conf.d/jottad
+	doas rm -rf /etc/jottad
+	forget_hand_install
+	logger -t alpymist-jottacloud "removed jotta-cli"
+	echo "Jottacloud is removed."
+	if [ -d "$DATA" ] &&
+		ask "Also delete $DATA, this machine's Jottacloud login and record of what it backed up?"; then
+		doas rm -rf "$DATA"
+		echo "$DATA is deleted."
+	fi
+}
+
+[ "$(id -u)" -ne 0 ] ||
+	die "Run this as the account whose files jottad should back up, not as root."
+
+case ${1:-} in
+install) do_install ;;
+remove) do_remove ;;
+*) die "usage: alpymist-jottacloud install|remove" ;;
+esac

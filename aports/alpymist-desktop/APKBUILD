@@ -133,6 +133,10 @@ package() {
 	# Flathub's remote, which each account adds for itself at login.
 	install -Dm644 "$builddir"/desktop/flatpak/flathub.flatpakrepo \
 		"$pkgdir"/usr/share/alpymist/flathub.flatpakrepo
+	# Installs and removes Jottacloud's backup client, which is not a package;
+	# the menu runs it, and on a tier without the menu a terminal can.
+	install -Dm755 "$builddir"/desktop/jottacloud/alpymist-jottacloud \
+		"$pkgdir"/usr/bin/alpymist-jottacloud
 	install -d "$pkgdir"/etc/alpymist
 	_skel common "$pkgdir"
 }
