@@ -9,6 +9,7 @@ pub mod language;
 pub mod notifications;
 pub mod power;
 pub mod screensaver;
+pub mod sound;
 pub mod ssh;
 pub mod updates;
 pub mod wallpaper;
@@ -68,6 +69,13 @@ pub const AREAS: &[Area] = &[
         description: "Pointer speed, acceleration and buttons",
         icon: "\u{f037d}",
         keywords: &["cursor", "pointer", "wheel"],
+    },
+    Area {
+        id: "sound",
+        title: "Sound",
+        description: "Speakers, headphones and microphones, and how loud",
+        icon: "\u{f057e}",
+        keywords: &["audio", "volume", "speakers", "microphone", "pipewire"],
     },
     Area {
         id: "wifi",
@@ -167,6 +175,7 @@ pub fn all() -> Vec<Setting> {
         keyboard::settings(),
         language::settings(),
         input::settings(),
+        sound::settings(),
         wifi::settings(),
         bluetooth::settings(),
         ssh::settings(),
@@ -187,6 +196,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "keyboard" if s.id == "keyboard.layout" => keyboard::get(env, s),
         "language" => language::get(env, s),
         "keyboard" | "touchpad" | "mouse" => input::get(env, s),
+        "sound" => sound::get(env, s),
         "wifi" => wifi::get(env),
         "bluetooth" => Ok(bluetooth::get(env)),
         "ssh" => Ok(ssh::get(env)),
@@ -213,6 +223,7 @@ pub fn set(
         "keyboard" if s.id == "keyboard.layout" => keyboard::set(env, s, value, force),
         "language" => language::set(env, s, value),
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
+        "sound" => none(sound::set(env, s, value)),
         "wifi" => none(wifi::set(env, value)),
         "bluetooth" => none(bluetooth::set(env, value)),
         "ssh" => ssh::set(env, value),
