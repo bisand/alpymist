@@ -32,7 +32,9 @@ license="MIT OR Apache-2.0"
 # terminal.
 # Terminals use FiraCode Nerd Font: Fira Code's ligatures, with the prompt's
 # icons at the size and place they were made for, which a separate symbols
-# font gets wrong.
+# font gets wrong. musl-locales is how musl writes dates and messages in the
+# language chosen in Settings; the programs' own translations are Alpine's
+# -lang packages, every language at once, and Settings installs them when asked.
 # Beside those, the desktop itself: Hyprland; alpymist-menu, the launcher and
 # system menu hyprland.conf binds; foot, the terminal; squint, the editor, as
 # $VISUAL and for text files. alpymist-wifi and alpymist-power are the bar's
@@ -84,6 +86,7 @@ depends="
 	librewolf
 	mako
 	mesa-dri-gallium
+	musl-locales
 	pam-rundir
 	pavucontrol
 	pipewire
