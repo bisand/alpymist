@@ -2,7 +2,21 @@
    Font symbols behind Fira Mono, so text and icons share one family list.
 
    Belongs to the alpymist-desktop-wayland package and is replaced on every
-   upgrade: change ~/.config/waybar/style.css instead, which imports this. */
+   upgrade: change ~/.config/waybar/style.css instead, which imports this.
+
+   The colours are named, and these are the dark Mist theme's. The account's
+   style imports ~/.config/alpymist/waybar/colours.css after this, which
+   Settings writes from the theme and which names them again: the last
+   definition wins, wherever the name is used. */
+@define-color alpymist-page #0b121e;
+@define-color alpymist-text #eaf0f6;
+@define-color alpymist-border #3a4c63;
+@define-color alpymist-dim #9aabbd;
+@define-color alpymist-accent #7fb8d9;
+@define-color alpymist-warning #d9a07f;
+@define-color alpymist-error #d98f7f;
+@define-color alpymist-muted #5d6b7a;
+
 * {
   font-family: "Fira Mono", "Symbols Nerd Font", monospace;
   font-size: 12px;
@@ -12,8 +26,8 @@
 }
 
 window#waybar {
-  background: #0b121e;
-  color: #eaf0f6;
+  background: @alpymist-page;
+  color: @alpymist-text;
 }
 
 .modules-left { margin-left: 6px; }
@@ -34,16 +48,16 @@ window#waybar {
   all: unset;
   font-family: "Fira Mono", monospace;
   font-size: 12px;
-  color: #3a4c63;
+  color: @alpymist-border;
   padding: 0 7px;
 }
 
-#workspaces button.occupied { color: #9aabbd; }
-#workspaces button.active { color: #7fb8d9; }
-#workspaces button:hover { color: #eaf0f6; }
+#workspaces button.occupied { color: @alpymist-dim; }
+#workspaces button.active { color: @alpymist-accent; }
+#workspaces button:hover { color: @alpymist-text; }
 
 #clock {
-  color: #eaf0f6;
+  color: @alpymist-text;
   padding: 0 10px;
 }
 
@@ -56,7 +70,7 @@ window#waybar {
 #custom-battery,
 #custom-session,
 #custom-tray-arrow {
-  color: #9aabbd;
+  color: @alpymist-dim;
   font-size: 14px;
   padding: 0 8px;
 }
@@ -69,23 +83,23 @@ window#waybar {
 #memory:hover,
 #custom-battery:hover,
 #custom-session:hover,
-#custom-tray-arrow:hover { color: #eaf0f6; }
+#custom-tray-arrow:hover { color: @alpymist-text; }
 
-#custom-session { color: #7fb8d9; }
-#custom-battery.charging { color: #7fb8d9; }
-#custom-battery.warning { color: #d9a07f; }
-#custom-battery.critical { color: #d98f7f; }
+#custom-session { color: @alpymist-accent; }
+#custom-battery.charging { color: @alpymist-accent; }
+#custom-battery.warning { color: @alpymist-warning; }
+#custom-battery.critical { color: @alpymist-error; }
 #custom-wifi.off,
-#custom-wifi.unavailable { color: #5d6b7a; }
-#custom-wifi.connecting { color: #7fb8d9; }
+#custom-wifi.unavailable { color: @alpymist-muted; }
+#custom-wifi.connecting { color: @alpymist-accent; }
 
 #tray { padding: 0 4px; }
-#tray menu { background: #0b121e; color: #eaf0f6; }
+#tray menu { background: @alpymist-page; color: @alpymist-text; }
 
 tooltip {
-  background: #0b121e;
-  border: 1px solid #3a4c63;
+  background: @alpymist-page;
+  border: 1px solid @alpymist-border;
   border-radius: 6px;
 }
 
-tooltip label { color: #eaf0f6; padding: 2px; }
+tooltip label { color: @alpymist-text; padding: 2px; }

@@ -251,7 +251,7 @@ pub fn live(env: &Env, setting: &Setting, value: &Value) -> Result<(), String> {
 }
 
 /// The Hyprland file's body for `values`.
-fn conf(values: &Values) -> String {
+fn conf(values: &Values, theme: &alpymist_theme::ThemeFile) -> String {
     let all = settings();
     let value = |id: &str| {
         values
@@ -269,15 +269,24 @@ fn conf(values: &Values) -> String {
             let _ = writeln!(outer, "    {key} = {line}");
         }
     }
-    format!("input {{\n{outer}    touchpad {{\n{touchpad}    }}\n}}\n")
+    // The borders are the theme's, here because this is the one file of
+    // Alpymist's own that every account's Hyprland reads.
+    format!(
+        "input {{\n{outer}    touchpad {{\n{touchpad}    }}\n}}\n{}",
+        super::themed::hyprland(theme)
+    )
 }
 
-fn write_conf(env: &Env, values: &Values, force: bool) -> Result<(), String> {
+/// Write the Hyprland file from `values` and the account's theme.
+///
+/// # Errors
+/// It was edited by hand, or could not be written.
+pub fn write_conf(env: &Env, values: &Values, force: bool) -> Result<(), String> {
     generated::write(
         &env.account(HYPR_CONF),
         "#",
         "~/.config/alpymist/settings.toml",
-        &conf(values),
+        &conf(values, &super::appearance::load(env)),
         |_| false,
         force,
     )
@@ -315,7 +324,7 @@ mod tests {
         let mut v = Values::default();
         v.set("touchpad.natural-scroll", &Value::Bool(true));
         v.set("mouse.speed", &Value::Number(-20));
-        let text = conf(&v);
+        let text = conf(&v, &alpymist_theme::ThemeFile::default());
         assert!(
             text.starts_with("input {\n    repeat_delay = 600\n"),
             "{text}"
@@ -326,6 +335,6 @@ mod tests {
             "{text}"
         );
         assert!(text.contains("        tap-to-click = true\n"), "{text}");
-        assert!(text.ends_with("    }\n}\n"), "{text}");
+        assert!(text.contains("    }\n}\ngeneral {\n"), "{text}");
     }
 }

@@ -210,6 +210,37 @@ pub struct Colours {
     pub selection: [u8; 4],
 }
 
+/// The colours the programs around Alpymist's windows are given: the top bar,
+/// the terminal's background and text, Hyprland's borders.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Palette {
+    /// Behind everything.
+    pub page: Color,
+    /// A recessed well.
+    pub well: Color,
+    /// Borders and what is there but not in use.
+    pub border: Color,
+    /// Text.
+    pub text: Color,
+    /// Details and hints.
+    pub dim: Color,
+    /// What is chosen or active.
+    pub accent: Color,
+    /// Something wants attention.
+    pub warning: Color,
+    /// Something is wrong.
+    pub error: Color,
+    /// What is off or out of reach.
+    pub muted: Color,
+}
+
+/// A colour as CSS and most configuration files write it, without the `#`:
+/// `7fb8d9`.
+#[must_use]
+pub fn hex(c: Color) -> String {
+    format!("{:02x}{:02x}{:02x}", c.r, c.g, c.b)
+}
+
 /// The base surfaces and text of a scheme: page, recessed well, border and
 /// selection, text, dim text.
 const fn base(scheme: Scheme) -> [Color; 5] {
@@ -301,6 +332,27 @@ impl ThemeFile {
         .with_color(Role::Base200, well)
         .with_color(Role::Base300, border)
         .with_color(Role::BaseContent, text)
+    }
+
+    /// The colours for the programs around Alpymist's windows. Dark and Mist
+    /// are exactly the colours the top bar had before there was a theme.
+    #[must_use]
+    pub fn palette(&self) -> Palette {
+        let [page, well, border, text, dim] = base(self.scheme);
+        Palette {
+            page,
+            well,
+            border,
+            text,
+            dim,
+            accent: self.accent.colour(self.scheme),
+            warning: Accent::Amber.colour(self.scheme),
+            error: Accent::Rose.colour(self.scheme),
+            muted: match self.scheme {
+                Scheme::Dark => Color::rgb(0x5D, 0x6B, 0x7A),
+                Scheme::Light => Color::rgb(0x9A, 0xAB, 0xBD),
+            },
+        }
     }
 
     /// The colours the hand-drawn windows use. Dark and Mist are exactly the

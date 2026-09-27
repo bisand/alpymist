@@ -216,6 +216,7 @@ impl Settings {
     /// # Errors
     /// A file could not be written.
     pub fn prepare_session(&self, env: &Env) -> Result<(), Error> {
+        areas::themed::prepare_session(env, &areas::appearance::load(env));
         areas::input::prepare_session(env).map_err(Error::Failed)
     }
 }

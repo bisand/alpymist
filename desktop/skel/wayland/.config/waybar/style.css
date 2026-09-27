@@ -9,3 +9,6 @@
    Save, then restart the bar: under Hyprland, Toggle › Top bar in the
    menu, twice; under labwc, log out and in again. */
 @import url("file:///usr/share/alpymist/waybar/style.css");
+/* The theme's colours, from Settings › Appearance: after Alpymist's style,
+   so they win, and before anything of yours, so yours do. */
+@import url("../alpymist/waybar/colours.css");
