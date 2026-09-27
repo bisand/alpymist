@@ -89,9 +89,16 @@ pub const AREAS: &[Area] = &[
     Area {
         id: "system",
         title: "System",
-        description: "What this computer is called",
+        description: "What this computer is called, your password, and who administers it",
         icon: "\u{f01c4}",
-        keywords: &["computer", "hostname", "name", "device"],
+        keywords: &[
+            "computer",
+            "hostname",
+            "name",
+            "account",
+            "password",
+            "administrator",
+        ],
     },
 ];
 
@@ -154,7 +161,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "power" => power::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
         "updates" => updates::get(env),
-        "system" => system::get(env),
+        "system" => system::get(env, s),
         other => Err(format!("no area `{other}`")),
     }
 }
