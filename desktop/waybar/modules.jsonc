@@ -38,7 +38,10 @@
     "format-off": "",
     "format-no-controller": "",
     "tooltip-format": "{controller_alias}",
-    "tooltip-format-connected": "{device_enumerate}"
+    "tooltip-format-connected": "{device_enumerate}",
+    // Pairing and connecting, in a terminal. The icon is only there while
+    // Bluetooth is on: Settings › Bluetooth turns it on.
+    "on-click": "foot --title Bluetooth bluetuith"
   },
 
   // Wi-Fi is alpymist-wifi: it prints the icon and tooltip whenever iwd

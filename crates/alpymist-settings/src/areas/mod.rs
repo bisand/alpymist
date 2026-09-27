@@ -1,12 +1,16 @@
 //! Every area, and which one answers for a setting.
 
 pub mod appearance;
+pub mod bluetooth;
 pub mod datetime;
 pub mod input;
 pub mod keyboard;
+pub mod language;
 pub mod notifications;
 pub mod power;
 pub mod screensaver;
+pub mod sound;
+pub mod ssh;
 pub mod themed;
 pub mod updates;
 pub mod wallpaper;
@@ -47,6 +51,13 @@ pub const AREAS: &[Area] = &[
         keywords: &["typing", "language", "keymap"],
     },
     Area {
+        id: "language",
+        title: "Language",
+        description: "The language programs speak, and their translations",
+        icon: "\u{f05ca}",
+        keywords: &["locale", "translation", "region", "lang"],
+    },
+    Area {
         id: "touchpad",
         title: "Touchpad",
         description: "Tapping, scrolling and typing with a touchpad",
@@ -61,11 +72,32 @@ pub const AREAS: &[Area] = &[
         keywords: &["cursor", "pointer", "wheel"],
     },
     Area {
+        id: "sound",
+        title: "Sound",
+        description: "Speakers, headphones and microphones, and how loud",
+        icon: "\u{f057e}",
+        keywords: &["audio", "volume", "speakers", "microphone", "pipewire"],
+    },
+    Area {
         id: "wifi",
         title: "Wi-Fi",
         description: "Wireless networks",
         icon: "\u{f05a9}",
         keywords: &["network", "wireless", "internet"],
+    },
+    Area {
+        id: "bluetooth",
+        title: "Bluetooth",
+        description: "Headphones, keyboards and other wireless devices",
+        icon: "\u{f00af}",
+        keywords: &["bluez", "pair", "headphones", "wireless"],
+    },
+    Area {
+        id: "ssh",
+        title: "SSH",
+        description: "Logging in to this computer from another one",
+        icon: "\u{f08c0}",
+        keywords: &["sshd", "openssh", "remote", "server"],
     },
     Area {
         id: "power",
@@ -142,8 +174,12 @@ pub fn all() -> Vec<Setting> {
         appearance::settings(),
         wallpaper::settings(),
         keyboard::settings(),
+        language::settings(),
         input::settings(),
+        sound::settings(),
         wifi::settings(),
+        bluetooth::settings(),
+        ssh::settings(),
         power::settings(),
         notifications::settings(),
         screensaver::settings(),
@@ -159,8 +195,12 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "appearance" if s.id == wallpaper::ID => Ok(wallpaper::get(env)),
         "appearance" => Ok(appearance::get(env, s)),
         "keyboard" if s.id == "keyboard.layout" => keyboard::get(env, s),
+        "language" => language::get(env, s),
         "keyboard" | "touchpad" | "mouse" => input::get(env, s),
+        "sound" => sound::get(env, s),
         "wifi" => wifi::get(env),
+        "bluetooth" => Ok(bluetooth::get(env)),
+        "ssh" => Ok(ssh::get(env)),
         "power" => power::get(env, s),
         "notifications" => notifications::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
@@ -182,8 +222,12 @@ pub fn set(
         "appearance" if s.id == wallpaper::ID => wallpaper::set(env, s, value),
         "appearance" => appearance::set(env, s, value),
         "keyboard" if s.id == "keyboard.layout" => keyboard::set(env, s, value, force),
+        "language" => language::set(env, s, value),
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
+        "sound" => none(sound::set(env, s, value)),
         "wifi" => none(wifi::set(env, value)),
+        "bluetooth" => none(bluetooth::set(env, value)),
+        "ssh" => ssh::set(env, value),
         "power" => none(power::set(env, s, value)),
         "notifications" => notifications::set(env, s, value, force),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),

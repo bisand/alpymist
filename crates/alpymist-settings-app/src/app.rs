@@ -118,9 +118,8 @@ fn apply(job: &Job) -> Event {
             let _ = settings.live(&env, job.id, &changed.value);
             Ok(changed.notes)
         }
-        Err(Error::NeedsRoot(_)) => as_root(job.id, &text).map(|()| {
+        Err(Error::NeedsRoot(_)) => as_root(job.id, &text).inspect(|_| {
             let _ = settings.live(&env, job.id, &job.value);
-            Vec::new()
         }),
         Err(e) => Err(e.to_string()),
     };
@@ -132,8 +131,8 @@ fn apply(job: &Job) -> Event {
 }
 
 /// `alpymist set ID VALUE` as root, asking for the password in Alpymist's
-/// dialog.
-fn as_root(id: &str, value: &str) -> Result<(), String> {
+/// dialog. Returns the notes it printed.
+fn as_root(id: &str, value: &str) -> Result<Vec<String>, String> {
     let mut command = if Path::new(AUTH).exists() {
         let mut c = Command::new(AUTH);
         c.args(["run", "--"]);
@@ -147,7 +146,7 @@ fn as_root(id: &str, value: &str) -> Result<(), String> {
         .output()
         .map_err(|e| format!("could not ask for a password: {e}"))?;
     if output.status.success() {
-        return Ok(());
+        return Ok(notes(&String::from_utf8_lossy(&output.stdout)));
     }
     let said = String::from_utf8_lossy(&output.stderr);
     Err(match output.status.code() {
@@ -160,6 +159,16 @@ fn as_root(id: &str, value: &str) -> Result<(), String> {
             .trim_start_matches("alpymist: ")
             .to_owned(),
     })
+}
+
+/// The notes in what `alpymist set` printed: the lines under the first,
+/// indented by two.
+fn notes(printed: &str) -> Vec<String> {
+    printed
+        .lines()
+        .filter_map(|l| l.strip_prefix("  "))
+        .map(str::to_owned)
+        .collect()
 }
 
 /// Start a program and leave it running.
@@ -256,6 +265,9 @@ impl SettingsApp {
                 }
                 Effect::Action(Action::OpenWifi) => spawn(&["alpymist-wifi"]),
                 Effect::Action(Action::OpenPower) => spawn(&["alpymist-power"]),
+                Effect::Action(Action::OpenBluetooth) => {
+                    spawn(&["foot", "--title", "Bluetooth", "bluetuith"]);
+                }
                 Effect::Action(Action::CheckUpdates) => spawn(&["alpymist-store", "updates"]),
                 Effect::Action(Action::CopyAbout) => {
                     let sender = self.sender.clone();
@@ -487,5 +499,17 @@ impl App for SettingsApp {
             return Outcome::Redraw;
         }
         Outcome::Unchanged
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::notes;
+
+    #[test]
+    fn roots_notes_are_read_from_what_it_printed() {
+        let printed = "ssh.server: On\n  Reach it at 192.168.1.23, port 22.\n";
+        assert_eq!(notes(printed), ["Reach it at 192.168.1.23, port 22."]);
+        assert!(notes("updates.channel: Dev\n").is_empty());
     }
 }
