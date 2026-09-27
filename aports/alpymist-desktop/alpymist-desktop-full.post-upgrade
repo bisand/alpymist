@@ -43,4 +43,14 @@ if command -v alpymist >/dev/null 2>&1; then
 		su -s /bin/sh "$owner" -c "alpymist session prepare" >/dev/null 2>&1 || true
 	done
 fi
+
+# The desktop opens its screen and keyboard through seatd, and the login screen
+# does not, so greetd has to wait for seatd or a boot that never starts it
+# shows a login screen that every login falls straight back to. The installer
+# now writes this; add it where an earlier installer's file lacks it.
+conf=/etc/conf.d/greetd
+if [ -f "$conf" ] && grep -Eq '^cfgfile=.*alpymist-(full|lite|potato)' "$conf" &&
+	! grep -q '^rc_need=' "$conf"; then
+	printf '# The desktop opens its screen and keyboard through seatd.\nrc_need="seatd"\n' >>"$conf"
+fi
 exit 0
