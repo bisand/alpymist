@@ -210,7 +210,7 @@ fn tell_sessions(summary: &str, body: &str) {
                 "/org/freedesktop/Notifications",
                 "--method",
                 "org.freedesktop.Notifications.Notify",
-                // The expiry, -1, would be read as an option without this.
+                // Whatever follows is the method's arguments, not options.
                 "--",
                 "'Alpymist'",
                 "0",
@@ -218,7 +218,10 @@ fn tell_sessions(summary: &str, body: &str) {
             ])
             .arg(gvariant_string(summary))
             .arg(gvariant_string(body))
-            .args(["[]", "{}", "-1"])
+            // No hints, and an expiry of 0: it stays until it is clicked
+            // away. This happens while nobody may be looking, and the
+            // desktop's usual few seconds would pass unseen.
+            .args(["[]", "{}", "0"])
             .env_clear()
             .env("PATH", "/usr/bin:/bin")
             .envs(env)
