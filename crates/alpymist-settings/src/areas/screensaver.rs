@@ -16,8 +16,8 @@ use crate::model::{Applies, Choice, Kind, Scope, Setting, Value};
 use alpymist_screensaver::config::{Config, MAX_MINUTES};
 use alpymist_screensaver::definition::{Definition, Dial, discover};
 use alpymist_screensaver::idle;
-use alpymist_screensaver::paint::Screen;
 use alpymist_screensaver::picture::{RANDOM, Show};
+use alpymist_screensaver::screens::{self, Screen};
 use alpymist_screensaver::values::{Value as Held, Values};
 use std::sync::OnceLock;
 
@@ -281,7 +281,7 @@ pub fn settings() -> Vec<Setting> {
 /// The screens connected now, found once per process, first first.
 fn connected() -> &'static [Screen] {
     static SCREENS: OnceLock<Vec<Screen>> = OnceLock::new();
-    SCREENS.get_or_init(alpymist_screensaver::paint::screens)
+    SCREENS.get_or_init(screens::connected)
 }
 
 /// The account's file as it is, or the defaults, for building the choices.
