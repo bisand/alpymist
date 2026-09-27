@@ -19,7 +19,7 @@
 
 #[cfg(all(feature = "winit", not(feature = "drm")))]
 mod run {
-    use alpymist_core::Tier;
+    use alpymist_core::hyprland::Check;
     use alpymist_install::answers::Answers;
     use alpymist_install::app::{App, action_for};
     use denise::{Color, DamageTracker, Frame, InputEvent, Rect};
@@ -69,8 +69,8 @@ mod run {
         use denise::geom::Size;
 
         // Probing needs Linux; on a development machine there is nothing to
-        // probe, so the Desktop screen simply offers the choice outright.
-        let detected_tier = probe_tier();
+        // probe, and the Desktop screen says so.
+        let hyprland = probe();
         // A development machine may have no /sys/block, or disks nobody wants
         // offered; the preview shows stand-ins rather than an empty screen.
         let mut disks = alpymist_install::disks::discover(&alpymist_install::safety::gather());
@@ -78,7 +78,7 @@ mod run {
             disks = alpymist_install::disks::sample();
         }
         let answers = Answers {
-            detected_tier,
+            hyprland: hyprland.clone(),
             disks,
             // A window system has already applied the keyboard layout.
             typed_by_os: true,
@@ -89,8 +89,8 @@ mod run {
         let size = Size::new(1280, 800);
         let app = App::with_mode(answers, size.width, size.height, crate::install_mode());
         eprintln!("{}", app.face.status.describe());
-        match detected_tier {
-            Some(tier) => eprintln!("hardware: reports {tier:?}"),
+        match hyprland {
+            Some(check) => eprintln!("hardware: {}", check.verdict.describe()),
             None => eprintln!("hardware: not probed on this platform"),
         }
 
@@ -103,11 +103,11 @@ mod run {
         Ok(())
     }
 
-    /// Ask the hardware what it can drive, where that is possible.
-    fn probe_tier() -> Option<Tier> {
+    /// Ask the hardware how Hyprland will do, where that is possible.
+    fn probe() -> Option<Check> {
         alpymist_hwprobe::probe()
             .ok()
-            .map(|caps| alpymist_core::select_tier(&caps).tier)
+            .map(|caps| alpymist_core::hyprland::check(&caps))
     }
 }
 
@@ -116,10 +116,10 @@ mod run {
 /// No compositor, no window system and no GPU driver stack — Denise rasterises
 /// on the CPU and page-flips dumb buffers straight to the scanout engine. That
 /// is what lets this run before any desktop exists, and why it looks the same on
-/// every hardware tier.
+/// every machine.
 #[cfg(feature = "drm")]
 mod drm_run {
-    use alpymist_core::Tier;
+    use alpymist_core::hyprland::Check;
     use alpymist_install::answers::{Answers, Firmware};
     use alpymist_install::app::{App, action_for};
     use alpymist_install::typing;
@@ -212,7 +212,7 @@ mod drm_run {
         let mut complained = false;
         let mut input = open_input(size, &mut complained);
 
-        let detected_tier = probe_tier();
+        let hyprland = probe();
         let disks = alpymist_install::disks::discover(&alpymist_install::safety::gather());
         eprintln!(
             "disks: {}",
@@ -232,7 +232,7 @@ mod drm_run {
             .ok()
             .and_then(|text| typing::configured_keymap(&text));
         let answers = Answers {
-            detected_tier,
+            hyprland,
             disks,
             firmware: Firmware::detect(),
             keyboard: configured.map(|(layout, _)| layout.to_string()),
@@ -355,11 +355,11 @@ mod drm_run {
         }
     }
 
-    /// Ask the hardware what desktop it can drive.
-    fn probe_tier() -> Option<Tier> {
+    /// Ask the hardware how Hyprland will do.
+    fn probe() -> Option<Check> {
         alpymist_hwprobe::probe()
             .ok()
-            .map(|caps| alpymist_core::select_tier(&caps).tier)
+            .map(|caps| alpymist_core::hyprland::check(&caps))
     }
 }
 
@@ -434,7 +434,6 @@ fn unattended_main() -> Option<Result<(), Box<dyn std::error::Error>>> {
 /// as the wizard; only the answers arrive differently.
 #[cfg(any(feature = "winit", feature = "drm"))]
 mod unattended {
-    use alpymist_core::Tier;
     use alpymist_install::answers::{Answers, DiskPlan, Firmware, Network};
     use alpymist_install::execute::{self, Mode, Progress};
     use alpymist_install::plan;
@@ -503,7 +502,6 @@ mod unattended {
             full_name: o.user.clone(),
             hostname: o.hostname.clone(),
             firmware: Firmware::detect(),
-            detected_tier: Some(Tier::Potato),
             ..Answers::default()
         }
     }

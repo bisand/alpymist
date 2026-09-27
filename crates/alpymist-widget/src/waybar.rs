@@ -120,10 +120,9 @@ mod tests {
     /// defined, and the ones Alpymist runs are Alpymist's.
     #[test]
     fn an_accounts_bar_is_the_packaged_bar() {
-        for (compositor, launcher, session) in [
-            ("hyprland", "alpymist-menu", "alpymist-menu system"),
-            ("labwc", "fuzzel", "labwc --exit"),
-        ] {
+        for (compositor, launcher, session) in
+            [("hyprland", "alpymist-menu", "alpymist-menu system")]
+        {
             let bar = resolve(&PathBuf::from(SKEL).join(format!("{compositor}.jsonc")));
             let listed: Vec<&str> = ["modules-left", "modules-center", "modules-right"]
                 .iter()
@@ -160,23 +159,20 @@ mod tests {
     /// their clock, and after nothing else.
     #[test]
     fn the_clock_from_settings_wins_over_the_packaged_one() {
-        for compositor in ["hyprland", "labwc"] {
-            let bar = jsonc(&PathBuf::from(TREE).join(format!("{compositor}.jsonc")));
-            let includes: Vec<&str> = bar["include"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .filter_map(Value::as_str)
-                .collect();
-            assert_eq!(
-                includes,
-                [
-                    "/etc/alpymist/waybar/clock.jsonc",
-                    "/usr/share/alpymist/waybar/modules.jsonc"
-                ],
-                "{compositor}"
-            );
-        }
+        let bar = jsonc(&PathBuf::from(TREE).join("hyprland.jsonc"));
+        let includes: Vec<&str> = bar["include"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        assert_eq!(
+            includes,
+            [
+                "/etc/alpymist/waybar/clock.jsonc",
+                "/usr/share/alpymist/waybar/modules.jsonc"
+            ]
+        );
     }
 
     /// An account's own setting wins, and leaves the rest of the module to

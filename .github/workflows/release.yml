@@ -110,11 +110,10 @@ jobs:
             echo "no /dev/kvm on this runner; the boot will be emulated"
           fi
 
-      # Potato, not Lite: virtio-gpu without virgl gives the guest no hardware
-      # GL, so Mesa falls back to llvmpipe and the tier logic correctly refuses
-      # to promote it. If this ever reports Full, the software-renderer check
-      # has regressed.
-      - name: Boot it and assert the reported tier
+      # Slow: virtio-gpu without virgl gives the guest no hardware GL, so Mesa
+      # falls back to llvmpipe, on which Hyprland runs, but on the processor.
+      # If this ever reports Runs, the software-renderer check has regressed.
+      - name: Boot it and assert what it says of Hyprland
         if: matrix.arch == 'x86_64'
         run: |
           sudo apt-get update -qq
@@ -122,7 +121,7 @@ jobs:
           cargo run -p xtask -- smoke \
             --iso out/iso/alpymist-*-x86_64.iso \
             --arch x86_64 \
-            --expect-tier Potato \
+            --expect-hyprland Slow \
             --timeout 300
 
       - uses: actions/upload-artifact@v7

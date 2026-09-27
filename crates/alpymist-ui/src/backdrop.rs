@@ -57,7 +57,7 @@ pub struct Backdrop {
 }
 
 /// How many ridges the scene draws. Enough for depth, few enough to stay quick
-/// to fill on a CPU that is the reason this machine is on the Potato tier.
+/// to fill on a CPU that is drawing everything itself.
 const RIDGE_COUNT: u32 = 5;
 /// How much of the horizon the mark's range occupies, as a percentage.
 const MARK_SPREAD: u32 = 72;

@@ -11,7 +11,7 @@
 //! without it the built-in bitmap is used, which is also what a machine missing
 //! `font-fira-ttf` would show.
 
-use alpymist_core::Tier;
+use alpymist_core::hyprland::{Check, Verdict};
 use alpymist_install::answers::{Answers, DiskPlan, Network};
 use alpymist_install::app::{Action, App};
 use alpymist_install::wifi::Status;
@@ -42,7 +42,13 @@ fn answers() -> Answers {
         disks: alpymist_install::disks::sample(),
         passphrase: "a long disk passphrase".into(),
         passphrase_confirm: "a long disk passphrase".into(),
-        detected_tier: Some(Tier::Lite),
+        hyprland: Some(Check {
+            verdict: Verdict::Slow,
+            reasons: vec![
+                "accelerated DRM driver i915 on card0".into(),
+                "1900 MiB RAM is below the 3072 MiB it is comfortable in".into(),
+            ],
+        }),
         // A laptop with Wi-Fi, part way through joining a secured network.
         wifi: alpymist_install::wifi::Wifi {
             passphrase: "correct horse".into(),

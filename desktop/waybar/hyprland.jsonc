@@ -1,6 +1,6 @@
 // Alpymist: the top bar under Hyprland.
 //
-// Belongs to the alpymist-desktop-wayland package and is replaced on every
+// Belongs to the alpymist-desktop package and is replaced on every
 // upgrade: change ~/.config/waybar/hyprland.jsonc instead, which includes this.
 // The modules shared with the other desktop are in modules.jsonc.
 //

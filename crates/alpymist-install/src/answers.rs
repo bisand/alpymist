@@ -4,7 +4,7 @@
 //! Everything the wizard will eventually *do* is decided from this struct, so
 //! this is the part that most deserves testing.
 
-use alpymist_core::Tier;
+use alpymist_core::hyprland::Check;
 
 /// A problem with what has been entered so far.
 ///
@@ -176,10 +176,8 @@ pub struct Answers {
     /// the installer translates keys itself and can only do so for the layouts
     /// Denise has tables for.
     pub typed_by_os: bool,
-    /// Desktop tier the probe detected, if it ran.
-    pub detected_tier: Option<Tier>,
-    /// Tier the user chose instead, if they overrode the detection.
-    pub tier_override: Option<Tier>,
+    /// What the probe made of this machine, if it ran: how Hyprland will do.
+    pub hyprland: Option<Check>,
 }
 
 /// The longest a Linux login name may be.
@@ -210,8 +208,7 @@ impl std::fmt::Debug for Answers {
             .field("password", &masked(&self.password))
             .field("hostname", &self.hostname)
             .field("firmware", &self.firmware)
-            .field("detected_tier", &self.detected_tier)
-            .field("tier_override", &self.tier_override)
+            .field("hyprland", &self.hyprland)
             .finish_non_exhaustive()
     }
 }
@@ -249,23 +246,6 @@ impl Answers {
             self.hostname = "alpymist".into();
         }
         self
-    }
-
-    /// The tier this machine will actually be set up for.
-    ///
-    /// An explicit choice always wins over the probe: the user may know
-    /// something the probe cannot see, and being unable to overrule it would be
-    /// worse than occasionally choosing wrong.
-    #[must_use]
-    pub fn effective_tier(&self) -> Option<Tier> {
-        self.tier_override.or(self.detected_tier)
-    }
-
-    /// Whether the user overrode what the probe detected.
-    #[must_use]
-    pub fn tier_was_overridden(&self) -> bool {
-        matches!((self.tier_override, self.detected_tier),
-            (Some(chosen), Some(detected)) if chosen != detected)
     }
 }
 
@@ -400,9 +380,7 @@ pub fn gateway_is_local(address: &str, gateway: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        Answers, DiskPlan, gateway_is_local, validate_hostname, validate_ipv4, validate_username,
-    };
+    use super::{DiskPlan, gateway_is_local, validate_hostname, validate_ipv4, validate_username};
 
     #[test]
     fn a_gateway_must_be_on_the_addresss_own_network() {
@@ -416,7 +394,6 @@ mod tests {
             "left to validate_ipv4"
         );
     }
-    use alpymist_core::Tier;
 
     #[test]
     fn ordinary_usernames_are_accepted() {
@@ -525,41 +502,6 @@ mod tests {
     fn a_prefix_above_thirty_two_is_refused() {
         assert!(validate_ipv4("10.0.0.1/32", true).is_ok());
         assert!(validate_ipv4("10.0.0.1/33", true).is_err());
-    }
-
-    /// The user may know something the probe cannot see, so their choice wins.
-    #[test]
-    fn an_explicit_tier_choice_overrides_what_was_detected() {
-        let a = Answers {
-            detected_tier: Some(Tier::Potato),
-            tier_override: Some(Tier::Full),
-            ..Answers::default()
-        };
-        assert_eq!(a.effective_tier(), Some(Tier::Full));
-        assert!(a.tier_was_overridden());
-    }
-
-    #[test]
-    fn with_no_override_the_detected_tier_is_used() {
-        let a = Answers {
-            detected_tier: Some(Tier::Lite),
-            ..Answers::default()
-        };
-        assert_eq!(a.effective_tier(), Some(Tier::Lite));
-        assert!(
-            !a.tier_was_overridden(),
-            "agreeing with the probe is not an override"
-        );
-    }
-
-    #[test]
-    fn choosing_the_same_tier_the_probe_chose_is_not_an_override() {
-        let a = Answers {
-            detected_tier: Some(Tier::Lite),
-            tier_override: Some(Tier::Lite),
-            ..Answers::default()
-        };
-        assert!(!a.tier_was_overridden());
     }
 
     #[test]

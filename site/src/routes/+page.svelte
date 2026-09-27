@@ -1,12 +1,12 @@
 <script lang="ts">
 	import Backdrop from '$lib/components/Backdrop.svelte';
-	import { REPO, tiers } from '$lib/site';
+	import { REPO, verdicts } from '$lib/site';
 
 	const pillars = [
 		{
-			tag: 'scales down',
-			title: 'One desktop, three renderers',
-			body: 'The same keybindings, theme, panel and launcher, drawn by Hyprland on a good GPU, by labwc on a weak one or on the CPU alone, and by i3 where Wayland cannot run. The installer probes the machine and says why it chose what it chose.',
+			tag: 'one desktop',
+			title: 'Hyprland, and only Hyprland',
+			body: 'One desktop, configured once and kept in focus: Hyprland on Wayland, with its keybindings, theme, bar and launcher. The installer probes the machine and says how well it will run there, and why.',
 			href: '/docs/adr/0001-hardware-tiers/'
 		},
 		{
@@ -18,7 +18,7 @@
 		{
 			tag: 'rust',
 			title: 'First-party code in Rust',
-			body: 'The installer, splash, menu and tier probe are Rust. unsafe is denied workspace-wide and confined to one short file that talks to EGL, where there is no other way.',
+			body: 'The installer, splash, menu and hardware probe are Rust. unsafe is denied workspace-wide and confined to one short file that talks to EGL, where there is no other way.',
 			href: '/docs/adr/0004-unsafe-and-musl-linking/'
 		},
 		{
@@ -31,10 +31,10 @@
 </script>
 
 <svelte:head>
-	<title>Alpymist — an Alpine desktop that scales down</title>
+	<title>Alpymist — a Hyprland desktop on Alpine</title>
 	<meta
 		name="description"
-		content="An opinionated desktop on Alpine Linux: Hyprland where the hardware allows, software-rendered Wayland where it does not, shipped only as signed packages."
+		content="An opinionated desktop on Alpine Linux: Hyprland on Wayland, configured once and kept in focus, shipped only as signed packages."
 	/>
 </svelte:head>
 
@@ -44,9 +44,8 @@
 		<p class="eyebrow">Alpine + mist · early days</p>
 		<h1>A curated desktop for the machine you already have.</h1>
 		<p class="lede">
-			Alpymist is an opinionated Wayland desktop on Alpine Linux. It runs Hyprland where the
-			hardware can, composites on the CPU where it cannot, and ships as nothing but signed
-			packages.
+			Alpymist is an opinionated Wayland desktop on Alpine Linux: Hyprland, configured once and
+			kept in focus, and shipped as nothing but signed packages.
 		</p>
 		<div class="actions">
 			<a class="button primary" href="/download/">Get Alpymist</a>
@@ -76,16 +75,16 @@
 
 <section class="wrap tiers">
 	<div class="tiers-head">
-		<p class="eyebrow">Hardware tiers</p>
-		<h2>Picked by probing, never by guessing</h2>
+		<p class="eyebrow">Hardware</p>
+		<h2>Said by probing, never by guessing</h2>
 		<p>
 			At install and again on first boot, Alpymist checks what the GPU, driver and memory can
-			actually do and picks a tier. Anything it cannot confirm counts against the machine: a
-			desktop that starts slowly can be fixed, one that does not start cannot.
+			actually do, and says how Hyprland will run. Anything it cannot confirm counts against the
+			machine, and nothing is refused on it: you decide.
 		</p>
 	</div>
 	<ol class="tier-list">
-		{#each tiers as tier, i (tier.name)}
+		{#each verdicts as tier, i (tier.name)}
 			<li style="--depth: {i}">
 				<div class="tier-name">
 					<code>{tier.name}</code>
@@ -105,7 +104,7 @@
 			<h2>Early, and honest about it</h2>
 			<p>
 				The build pipeline runs end to end: CI builds a bootable ISO, boots it in QEMU and checks
-				the tier it reports. Packages are published to a signed repository. It is not yet something
+				what it reports of Hyprland. Packages are published to a signed repository. It is not yet something
 				to install on a machine you depend on.
 			</p>
 		</div>

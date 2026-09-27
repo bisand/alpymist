@@ -9,30 +9,24 @@ export const nav = [
 	{ href: '/docs/', label: 'Docs' }
 ];
 
-/** ADR 0001's tiers, most capable first. */
-export const tiers = [
+/** What the probe says of Hyprland on a machine, best first (ADR 0001's addendum). */
+export const verdicts = [
 	{
-		name: 'Full',
-		backend: 'Hyprland',
+		name: 'Runs',
+		backend: 'Hyprland on the GPU',
 		when: 'Accelerated DRM, GL ES 3.2 or newer, 3 GiB of memory',
-		note: 'Animations, blur, foot as the terminal.'
+		note: 'Animations, blur, everything as it is meant to be.'
 	},
 	{
-		name: 'Lite',
-		backend: 'labwc on GLES2',
-		when: 'Accelerated DRM, GL ES 2.0 or newer, 1.5 GiB of memory',
-		note: 'A stacking desktop that still uses the GPU.'
+		name: 'Slow',
+		backend: 'Hyprland on the processor',
+		when: 'A software renderer such as llvmpipe, or less than 3 GiB of memory',
+		note: 'It runs, and the probe says why it will not be quick.'
 	},
 	{
-		name: 'Potato',
-		backend: 'labwc on pixman',
-		when: 'Kernel modesetting, but no GPU worth rendering with',
-		note: 'Wayland composited entirely on the CPU.'
-	},
-	{
-		name: 'Legacy',
-		backend: 'X11 and i3',
-		when: 'No DRM/KMS device at all',
-		note: 'A fallback that still boots to a usable session.'
+		name: 'Unlikely',
+		backend: 'Hyprland may not start',
+		when: 'No DRM/KMS device, only a firmware framebuffer, or GL ES below 3.2',
+		note: 'The installer says so, with the reasons, and lets you go on.'
 	}
 ];
