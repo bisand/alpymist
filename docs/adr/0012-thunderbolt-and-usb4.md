@@ -133,3 +133,39 @@ safe direction.
 - `iommu_dma_protection` depends on the firmware as well as the IOMMU. The dev
   machine's 2018 firmware may never report `1`. The IOMMU still confines
   devices, but that bit is not ours to set.
+
+## Addendum, 2026-09-27: tried on the dev machine
+
+§3 has now run on hardware: the ThinkPad X1 Carbon 6th gen above, on firmware
+N23ET93W (1.68), booted with `intel_iommu=on` and then used for a desktop
+session with the ThinkPad Thunderbolt 3 Dock plugged in.
+
+- **Nothing broke.** It booted to the login screen and the desktop as before.
+  `i915` loaded in an IOMMU group of its own, both remapping units (`dmar0`,
+  `dmar1`) came up, and the kernel logged no DMA faults and no GPU errors.
+- **The dock is confined.** The watch let it in as allowed always, and
+  everything behind it appeared. The dock's USB controller, which reaches the
+  machine as PCIe through the tunnel, sat in its own group with translated
+  DMA (`DMA-FQ`), so it could reach only what its driver mapped.
+- **`iommu_dma_protection` stays `0`, as the last consequence above expected.**
+  The firmware's ACPI DMAR table has flags `1`: interrupt remapping, without
+  the platform opt-in bit (`4`) that tells the kernel the firmware protected
+  the Thunderbolt ports before handing over. Without it, the kernel does not
+  mark those ports untrusted. Their devices get lazy IOTLB invalidation
+  rather than strict, and no bounce buffers, and the time before the kernel
+  turns the IOMMU on is not covered. The IOMMU still does most of the work.
+  Before, the dock could reach all of memory; now it can reach only what its
+  driver mapped.
+
+This is one machine, and the risk to older chipsets in §3 is unchanged.
+Whoever wants to try the IOMMU on a machine without betting its next boot on
+it can do what was done here. Put a copy of the GRUB entry, with
+`intel_iommu=on` added, in `/boot/grub/custom.cfg` with `--id iommu-test`,
+and run `grub-reboot iommu-test`. That boots it once, and holding the power
+button gets the old boot back.
+
+A login loop on this machine was blamed on `intel_iommu=on` before this test,
+and it was not the cause. A hand-written init script held up the boot before
+seatd started, so every login went to a Hyprland that could not open a seat.
+A desktop that dies at once after a change to the kernel command line is
+worth checking for that before blaming the IOMMU.
