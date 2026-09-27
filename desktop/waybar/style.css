@@ -1,7 +1,7 @@
 /* Alpymist: the top bar. The palette is the installer's; the icons are Nerd
    Font symbols behind Fira Mono, so text and icons share one family list.
 
-   Belongs to the alpymist-desktop-wayland package and is replaced on every
+   Belongs to the alpymist-desktop package and is replaced on every
    upgrade: change ~/.config/waybar/style.css instead, which imports this. */
 * {
   font-family: "Fira Mono", "Symbols Nerd Font", monospace;

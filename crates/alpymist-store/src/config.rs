@@ -377,11 +377,7 @@ mod tests {
             panic!("Alpine second");
         };
         assert!(apk.hide.iter().any(|p| p.matches("zsh-doc")));
-        assert!(
-            apk.protect
-                .iter()
-                .any(|p| p.matches("alpymist-desktop-full"))
-        );
+        assert!(apk.protect.iter().any(|p| p.matches("alpymist-desktop")));
         assert!(!apk.protect.iter().any(|p| p.matches("gimp")));
     }
 

@@ -35,7 +35,7 @@ iso: builder ## Build the Alpymist ISO (ARCH=aarch64|x86_64)
 	docker run --rm --platform $(PLATFORM) -v "$(PWD)":/src -v "$(PWD)/out":/out $(BUILDER) \
 		bash /src/ci/build-iso.sh $(ARCH)
 
-smoke: ## Boot the built ISO in QEMU and assert it reports a tier
+smoke: ## Boot the built ISO in QEMU and assert it reports on Hyprland
 	cargo run -q -p xtask -- smoke --iso out/alpymist-$(VERSION)-$(ARCH).iso --arch $(ARCH)
 
 clean:

@@ -188,10 +188,10 @@ mod tests {
             ),
             (
                 Request::StartSession {
-                    cmd: vec!["labwc".into()],
+                    cmd: vec!["start-hyprland".into()],
                     env: vec![],
                 },
-                r#"{"type":"start_session","cmd":["labwc"],"env":[]}"#,
+                r#"{"type":"start_session","cmd":["start-hyprland"],"env":[]}"#,
             ),
             (Request::CancelSession, r#"{"type":"cancel_session"}"#),
         ];

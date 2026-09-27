@@ -47,7 +47,7 @@ mkdir -p "$tmp"/etc/apk
 # This file *replaces* the world the image was built with, so anything the
 # running system needs must be listed here — not only in the mkimage profile.
 # Mesa is what gives the EGL probe something to ask; without it every machine
-# reports "libEGL.so.1 could not be loaded" and lands on the Potato tier.
+# reports "libEGL.so.1 could not be loaded", and that Hyprland will not start.
 #
 # Nothing here may install a file under /lib/firmware. The live system's
 # firmware is the modloop's, and modloop links it in only where /lib/firmware
@@ -100,28 +100,27 @@ makefile root:root 0644 "$tmp"/etc/modules <<EOF
 evdev
 EOF
 
-# Hardware probing on first boot. This is a real product service, not test
-# scaffolding: the installer and the desktop metapackages both read the tier
-# it records. The automated boot test just happens to assert on the same
-# console output.
+# Hardware probing on first boot: what it says of Hyprland, and why, for
+# whoever looks into a desktop that would not start. The automated boot test
+# asserts on the same console output.
 mkdir -p "$tmp"/etc/init.d
 makefile root:root 0755 "$tmp"/etc/init.d/alpymist-probe <<'EOF'
 #!/sbin/openrc-run
 
-description="Probe the hardware and record which Alpymist desktop tier it supports"
+description="Probe the hardware and record how Hyprland will do on it"
 
 depend() {
 	need localmount
 	# udev-settle: every driver udev is going to load has loaded, the GPU's
 	# included. Probing before that reports a machine with no accelerated
-	# driver, and a tier lower than it can drive.
+	# driver, and a worse verdict than it deserves.
 	after modules udev-settle
 }
 
 start() {
 	ebegin "Probing hardware capability"
 	mkdir -p /var/lib/alpymist
-	alpymist probe --format json > /var/lib/alpymist/tier.json
+	alpymist probe --format json > /var/lib/alpymist/probe.json
 	# Markers bracket the output so an automated boot test can find it in a
 	# serial log without depending on where in the boot it appeared.
 	echo "=== ALPYMIST-PROBE-BEGIN ==="

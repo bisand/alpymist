@@ -174,7 +174,7 @@ mod tests {
     }
 
     fn cmd() -> Vec<String> {
-        vec!["dbus-run-session".into(), "labwc".into()]
+        vec!["dbus-run-session".into(), "start-hyprland".into()]
     }
 
     fn run(script: &mut Script) -> (Outcome, Vec<String>) {

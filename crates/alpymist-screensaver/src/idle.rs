@@ -26,8 +26,7 @@ use std::process::{Child, Command};
 const LOCK: &str = "alpymist-lock -f";
 
 /// Turning the screen off. `wlopm` speaks `wlr-output-power-management`, which
-/// Hyprland and labwc both implement, so one command covers both Wayland tiers
-/// where `hyprctl dispatch dpms` would cover only one.
+/// Hyprland implements.
 const OFF: &str = "wlopm --off '*'";
 /// And on again.
 const ON: &str = "wlopm --on '*'";
