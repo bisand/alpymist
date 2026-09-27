@@ -6,6 +6,7 @@
 
 #![forbid(unsafe_code)]
 
+mod build_order;
 mod installer_data;
 mod publish;
 mod qemu;
@@ -38,10 +39,10 @@ enum Command {
         /// Give up after this many seconds.
         #[arg(long, default_value_t = 180)]
         timeout: u64,
-        /// Fail unless the image reports this tier. Use in CI to catch a
-        /// regression that silently downgrades every machine.
+        /// Fail unless the image says this of Hyprland: Runs, Slow or
+        /// Unlikely. Use in CI to catch a regression in the check.
         #[arg(long)]
-        expect_tier: Option<String>,
+        expect_hyprland: Option<String>,
         /// Print the whole serial log, not just the probe report.
         #[arg(long)]
         verbose: bool,
@@ -126,13 +127,13 @@ fn main() -> Result<()> {
             iso,
             arch,
             timeout,
-            expect_tier,
+            expect_hyprland,
             verbose,
         } => smoke(
             &iso,
             arch,
             Duration::from_secs(timeout),
-            expect_tier.as_deref(),
+            expect_hyprland.as_deref(),
             verbose,
         ),
         Command::Publish {
@@ -166,12 +167,12 @@ fn parse_channel(s: &str) -> Result<Channel, String> {
     s.parse()
 }
 
-/// Boot `iso` and check that the first-boot probe reported a tier.
+/// Boot `iso` and check that the first-boot probe said how Hyprland will do.
 fn smoke(
     iso: &std::path::Path,
     arch: Arch,
     timeout: Duration,
-    expect_tier: Option<&str>,
+    expect_hyprland: Option<&str>,
     verbose: bool,
 ) -> Result<()> {
     if !iso.exists() {
@@ -214,12 +215,12 @@ fn smoke(
         bail!("probe report is missing: {}", missing.join(", "));
     }
 
-    if let Some(expected) = expect_tier {
-        let actual = serial::reported_tier(&report).unwrap_or_default();
+    if let Some(expected) = expect_hyprland {
+        let actual = serial::reported_verdict(&report).unwrap_or_default();
         if actual != expected {
-            bail!("expected tier {expected}, image reported {actual}");
+            bail!("expected Hyprland to be {expected}, image reported {actual}");
         }
-        println!("tier is {actual}, as expected");
+        println!("Hyprland is {actual}, as expected");
     }
 
     println!("\nsmoke test passed in {}s", log.elapsed.as_secs());

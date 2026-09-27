@@ -13,12 +13,12 @@ license="MIT OR Apache-2.0"
 makedepends="cargo libxkbcommon-dev"
 # swayidle is what speaks ext-idle-notify-v1 and runs this at each timeout;
 # wlopm is what turns the screen off, through wlr-output-power-management,
-# which Hyprland and labwc both implement. Neither is optional: without them
+# which Hyprland implements. Neither is optional: without them
 # the watch starts nothing and the screen never goes off.
 #
 # No screensaver is named here. They are packages of their own, found by the
 # files they install in /usr/share/alpymist/screensavers, and which of them you
-# have is not this package's business — alpymist-desktop-wayland asks for the
+# have is not this package's business — alpymist-desktop asks for the
 # one Alpymist ships.
 depends="swayidle wlopm"
 options="!check"  # the test suite runs in CI, not in the package build

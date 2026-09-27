@@ -117,8 +117,7 @@ if [ -n "${PREBUILT:-}" ]; then
 	cp "$PREBUILT"/*.apk "$REPO"/
 	reindex
 else
-	copied=false
-	for pkg in alpymist-keys alpymist alpymist-install alpymist-menu alpymist-about alpymist-wifi alpymist-auth alpymist-splash alpymist-lock alpymist-power alpymist-thunderbolt alpymist-settings alpymist-screensaver alpymist-saver-mountains alpymist-saver-starfield alpymist-store alpymist-greeter alpymist-desktop squint; do
+	for pkg in alpymist-keys alpymist alpymist-install alpymist-menu alpymist-about alpymist-wifi alpymist-auth alpymist-splash alpymist-lock alpymist-power alpymist-thunderbolt alpymist-settings alpymist-screensaver alpymist-saver-mountains alpymist-saver-starfield alpymist-store alpymist-greeter squint alpymist-desktop; do
 		mkdir -p ~/ap/"$pkg"
 		cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
 		if [[ "$INDEPENDENT" != *" $pkg "* ]]; then
@@ -145,7 +144,9 @@ else
 				trust "$CACHE/$pkg"
 				mkdir -p "$REPO"
 				cp "$CACHE/$pkg"/*.apk "$REPO"/
-				copied=true
+				# In the index now, not after the loop: a package built later may
+				# need it to build, as alpymist-desktop needs squint.
+				reindex
 				continue
 			fi
 		fi
@@ -175,9 +176,6 @@ else
 			touch "$CACHE/$pkg/$key"
 		fi
 	done
-	if $copied; then
-		reindex
-	fi
 fi
 
 if [ -n "$OUT" ]; then

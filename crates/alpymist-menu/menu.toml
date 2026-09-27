@@ -74,6 +74,8 @@ items = [
 title = "Setup"
 items = [
   { name = "Audio", icon = "󰕾", exec = "pavucontrol", keywords = ["sound", "volume", "speakers", "microphone"] },
+  # Pairing and connecting; Settings › Bluetooth turns it on first.
+  { name = "Bluetooth", icon = "󰂯", exec = "bluetuith", terminal = true, keywords = ["pair", "headphones", "bluez", "devices"] },
   { name = "Wi-Fi", icon = "󰖩", exec = "alpymist-wifi", keywords = ["wireless", "network", "wlan", "iwd"] },
   { name = "Power", icon = "\U000F0084", exec = "alpymist-power", keywords = ["battery", "power mode", "performance", "lid", "suspend", "charge"] },
   { name = "Config", icon = "", menu = "config", keywords = ["edit", "dotfiles"] },
@@ -140,7 +142,7 @@ title = "System"
 items = [
   { name = "Lock", icon = "", exec = "alpymist-lock", keywords = ["screen", "password"] },
   { name = "Suspend", icon = "\U000F04B2", exec = "alpymist-power suspend", keywords = ["sleep"] },
-  { name = "Log out", icon = "󰍃", exec = "case \"$XDG_CURRENT_DESKTOP\" in Hyprland) hyprctl dispatch exit ;; *) labwc --exit ;; esac", keywords = ["exit", "session", "sign out"] },
+  { name = "Log out", icon = "󰍃", exec = "hyprctl dispatch exit", keywords = ["exit", "session", "sign out"] },
   { name = "Restart", icon = "󰜉", exec = "alpymist-power restart", keywords = ["reboot"] },
   { name = "Shut down", icon = "󰐥", exec = "alpymist-power power-off", keywords = ["poweroff", "halt", "turn off"] },
 ]

@@ -9,7 +9,7 @@ use alpymist_core::Channel;
 use std::fmt::Write as _;
 use std::path::Path;
 
-/// The package whose version is Alpymist's: the desktop every tier shares.
+/// The package whose version is Alpymist's: the desktop.
 const DESKTOP: &str = "alpymist-desktop";
 
 /// Everything the box shows.
@@ -23,7 +23,7 @@ pub struct About {
     pub alpine: Option<String>,
     /// The running kernel.
     pub kernel: Option<String>,
-    /// The desktop the session runs: Hyprland, labwc, i3.
+    /// The desktop the session runs: Hyprland.
     pub session: Option<String>,
     /// The machine's maker and model.
     pub computer: Option<String>,
@@ -214,8 +214,8 @@ impl About {
 
     /// The packages worth a line in the box: each one, less subpackages
     /// installed at the version of the package they were built beside
-    /// (`alpymist-power-openrc` beside `alpymist-power`, the desktop's tiers
-    /// beside `alpymist-desktop`), which would make the box taller than a
+    /// (`alpymist-power-openrc` beside `alpymist-power`, the wallpapers and the
+    /// shell beside `alpymist-desktop`), which would make the box taller than a
     /// small screen and say nothing new.
     ///
     /// Which is a subpackage is apk's `o:` and not the name, because since
@@ -282,7 +282,7 @@ impl About {
                 ("alpymist", v, "alpymist"),
                 ("alpymist-auth", v, "alpymist-auth"),
                 ("alpymist-desktop", v, "alpymist-desktop"),
-                ("alpymist-desktop-full", v, "alpymist-desktop"),
+                ("alpymist-wallpapers", v, "alpymist-desktop"),
                 ("alpymist-keys", "2026-r1", "alpymist-keys"),
                 ("alpymist-menu", v, "alpymist-menu"),
                 ("alpymist-power", v, "alpymist-power"),
@@ -464,14 +464,14 @@ mod tests {
             .iter()
             .map(|p| p.name.as_str())
             .collect();
-        assert!(!shown.contains(&"alpymist-desktop-full"));
+        assert!(!shown.contains(&"alpymist-wallpapers"));
         // Built beside the desktop under an unrelated name: still a
         // subpackage, and the name alone would never have said so.
         assert!(!shown.contains(&"alpymist-shell"));
         assert!(shown.contains(&"alpymist-desktop"));
         // At another version it says something, so it stays.
         assert!(shown.contains(&"alpymist-power-openrc"));
-        assert!(about.text().contains("alpymist-desktop-full"));
+        assert!(about.text().contains("alpymist-wallpapers"));
     }
 
     #[test]
