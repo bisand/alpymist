@@ -1,0 +1,22 @@
+#!/sbin/openrc-run
+
+description="Install firmware that drivers ask for and do not find"
+
+# `alpymist firmware watch` follows the kernel log for drivers asking for a
+# firmware file nobody installed, and installs the Alpine package holding it;
+# see crates/alpymist/src/firmware.rs. supervise-daemon keeps it in the
+# background, so starting it never waits, not for the network and not for
+# anything else: a service that holds up the boot is how seatd once never
+# started. Its messages go to syslog as alpymist-firmware.
+command="/usr/bin/alpymist"
+command_args="firmware watch"
+supervisor="supervise-daemon"
+respawn_delay=10
+error_logger="logger -t alpymist-firmware -p daemon.info"
+
+depend() {
+	need localmount
+	use net
+	after net
+	keyword -containers -vserver -lxc -docker -podman
+}

@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 mod channel;
+mod firmware;
 mod root;
 mod settings;
 
@@ -106,9 +107,23 @@ enum Command {
     /// Each desktop runs this at login, and Settings after a change;
     /// `alpymist set appearance.wallpaper` chooses the picture.
     Wallpaper,
+    /// Install firmware that a driver asked for and did not find. As root;
+    /// the alpymist-firmware service runs `watch` at boot.
+    Firmware {
+        #[command(subcommand)]
+        action: FirmwareAction,
+    },
     /// Print the menu fragment for every setting, for packaging.
     #[command(hide = true)]
     MenuFragment,
+}
+
+#[derive(Subcommand)]
+enum FirmwareAction {
+    /// Look through the kernel log so far, install what is missing, and stop.
+    Check,
+    /// Follow the kernel log, installing what is missing as drivers ask.
+    Watch,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -170,6 +185,12 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Probe { format } => Ok(probe(*format)?),
         Command::Session { desktop, args } => session(&all, &env, *desktop, args),
         Command::Wallpaper => Ok(alpymist_settings::wallpaper::show(&env)?),
+        Command::Firmware {
+            action: FirmwareAction::Check,
+        } => firmware::check(),
+        Command::Firmware {
+            action: FirmwareAction::Watch,
+        } => firmware::watch(),
         Command::MenuFragment => {
             print!("{}", alpymist_settings::menu::fragment(&all));
             Ok(())

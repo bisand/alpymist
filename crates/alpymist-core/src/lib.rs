@@ -10,6 +10,7 @@
 mod capabilities;
 pub mod catalog;
 mod channel;
+pub mod firmware;
 mod tier;
 
 pub use capabilities::{Capabilities, GlesInfo, GpuDevice, Virtualisation};

@@ -11,9 +11,9 @@
 //! same question `setup-disk` does — which firmware do the loaded drivers name —
 //! and installs the answer from both the medium and the network.
 //!
-//! The same rule as `setup-disk`, deliberately: firmware under `vendor/` is in
-//! `linux-firmware-vendor`, and a file at the top level is in
-//! `linux-firmware-other`.
+//! The same rule as `setup-disk`, deliberately: see
+//! [`alpymist_core::firmware::package_for`], which `alpymist firmware watch`
+//! also uses for whatever a driver asks for after installation.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -27,10 +27,7 @@ pub fn packages(firmware: &str, wireless: bool) -> Vec<String> {
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
-        .map(|path| match path.split_once('/') {
-            Some((vendor, _)) if !vendor.is_empty() => format!("linux-firmware-{vendor}"),
-            _ => "linux-firmware-other".to_string(),
-        })
+        .filter_map(alpymist_core::firmware::package_for)
         .collect();
     if wireless {
         wanted.insert("wireless-regdb".into());
