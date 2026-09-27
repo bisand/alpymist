@@ -1131,7 +1131,6 @@ mod tests {
         );
     }
 
-    /// The live image's root has an empty password and its /etc is copied.
     #[test]
     fn the_iommu_is_on_so_a_device_let_in_cannot_reach_all_of_memory() {
         let plan = build(&answers()).unwrap();
@@ -1149,6 +1148,7 @@ mod tests {
         assert!(opts.split_whitespace().any(|o| o == "quiet"), "{opts}");
     }
 
+    /// The live image's root has an empty password and its /etc is copied.
     #[test]
     fn the_new_systems_root_account_is_locked() {
         for a in [answers(), encrypted()] {
