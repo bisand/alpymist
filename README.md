@@ -11,9 +11,10 @@ a usable desktop amounts to.
 Three things make it different from the curated-desktop projects it takes
 inspiration from:
 
-- **It scales down.** One desktop definition, rendered onto Hyprland, labwc
-  (GPU or CPU), or i3 depending on what the machine can actually drive. See
-  [ADR 0001](docs/adr/0001-hardware-tiers.md).
+- **It is one desktop.** Hyprland on Wayland, and nothing else to maintain
+  beside it. The installer probes the machine and says how well Hyprland will
+  run there, and why. See [ADR 0001](docs/adr/0001-hardware-tiers.md) and its
+  addendum.
 - **It ships as signed packages.** No `curl | bash`, no root install scripts,
   no unpinned third-party repos. See [ADR 0002](docs/adr/0002-supply-chain.md).
 - **It is secure by default.** Nothing unsafe is on unless its owner turns it
@@ -36,13 +37,13 @@ end:
 
 ```
 make iso     # build a bootable ISO in the Alpine builder container
-make smoke   # boot it in QEMU and assert it reports a desktop tier
+make smoke   # boot it in QEMU and assert what it reports of Hyprland
 ```
 
 `make iso` builds `alpymist` into a signed apk, assembles an Alpine image
 around it with `mkimage`, and drops the ISO in `out/`. `make smoke` boots that
 ISO under QEMU with a virtio-gpu, captures the serial console, and checks that
-the first-boot probe reported a tier and explained itself.
+the first-boot probe said how Hyprland will do and explained itself.
 
 On any Linux machine you can also just run the probe directly:
 
