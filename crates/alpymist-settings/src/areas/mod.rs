@@ -9,6 +9,7 @@ pub mod language;
 pub mod notifications;
 pub mod power;
 pub mod screensaver;
+pub mod ssh;
 pub mod updates;
 pub mod wallpaper;
 pub mod wifi;
@@ -81,6 +82,13 @@ pub const AREAS: &[Area] = &[
         description: "Headphones, keyboards and other wireless devices",
         icon: "\u{f00af}",
         keywords: &["bluez", "pair", "headphones", "wireless"],
+    },
+    Area {
+        id: "ssh",
+        title: "SSH",
+        description: "Logging in to this computer from another one",
+        icon: "\u{f08c0}",
+        keywords: &["sshd", "openssh", "remote", "server"],
     },
     Area {
         id: "power",
@@ -161,6 +169,7 @@ pub fn all() -> Vec<Setting> {
         input::settings(),
         wifi::settings(),
         bluetooth::settings(),
+        ssh::settings(),
         power::settings(),
         notifications::settings(),
         screensaver::settings(),
@@ -180,6 +189,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "keyboard" | "touchpad" | "mouse" => input::get(env, s),
         "wifi" => wifi::get(env),
         "bluetooth" => Ok(bluetooth::get(env)),
+        "ssh" => Ok(ssh::get(env)),
         "power" => power::get(env, s),
         "notifications" => notifications::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
@@ -205,6 +215,7 @@ pub fn set(
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
         "wifi" => none(wifi::set(env, value)),
         "bluetooth" => none(bluetooth::set(env, value)),
+        "ssh" => ssh::set(env, value),
         "power" => none(power::set(env, s, value)),
         "notifications" => notifications::set(env, s, value, force),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
