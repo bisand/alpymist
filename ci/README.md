@@ -11,7 +11,7 @@ Five workflows:
 - **Release** (`.github/workflows/release.yml`): what a release is made of,
   built when a GitHub release is published. Stable packages, then an ISO for
   each architecture from exactly those packages, with the x86_64 one booted in
-  QEMU with KVM to assert the reported tier. The ISOs and their `.sha256` files
+  QEMU with KVM to assert what the probe reports of Hyprland. The ISOs and their `.sha256` files
   are attached to the release, which is where to download them. Publish to
   stable then takes the packages from that run. "Run workflow" in the Actions
   tab runs the same builds without a release, keeping everything as
