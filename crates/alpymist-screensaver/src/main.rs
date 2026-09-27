@@ -4,6 +4,7 @@
 //! alpymist-screensaver         run the chosen screensaver (or a random one)
 //! alpymist-screensaver list    every screensaver installed
 //! alpymist-screensaver stop    take away whichever one is up
+//! alpymist-screensaver screens the screens, main one first unless another is chosen
 //! alpymist-screensaver idle    watch for idleness, and start over if watching
 //! ```
 //!
@@ -18,16 +19,18 @@ use alpymist_screensaver::config::Config;
 use alpymist_screensaver::definition::{Definition, discover};
 use alpymist_screensaver::paint;
 use alpymist_screensaver::picture::Show;
-use alpymist_screensaver::{Values, idle};
+use alpymist_screensaver::{Values, idle, screens};
 use std::process::{Command, ExitCode};
 
 const USAGE: &str = "\
-usage: alpymist-screensaver [list | stop | idle]
+usage: alpymist-screensaver [list | stop | screens | idle]
 
 With no command, runs the screensaver chosen in Settings — or one at random,
 which is the default — until a key is pressed or the pointer moves.
   list   every screensaver installed, and what each is called
   stop   take away whichever screensaver is up, if any
+  screens  the screens connected, in the compositor's order, one per line:
+         its name, a tab, and what it is
   idle   watch for idleness and run one in its own time; running this again
          reads the settings afresh and starts the watch over";
 
@@ -48,6 +51,12 @@ fn main() -> ExitCode {
         }
         Some("stop") => {
             paint::stop();
+            ExitCode::SUCCESS
+        }
+        Some("screens") => {
+            for screen in paint::screens() {
+                println!("{}", screens::line(&screen));
+            }
             ExitCode::SUCCESS
         }
         Some("idle") => report(idle::watch()),

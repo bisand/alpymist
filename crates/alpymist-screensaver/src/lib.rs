@@ -20,6 +20,8 @@
 //!   paces the frames and takes it away at the first key. A screensaver never
 //!   touches a Wayland surface itself, which is why a second one costs a file
 //!   and a few hundred lines rather than a copy of all this.
+//! - [`screens`]: which screen is the main one, and the list of them read
+//!   back from `alpymist-screensaver screens` where there is no `paint`.
 //! - [`scene`]: the arithmetic a picture is likely to want — waves, drift, and
 //!   the block magnification — with no graphics stack behind it.
 
@@ -38,6 +40,7 @@ pub mod picture;
 mod saver;
 #[cfg(feature = "saver")]
 pub mod scene;
+pub mod screens;
 pub mod values;
 
 pub use definition::Definition;

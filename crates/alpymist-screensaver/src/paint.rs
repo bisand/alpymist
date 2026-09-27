@@ -21,6 +21,7 @@
 //! million, and the square blocks it is blown up in are the pixelated look
 //! rather than an effect applied to get one.
 
+use crate::screens::Screen;
 use denise::geom::Size;
 
 /// How often a picture is redrawn when it does not say, in milliseconds.
@@ -113,7 +114,7 @@ pub fn name_on(output: &str) -> String {
 }
 
 /// The compositor's screens, by name, first first; empty where there is no
-/// session or they have no names.
+/// session or they have no names. What `alpymist-screensaver screens` prints.
 #[must_use]
 pub fn screens() -> Vec<Screen> {
     #[cfg(target_os = "linux")]
@@ -131,25 +132,6 @@ pub fn screens() -> Vec<Screen> {
     {
         Vec::new()
     }
-}
-
-/// A screen the picture can be put on.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Screen {
-    /// What the compositor calls it: `eDP-1`, `DP-3`.
-    pub name: String,
-    /// What it is, where the compositor says so.
-    pub description: String,
-}
-
-/// The main screen: the one `configured` names if it is connected, or else the
-/// first the compositor numbers. `None` with no screens to name.
-#[must_use]
-pub fn main_screen<'a>(configured: &str, screens: &'a [Screen]) -> Option<&'a Screen> {
-    screens
-        .iter()
-        .find(|s| !configured.is_empty() && s.name == configured)
-        .or_else(|| screens.first())
 }
 
 /// Cover the screens with what `compose` draws, until somebody comes back.
@@ -187,7 +169,7 @@ pub fn start(compose: impl FnMut(Size) -> Box<dyn Painting> + 'static) -> Result
         }
         // A compositor that does not name its screens: wherever it puts the
         // picture, which is the screen with focus.
-        main_screen(&config.main_screen, &all).map(|s| s.name.clone())
+        crate::screens::main_screen(&config.main_screen, &all).map(|s| s.name.clone())
     };
 
     let name = copy.as_deref().map_or_else(|| NAME.to_owned(), name_on);
@@ -301,40 +283,7 @@ fn stop_copies() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Screen, main_screen, name_on};
-
-    fn screens(names: &[&str]) -> Vec<Screen> {
-        names
-            .iter()
-            .map(|n| Screen {
-                name: (*n).to_owned(),
-                description: String::new(),
-            })
-            .collect()
-    }
-
-    #[test]
-    fn the_main_screen_is_the_first_unless_another_is_named() {
-        let all = screens(&["eDP-1", "DP-3", "DP-5"]);
-        assert_eq!(
-            main_screen("", &all).map(|s| s.name.as_str()),
-            Some("eDP-1")
-        );
-        assert_eq!(
-            main_screen("DP-5", &all).map(|s| s.name.as_str()),
-            Some("DP-5")
-        );
-    }
-
-    #[test]
-    fn a_named_screen_that_is_not_connected_falls_back_to_the_first() {
-        let undocked = screens(&["eDP-1"]);
-        assert_eq!(
-            main_screen("DP-5", &undocked).map(|s| s.name.as_str()),
-            Some("eDP-1")
-        );
-        assert_eq!(main_screen("DP-5", &[]), None);
-    }
+    use super::name_on;
 
     #[test]
     fn a_copy_on_a_screen_is_named_after_it() {
