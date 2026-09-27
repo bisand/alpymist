@@ -1,10 +1,16 @@
 // Alpymist: the top bar under Hyprland.
 //
-// Belongs to the alpymist-desktop-wayland package and is replaced on every
+// Belongs to the alpymist-desktop package and is replaced on every
 // upgrade: change ~/.config/waybar/hyprland.jsonc instead, which includes this.
 // The modules shared with the other desktop are in modules.jsonc.
+//
+// The clock comes first, so it wins over modules.jsonc's: Settings writes it,
+// 24-hour or 12-hour, and until then there is none and modules.jsonc's stands.
 {
-  "include": ["/usr/share/alpymist/waybar/modules.jsonc"],
+  "include": [
+    "/etc/alpymist/waybar/clock.jsonc",
+    "/usr/share/alpymist/waybar/modules.jsonc"
+  ],
 
   "modules-left": ["custom/alpymist", "hyprland/workspaces"],
 

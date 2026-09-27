@@ -166,3 +166,30 @@ and the change is said in a note when it is made. It happens only because the
 person changed their wallpaper, never on an upgrade, and once it is done there
 is nothing left for it to find. Accounts made from now on start with the line
 already there.
+
+---
+
+## Addendum, 2026-09-27 — mako's configuration is generated whole
+
+**Status:** accepted · makes an exception to §3.
+
+Settings › Notifications sets where notifications appear and for how long, and
+switches do not disturb. §3 would have those in a file of Alpymist's own that
+`~/.config/mako/config` includes. mako 1.11 has `include=`, but it refuses to
+start at all when an included file is missing: tried on the dev VM, it says
+"Failed to parse config" and exits. An account whose include line arrived
+before the file it names — a new account, a restored home directory, a file
+deleted by hand — would have no notifications, and nothing to say why.
+
+So `~/.config/mako/config` itself is the generated file, with the usual header
+and hash. The one every account started with, from the skeleton, is taken over
+as it stands; one edited by hand is left alone, and Settings says so rather
+than changing it, as for any generated file. `alpymist session` writes it
+before the compositor starts, so the first login after an upgrade already has
+it.
+
+Do not disturb is mako's `do-not-disturb` mode, switched in the running mako
+with `makoctl`, and lasts until it is turned off or the session ends. The mode
+only hides anything because the generated file gives it `invisible=1`. The
+skeleton's file had no such section, so the menu's toggle, which has switched
+that mode since the desktop was first configured, has had nothing to switch.

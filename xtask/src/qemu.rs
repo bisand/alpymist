@@ -33,8 +33,8 @@ impl Arch {
     /// ISO's El Torito image directly.
     ///
     /// Both get a virtio-gpu. Without one the guest has no DRM device at all
-    /// and every boot reports the `Legacy` X11 tier, which would make the smoke
-    /// test blind to exactly the Wayland paths it exists to cover. A VM with
+    /// and every boot reports that Hyprland will not start, which would make
+    /// the smoke test blind to exactly the paths it exists to cover. A VM with
     /// virtio-gpu is also the configuration most Alpymist installs will run in.
     fn machine_args(self) -> Vec<String> {
         let mut args: Vec<String> = match self {
