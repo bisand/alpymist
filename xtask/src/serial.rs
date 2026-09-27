@@ -17,13 +17,13 @@ pub fn extract_report(lines: &[String]) -> Option<Vec<String>> {
     Some(lines[begin + 1..end].to_vec())
 }
 
-/// Check that a report names a tier, a backend and a metapackage.
+/// Check that a report says how Hyprland will do, and why.
 ///
 /// # Errors
 /// Returns the list of missing fields.
 pub fn validate_report(report: &[String]) -> Result<(), Vec<&'static str>> {
     let text = report.join("\n");
-    let missing: Vec<&'static str> = ["tier:", "backend:", "metapackage:", "memory:", "why:"]
+    let missing: Vec<&'static str> = ["hyprland:", "memory:", "why:"]
         .into_iter()
         .filter(|field| !text.contains(field))
         .collect();
@@ -34,14 +34,15 @@ pub fn validate_report(report: &[String]) -> Result<(), Vec<&'static str>> {
     }
 }
 
-/// Read the tier a report names, e.g. `Potato` from `tier:        Potato`.
+/// Read the verdict a report gives, e.g. `Slow` from
+/// `hyprland:    Slow — Hyprland runs here, but slowly`.
 #[must_use]
-pub fn reported_tier(report: &[String]) -> Option<String> {
+pub fn reported_verdict(report: &[String]) -> Option<String> {
     report
         .iter()
-        .find_map(|l| l.split_once("tier:"))
-        .map(|(_, rest)| rest.trim().to_string())
-        .filter(|t| !t.is_empty())
+        .find_map(|l| l.trim_start().strip_prefix("hyprland:"))
+        .and_then(|rest| rest.split_whitespace().next())
+        .map(str::to_string)
 }
 
 #[cfg(test)]
@@ -57,14 +58,17 @@ mod tests {
         let log = lines(&[
             "boot noise",
             BEGIN,
-            "tier: Full",
-            "backend: Hyprland",
+            "hyprland:    Runs — Hyprland runs well here",
+            "memory:      4096 MiB",
             END,
             "more noise",
         ]);
         assert_eq!(
             extract_report(&log).unwrap(),
-            lines(&["tier: Full", "backend: Hyprland"])
+            lines(&[
+                "hyprland:    Runs — Hyprland runs well here",
+                "memory:      4096 MiB"
+            ])
         );
     }
 
@@ -72,17 +76,17 @@ mod tests {
     fn tolerates_markers_with_serial_console_prefixes() {
         let log = lines(&[
             &format!("[    2.13] {BEGIN}"),
-            "tier: Potato",
+            "hyprland: Slow",
             &format!("[    2.14] {END}"),
         ]);
-        assert_eq!(extract_report(&log).unwrap(), lines(&["tier: Potato"]));
+        assert_eq!(extract_report(&log).unwrap(), lines(&["hyprland: Slow"]));
     }
 
     #[test]
     fn returns_none_when_the_boot_never_reached_the_probe() {
         assert_eq!(extract_report(&lines(&["kernel panic"])), None);
         assert_eq!(
-            extract_report(&lines(&[BEGIN, "tier: Full"])),
+            extract_report(&lines(&[BEGIN, "hyprland: Runs"])),
             None,
             "unterminated"
         );
@@ -97,41 +101,34 @@ mod tests {
 
     #[test]
     fn validation_names_every_missing_field() {
-        let report = lines(&["tier: Full", "backend: Hyprland"]);
+        let report = lines(&["hyprland: Runs"]);
         let missing = validate_report(&report).unwrap_err();
-        assert_eq!(missing, ["metapackage:", "memory:", "why:"]);
+        assert_eq!(missing, ["memory:", "why:"]);
     }
 
     #[test]
-    fn reads_the_tier_out_of_a_report() {
-        let report = lines(&["tier:        Potato", "backend:     Labwc"]);
-        assert_eq!(super::reported_tier(&report).as_deref(), Some("Potato"));
+    fn reads_the_verdict_out_of_a_report() {
+        let report = lines(&[
+            "memory:      2048 MiB",
+            "hyprland:    Slow — Hyprland runs here, but slowly",
+        ]);
+        assert_eq!(super::reported_verdict(&report).as_deref(), Some("Slow"));
     }
 
     #[test]
-    fn a_report_without_a_tier_has_no_tier() {
-        assert_eq!(super::reported_tier(&lines(&["backend: I3"])), None);
-        assert_eq!(super::reported_tier(&lines(&["tier:   "])), None);
-    }
-
-    /// `metapackage:` also ends in the substring `tier:`-adjacent text; make
-    /// sure the match is on the real field.
-    #[test]
-    fn does_not_match_a_different_field() {
-        let report = lines(&["metapackage: alpymist-desktop-lite", "tier: Lite"]);
-        assert_eq!(super::reported_tier(&report).as_deref(), Some("Lite"));
+    fn a_report_without_a_verdict_has_none() {
+        assert_eq!(super::reported_verdict(&lines(&["memory: 1 MiB"])), None);
+        assert_eq!(super::reported_verdict(&lines(&["hyprland:   "])), None);
     }
 
     #[test]
     fn a_complete_report_validates() {
         let report = lines(&[
-            "tier:        Potato",
-            "backend:     Labwc { software_render: true }",
-            "metapackage: alpymist-desktop-lite",
+            "hyprland:    Slow — Hyprland runs here, but slowly",
             "memory:      2048 MiB",
             "cpus:        2",
             "why:",
-            "  - only a firmware framebuffer is available",
+            "  - renderer \"llvmpipe\" is a CPU rasteriser, not the GPU",
         ]);
         assert!(validate_report(&report).is_ok());
     }

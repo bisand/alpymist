@@ -7,7 +7,7 @@
 use crate::answers::{Answers, DiskPlan, Network};
 use crate::catalog;
 use crate::wizard::Step;
-use alpymist_core::Tier;
+use alpymist_core::hyprland::Verdict;
 
 /// What kind of thing a row is, which decides how the cursor treats it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -552,14 +552,6 @@ fn network_rows(a: &Answers) -> Vec<Row> {
         .collect()
 }
 
-/// The tiers a user may pick, with what each actually runs.
-pub const TIERS: [(Tier, &str); 4] = [
-    (Tier::Full, "Full — Hyprland, animated and composited"),
-    (Tier::Lite, "Lite — labwc, GPU accelerated"),
-    (Tier::Potato, "Potato — labwc, rendered on the CPU"),
-    (Tier::Legacy, "Legacy — X11 with i3"),
-];
-
 /// The rows this screen shows.
 ///
 /// One long match by design: every screen's content in one place reads far
@@ -656,19 +648,16 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
                 chosen: false,
             })
             .collect(),
-        Step::Desktop => {
-            let mut rows = vec![Row::note(match a.detected_tier {
-                Some(t) => format!("This machine reports: {t:?}"),
-                None => "This machine was not probed.".into(),
-            })];
-            rows.push(Row::gap());
-            rows.extend(
-                TIERS
-                    .iter()
-                    .map(|(tier, label)| Row::radio(*label, a.effective_tier() == Some(*tier))),
-            );
-            rows
-        }
+        Step::Desktop => match &a.hyprland {
+            // What the probe found, and why: the person may go on whatever it
+            // says, and this is where they learn what to expect.
+            Some(check) => {
+                let mut rows = vec![Row::note(check.verdict.describe()), Row::gap()];
+                rows.extend(check.reasons.iter().map(|r| Row::note(format!("· {r}"))));
+                rows
+            }
+            None => vec![Row::note("This machine was not probed.")],
+        },
         Step::Confirm => vec![
             Row::note(format!(
                 "Keyboard    {}",
@@ -685,8 +674,12 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             Row::note(format!("Disk        {}", describe_disk(a))),
             Row::note(format!("Account     {} on {}", a.username, a.hostname)),
             Row::note(format!(
-                "Desktop     {}",
-                a.effective_tier().map_or("-".into(), |t| format!("{t:?}"))
+                "Desktop     Hyprland{}",
+                match a.hyprland.as_ref().map(|c| c.verdict) {
+                    Some(Verdict::Slow) => ", which will run slowly here",
+                    Some(Verdict::Unlikely) => ", which may not start here",
+                    _ => "",
+                }
             )),
             // Last, after everything it summarises, so it is the final thing
             // read before pressing Install.
@@ -801,14 +794,6 @@ pub fn choose(step: Step, index: usize, a: &mut Answers) {
             i if i == a.disks.len() + 1 => a.disk_confirmed = !a.disk_confirmed,
             _ => {}
         },
-        Step::Desktop => {
-            // Two rows of preamble sit above the tier list.
-            if let Some(i) = index.checked_sub(2)
-                && let Some((tier, _)) = TIERS.get(i)
-            {
-                a.tier_override = Some(*tier);
-            }
-        }
         Step::Encryption => {
             if index == 0
                 && let Some(DiskPlan::WholeDisk { device, encrypt }) = &a.disk
@@ -819,7 +804,12 @@ pub fn choose(step: Step, index: usize, a: &mut Answers) {
                 });
             }
         }
-        Step::Welcome | Step::Account | Step::Confirm | Step::Install | Step::Done => {}
+        Step::Welcome
+        | Step::Account
+        | Step::Desktop
+        | Step::Confirm
+        | Step::Install
+        | Step::Done => {}
     }
 }
 
@@ -836,9 +826,7 @@ pub fn selectable(step: Step, a: &Answers) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        LIST_ROWS, Row, TIERS, TextTarget, choose, follow_search, move_choice, rows, selectable,
-    };
+    use super::{LIST_ROWS, Row, TextTarget, choose, follow_search, move_choice, rows, selectable};
     use crate::answers::{Answers, DiskPlan, Network};
     use crate::wizard::Step;
 
@@ -873,7 +861,7 @@ mod tests {
             ..Answers::default()
         }
     }
-    use alpymist_core::Tier;
+    use alpymist_core::hyprland::{Check, Verdict};
 
     #[test]
     fn every_screen_offers_at_least_one_row() {
@@ -892,7 +880,6 @@ mod tests {
             Step::Network,
             Step::Disk,
             Step::Encryption,
-            Step::Desktop,
         ] {
             assert!(
                 !selectable(step, &a).is_empty(),
@@ -904,7 +891,13 @@ mod tests {
     #[test]
     fn the_screens_that_only_report_have_nothing_to_select() {
         let a = answers();
-        for step in [Step::Welcome, Step::Confirm, Step::Install, Step::Done] {
+        for step in [
+            Step::Welcome,
+            Step::Desktop,
+            Step::Confirm,
+            Step::Install,
+            Step::Done,
+        ] {
             assert!(
                 selectable(step, &a).is_empty(),
                 "{step:?} should not be selectable"
@@ -1081,29 +1074,22 @@ mod tests {
         assert!(!a.disk_confirmed, "it must be possible to take it back");
     }
 
+    /// The desktop screen reports; nothing on it is a choice.
     #[test]
-    fn choosing_a_tier_records_it_as_an_override() {
+    fn choosing_on_the_desktop_screen_does_nothing() {
         let mut a = Answers {
-            detected_tier: Some(Tier::Potato),
-            ..answers()
-        };
-        let full = TIERS.iter().position(|(t, _)| *t == Tier::Full).unwrap();
-        choose(Step::Desktop, full + 2, &mut a); // two preamble rows
-        assert_eq!(a.tier_override, Some(Tier::Full));
-        assert_eq!(a.effective_tier(), Some(Tier::Full));
-    }
-
-    /// A heading is not a choice; landing on one must change nothing.
-    #[test]
-    fn choosing_an_unselectable_row_does_nothing() {
-        let mut a = Answers {
-            detected_tier: Some(Tier::Lite),
+            hyprland: Some(Check {
+                verdict: Verdict::Slow,
+                reasons: vec!["renderer \"llvmpipe\" is a CPU rasteriser".into()],
+            }),
             ..answers()
         };
         let before = a.clone();
-        choose(Step::Desktop, 0, &mut a); // the "reports:" heading
-        choose(Step::Desktop, 1, &mut a); // the gap
+        for i in 0..4 {
+            choose(Step::Desktop, i, &mut a);
+        }
         assert_eq!(a, before);
+        assert!(selectable(Step::Desktop, &a).is_empty());
     }
 
     #[test]
@@ -1197,7 +1183,6 @@ mod tests {
             passphrase: "secret".into(),
             passphrase_confirm: "secret".into(),
             hostname: "alpymist".into(),
-            detected_tier: Some(Tier::Lite),
             // Wi-Fi chosen and failed: the Network screen at its longest, with
             // the passphrase field and a status line under the networks.
             wifi: crate::wifi::Wifi {

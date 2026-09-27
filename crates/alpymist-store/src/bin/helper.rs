@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn the_system_cannot_be_removed() {
         assert!(parse(&args(&["del", "musl"])).is_err());
-        assert!(parse(&args(&["del", "alpymist-desktop-full"])).is_err());
+        assert!(parse(&args(&["del", "alpymist-desktop"])).is_err());
         assert!(parse(&args(&["del", "linux-lts"])).is_err());
         assert!(parse(&args(&["del", "gimp", "busybox"])).is_err());
         assert!(parse(&args(&["del", "gimp"])).is_ok());

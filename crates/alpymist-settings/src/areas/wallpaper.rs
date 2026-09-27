@@ -5,15 +5,14 @@
 //! them is offered the same way, with nothing here naming any of them but the
 //! [`DEFAULT`]. The choice is the account's, in [`CONFIG`].
 //!
-//! Neither compositor draws a wallpaper itself. `swaybg` does, on Hyprland and
-//! labwc alike, and it takes its picture on the command line and never looks
-//! again, so [`show`] starts a new one on the chosen picture and only then
-//! stops the old: a change shows with no moment of bare desktop between the
-//! two. On X11, `feh` sets the root window's picture and exits. `alpymist
-//! wallpaper` runs [`show`] at login, and Settings after every change.
+//! Hyprland does not draw a wallpaper itself. `swaybg` does, and it takes its
+//! picture on the command line and never looks again, so [`show`] starts a
+//! new one on the chosen picture and only then stops the old: a change shows
+//! with no moment of bare desktop between the two. `alpymist wallpaper` runs
+//! [`show`] at login, and Settings after every change.
 //!
-//! An account made before this started `swaybg` or `feh` itself, from a file
-//! that is its own. The first time its wallpaper is changed, that line becomes
+//! An account made before this started `swaybg` itself, from a file that is
+//! its own. The first time its wallpaper is changed, that line becomes
 //! `alpymist wallpaper`, with the file as it was kept beside it. Otherwise the
 //! change would last until the next login and then quietly undo itself.
 
@@ -202,26 +201,12 @@ fn program<'a>(line: &'a str, prefix: &str) -> Option<&'a str> {
         .find(|w| !w.starts_with('-'))
 }
 
-const LAUNCHERS: [Launcher; 3] = [
-    Launcher {
-        file: "hypr/hyprland.conf",
-        desktop: "Hyprland",
-        starts_wallpaper: |l| program(l, "exec-once").is_some_and(|p| p == "swaybg"),
-        replacement: "exec-once = alpymist wallpaper",
-    },
-    Launcher {
-        file: "labwc/autostart",
-        desktop: "labwc",
-        starts_wallpaper: |l| l.split_whitespace().next() == Some("swaybg"),
-        replacement: "alpymist wallpaper >/dev/null 2>&1 &",
-    },
-    Launcher {
-        file: "i3/config",
-        desktop: "i3",
-        starts_wallpaper: |l| program(l, "exec").is_some_and(|p| p == "feh") && l.contains("--bg-"),
-        replacement: "exec --no-startup-id alpymist wallpaper",
-    },
-];
+const LAUNCHERS: [Launcher; 1] = [Launcher {
+    file: "hypr/hyprland.conf",
+    desktop: "Hyprland",
+    starts_wallpaper: |l| program(l, "exec-once").is_some_and(|p| p == "swaybg"),
+    replacement: "exec-once = alpymist wallpaper",
+}];
 
 /// `text` with every line that starts a wallpaper itself turned into
 /// `launcher`'s replacement, or `None` if there was none.
@@ -316,16 +301,6 @@ pub fn show(env: &Env) -> Result<(), String> {
             }
         }
         Ok(())
-    } else if set("DISPLAY") {
-        let status = Command::new("feh")
-            .args(["--no-fehbg", "--bg-fill", &picture])
-            .status()
-            .map_err(|e| format!("feh: {e}"))?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(format!("feh could not show {picture}"))
-        }
     } else {
         Err("there is no graphical session to show a wallpaper in".into())
     }
@@ -429,20 +404,6 @@ mod tests {
         assert!(new.contains("exec-once = waybar\n"), "the rest is left");
         assert!(rewrite(&new, &LAUNCHERS[0]).is_none(), "once is enough");
         assert!(rewrite("exec-once=swaybg -i /x.png\n", &LAUNCHERS[0]).is_some());
-    }
-
-    #[test]
-    fn labwc_and_i3_hand_theirs_over_too() {
-        let autostart = "/usr/libexec/pipewire-launcher >/dev/null 2>&1 &\n\
-                         swaybg -m fill -i /x.png >/dev/null 2>&1 &\n";
-        let new = rewrite(autostart, &LAUNCHERS[1]).unwrap();
-        assert!(new.ends_with("alpymist wallpaper >/dev/null 2>&1 &\n"));
-
-        let i3 = "exec --no-startup-id xsetroot -cursor_name left_ptr\n\
-                  exec --no-startup-id feh --no-fehbg --bg-fill /x.png\n";
-        let new = rewrite(i3, &LAUNCHERS[2]).unwrap();
-        assert!(new.ends_with("exec --no-startup-id alpymist wallpaper\n"));
-        assert!(new.contains("xsetroot"));
     }
 
     #[test]

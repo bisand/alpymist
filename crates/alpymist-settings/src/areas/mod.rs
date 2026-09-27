@@ -1,6 +1,7 @@
 //! Every area, and which one answers for a setting.
 
 pub mod appearance;
+pub mod datetime;
 pub mod input;
 pub mod keyboard;
 pub mod power;
@@ -80,6 +81,13 @@ pub const AREAS: &[Area] = &[
         keywords: &["screen saver", "idle", "blank", "lock", "timeout"],
     },
     Area {
+        id: "datetime",
+        title: "Date & time",
+        description: "The time zone, and keeping the clock right",
+        icon: "\u{f0150}",
+        keywords: &["time zone", "timezone", "clock", "ntp", "date"],
+    },
+    Area {
         id: "updates",
         title: "Updates",
         description: "The release channel Alpymist follows",
@@ -130,6 +138,7 @@ pub fn all() -> Vec<Setting> {
         wifi::settings(),
         power::settings(),
         screensaver::settings(),
+        datetime::settings(),
         updates::settings(),
     ]
     .concat()
@@ -145,6 +154,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "wifi" => wifi::get(env),
         "power" => power::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
+        "datetime" => datetime::get(env, s),
         "updates" => updates::get(env),
         other => Err(format!("no area `{other}`")),
     }
@@ -166,6 +176,7 @@ pub fn set(
         "wifi" => none(wifi::set(env, value)),
         "power" => none(power::set(env, s, value)),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
+        "datetime" => none(datetime::set(env, s, value)),
         "updates" => none(updates::set(env, value)),
         other => Err(format!("no area `{other}`")),
     }

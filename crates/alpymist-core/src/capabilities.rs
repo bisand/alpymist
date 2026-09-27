@@ -81,9 +81,9 @@ pub enum Virtualisation {
     Other,
 }
 
-/// Everything the tier decision is allowed to depend on.
+/// Everything the Hyprland check is allowed to depend on.
 ///
-/// Kept deliberately small and plain so that [`crate::select_tier`] stays pure
+/// Kept deliberately small and plain so that [`crate::hyprland::check`] stays pure
 /// and exhaustively testable without touching the filesystem.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Capabilities {
@@ -100,8 +100,7 @@ pub struct Capabilities {
     pub gles: Option<GlesInfo>,
     /// Why the EGL probe produced nothing, when it produced nothing.
     ///
-    /// Carried separately so the tier rationale can say *why* a machine was
-    /// downgraded. "mesa-egl is not installed" and "this GPU has no working
+    /// Carried separately so the check can say *why* a machine was doubted. "mesa-egl is not installed" and "this GPU has no working
     /// driver" both yield no `gles`, but call for very different responses.
     pub gles_error: Option<String>,
     /// Detected virtualisation.
@@ -117,8 +116,8 @@ impl Capabilities {
 
     /// Whether the kernel can drive *any* display at all.
     ///
-    /// If this is false we have no KMS, and a wlroots compositor has nothing to
-    /// scan out to — that is the one case where legacy X11 is the answer.
+    /// If this is false we have no KMS, and Hyprland has nothing to scan out
+    /// to.
     #[must_use]
     pub fn has_kms(&self) -> bool {
         !self.gpus.is_empty()

@@ -38,7 +38,7 @@ const SETTLE: Duration = Duration::from_secs(3);
 /// How soon to try again when the packages could not be fetched.
 const RETRY: Duration = Duration::from_mins(5);
 /// The compositors whose sessions are told what was installed.
-const COMPOSITORS: [&str; 3] = ["Hyprland", "labwc", "i3"];
+const COMPOSITORS: [&str; 1] = ["Hyprland"];
 /// `O_NONBLOCK` on Linux, for reading the log so far without waiting for more.
 const O_NONBLOCK: i32 = 0o4000;
 

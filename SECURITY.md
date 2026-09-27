@@ -17,4 +17,4 @@ In scope: the Rust crates in `crates/`, our `APKBUILD`s and image profiles, the
 signing and release pipeline, and default system configuration we ship.
 
 Out of scope: upstream Alpine packages (report to Alpine), and upstream
-Hyprland/labwc/wlroots issues (report upstream). We will help route these.
+Hyprland issues (report upstream). We will help route these.

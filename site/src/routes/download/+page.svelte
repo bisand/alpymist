@@ -43,18 +43,8 @@
 					'doas apk update'
 				]}
 			/>
-			<p>Ask the probe which tier the machine can run, then add that tier's desktop:</p>
-			<Shell lines={['doas apk add alpymist', 'alpymist probe']} />
-			<div class="table-scroll">
-				<table>
-					<thead><tr><th>Probe says</th><th>Install</th></tr></thead>
-					<tbody>
-						<tr><td>Full</td><td><code>alpymist-desktop-full</code></td></tr>
-						<tr><td>Lite or Potato</td><td><code>alpymist-desktop-lite</code></td></tr>
-						<tr><td>Legacy</td><td><code>alpymist-desktop-legacy</code></td></tr>
-					</tbody>
-				</table>
-			</div>
+			<p>Ask the probe how Hyprland will run on the machine, then add the desktop:</p>
+			<Shell lines={['doas apk add alpymist', 'alpymist probe', 'doas apk add alpymist-desktop']} />
 			<p>
 				The ISO's installer also enables <code>dbus</code>, <code>seatd</code> and
 				<code>greetd</code> and points the login screen at the right session. On an existing system
