@@ -1576,10 +1576,18 @@ mod tests {
     fn tab_from_the_areas_reaches_the_first_switch() {
         let mut v = view();
         v.resize(Size::new(1260, 754), 1);
-        let _ = v.handle(&key(KeyCode::ArrowDown), 10);
-        let _ = v.handle(&key(KeyCode::ArrowDown), 20);
-        assert_eq!(v.page, Page::Area(2));
-        let _ = v.handle(&key(KeyCode::Tab), 30);
+        // Touchpad's first setting is a switch, wherever the page is listed.
+        let touchpad = v
+            .settings
+            .pages()
+            .iter()
+            .position(|a| a.id == "touchpad")
+            .unwrap();
+        for step in 0..touchpad {
+            let _ = v.handle(&key(KeyCode::ArrowDown), 10 * (step as u64 + 1));
+        }
+        assert_eq!(v.page, Page::Area(touchpad));
+        let _ = v.handle(&key(KeyCode::Tab), 1000);
         assert_eq!(
             v.ui.focused(),
             v.rows.first().map(|r| r.control),
@@ -1587,7 +1595,7 @@ mod tests {
         );
         let mut events = key(KeyCode::Space).to_vec();
         events.insert(1, InputEvent::Text { ch: ' ' });
-        let effects = v.handle(&events, 40);
+        let effects = v.handle(&events, 1010);
         assert_eq!(effects.len(), 1, "{effects:?}");
     }
 

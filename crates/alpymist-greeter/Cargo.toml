@@ -26,6 +26,8 @@ denise-evdev = { workspace = true, optional = true }
 # Reads /etc/localtime itself, so the clock is in the machine's time zone.
 jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo"] }
 serde = { workspace = true }
+# The 24-hour clock, from the system's settings.toml.
+toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
 serde_json = { workspace = true }
 signal-hook = { version = "0.3", optional = true }
 

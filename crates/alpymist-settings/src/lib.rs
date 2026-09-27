@@ -202,7 +202,7 @@ impl Settings {
     }
 
     /// Show a change in the person's running session, where it can be shown
-    /// at once: Hyprland's input settings and keyboard layout.
+    /// at once: Hyprland's input settings and keyboard layout, and mako's file.
     ///
     /// # Errors
     /// An unknown id, or the session refused.
@@ -211,12 +211,24 @@ impl Settings {
         areas::live(env, s, value).map_err(Error::Failed)
     }
 
+    /// What the desktop's environment gets from the account's settings:
+    /// variables and their values, for `alpymist session` to start it with.
+    ///
+    /// # Errors
+    /// The account's values could not be read.
+    pub fn session_environment(&self, env: &Env) -> Result<Vec<(&'static str, String)>, Error> {
+        areas::language::session_environment(env).map_err(Error::Failed)
+    }
+
     /// What a session needs before its compositor reads its configuration.
     ///
     /// # Errors
     /// A file could not be written.
     pub fn prepare_session(&self, env: &Env) -> Result<(), Error> {
-        areas::input::prepare_session(env).map_err(Error::Failed)
+        // Each is tried whatever became of the other.
+        let input = areas::input::prepare_session(env);
+        let notifications = areas::notifications::prepare_session(env);
+        input.and(notifications).map_err(Error::Failed)
     }
 }
 

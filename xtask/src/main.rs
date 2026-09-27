@@ -6,6 +6,7 @@
 
 #![forbid(unsafe_code)]
 
+mod build_order;
 mod installer_data;
 mod publish;
 mod qemu;

@@ -214,6 +214,23 @@ fn session(
     };
     let mut command = std::process::Command::new(program);
     command.args(args);
+    match all.session_environment(env) {
+        Ok(vars) if !vars.is_empty() => {
+            // What D-Bus starts for the desktop, the portals among them, has
+            // the environment D-Bus started with, from before this login's
+            // settings: hand it these too.
+            let pairs: Vec<String> = vars.iter().map(|(k, v)| format!("{k}={v}")).collect();
+            if let Err(e) = std::process::Command::new("dbus-update-activation-environment")
+                .args(&pairs)
+                .status()
+            {
+                eprintln!("alpymist session: dbus-update-activation-environment: {e}");
+            }
+            command.envs(vars);
+        }
+        Ok(_) => {}
+        Err(e) => eprintln!("alpymist session: {e}"),
+    }
     if let Some(log) = session_log()
         && let Ok(err) = log.try_clone()
     {
