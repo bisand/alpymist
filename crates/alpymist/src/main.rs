@@ -1,7 +1,7 @@
 //! `alpymist` — the single entry point for configuring an Alpymist system.
 //!
-//! Formerly `alpymistctl`, which the transitional package of that name links
-//! here for one release (ADR 0007).
+//! Formerly `alpymistctl` (ADR 0007). The package provides that name, so a
+//! system that installed it by the old name upgrades to this one.
 
 #![forbid(unsafe_code)]
 

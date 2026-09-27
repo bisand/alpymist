@@ -116,8 +116,8 @@ release it follows and meets the next one when it arrives.
    its deployment branches to `main`, and give it two secrets:
    `DEV_CHANNEL_SIGNING_KEY` (`~/.config/alpymist/keys/alpymist-dev-2026.rsa`)
    and `DEV_CHANNEL_DEPLOY_KEY` (the SSH private key).
-4. Publish stable once with `alpymist-keys` 2026-r1 and `alpymistctl`
-   0.0.1-r1 (now `alpymist`), so stable systems have the dev key and the command to switch.
+4. Publish stable once with `alpymist-keys` 2026-r1 and `alpymist`, so stable
+   systems have the dev key and the command to switch.
 
 Keep an offline copy of the dev signing key as well, and never put it in
 `/etc/apk/keys` on a machine that should follow only stable.

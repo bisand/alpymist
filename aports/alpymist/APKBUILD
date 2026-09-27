@@ -7,6 +7,12 @@ pkgdesc="Alpymist's command line: settings, the release channel and the hardware
 url="https://github.com/bisand/alpymist"
 arch="all"
 license="MIT OR Apache-2.0"
+# This was alpymistctl, and a system that added it by that name still has
+# alpymistctl in its world. Providing the name, with a version, is what lets
+# apk take this package for it and purge the old one with its link; without
+# it the stale package stays installed for good. Keep it while such systems
+# may still be upgrading.
+provides="alpymistctl=$pkgver-r$pkgrel"
 makedepends="cargo"
 # libEGL is loaded at runtime, not linked, so it is deliberately not a depend:
 # alpymist must work on a system with no Mesa and simply report less.
