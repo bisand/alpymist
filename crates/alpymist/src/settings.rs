@@ -152,7 +152,7 @@ pub fn act(settings: &Settings, env: &Env, id: &str, force: bool, live: bool) ->
         .find(|s| s.id == id)
         .ok_or_else(|| Error::Unknown(id.to_owned()))?;
     if !matches!(setting.kind, Kind::Action { .. }) {
-        return Err(format!("{id} needs a value; `alpymist show {id}` says which it takes").into());
+        return Err(format!("{id} needs a value; `alpymist list {id}` says which it takes").into());
     }
     change(settings, env, id, None, force, live)
 }
