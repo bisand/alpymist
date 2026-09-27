@@ -16,6 +16,7 @@ use crate::model::{Applies, Choice, Kind, Scope, Setting, Value};
 use alpymist_screensaver::config::{Config, MAX_MINUTES};
 use alpymist_screensaver::definition::{Definition, Dial, discover};
 use alpymist_screensaver::idle;
+use alpymist_screensaver::paint::Screen;
 use alpymist_screensaver::picture::{RANDOM, Show};
 use alpymist_screensaver::values::{Value as Held, Values};
 use std::sync::OnceLock;
@@ -245,6 +246,26 @@ pub fn settings() -> Vec<Setting> {
             Value::Number(i64::from(defaults.blank_after)),
         ),
         account(
+            "screensaver.main-screen",
+            "Main screen",
+            "Where the screensaver shows while the others go dark. A screen that is not connected leaves it on the first.",
+            &[
+                "monitors", "displays", "multiple", "external", "dock", "primary",
+            ],
+            Kind::Choice(screen_choices(&load_default())),
+            Value::Text(defaults.main_screen.clone()),
+        ),
+        account(
+            "screensaver.every-screen",
+            "Show it on every screen",
+            "Off, it shows on the main screen and the others go dark.",
+            &[
+                "monitors", "displays", "multiple", "external", "dock", "all",
+            ],
+            Kind::Switch,
+            Value::Bool(defaults.every_screen),
+        ),
+        account(
             "screensaver.lock",
             "Lock when the screen turns off",
             "Ask for the password to get back in.",
@@ -255,6 +276,40 @@ pub fn settings() -> Vec<Setting> {
     ];
     all.extend_from_slice(per_screensaver());
     all
+}
+
+/// The screens connected now, found once per process, first first.
+fn connected() -> &'static [Screen] {
+    static SCREENS: OnceLock<Vec<Screen>> = OnceLock::new();
+    SCREENS.get_or_init(alpymist_screensaver::paint::screens)
+}
+
+/// The account's file as it is, or the defaults, for building the choices.
+fn load_default() -> Config {
+    Config::load().unwrap_or_default()
+}
+
+/// "The first screen", each screen connected now, and the one chosen before if
+/// it is not connected, so a docked machine's choice survives undocking and
+/// Settings still shows it.
+fn screen_choices(config: &Config) -> Vec<Choice> {
+    let mut choices = vec![Choice::new(String::new(), "The first screen")];
+    for screen in connected() {
+        let label = if screen.description.is_empty() {
+            screen.name.clone()
+        } else {
+            format!("{} ({})", screen.name, screen.description)
+        };
+        choices.push(Choice::new(screen.name.clone(), label));
+    }
+    let chosen = &config.main_screen;
+    if !chosen.is_empty() && !connected().iter().any(|s| &s.name == chosen) {
+        choices.push(Choice::new(
+            chosen.clone(),
+            format!("{chosen} (not connected)"),
+        ));
+    }
+    choices
 }
 
 fn file(env: &Env) -> std::path::PathBuf {
@@ -287,6 +342,8 @@ pub fn get(env: &Env, setting: &Setting) -> Result<Value, String> {
         "screensaver.show" => Value::Text(c.show.id().to_owned()),
         "screensaver.after" => Value::Number(i64::from(c.after)),
         "screensaver.blank-after" => Value::Number(i64::from(c.blank_after)),
+        "screensaver.every-screen" => Value::Bool(c.every_screen),
+        "screensaver.main-screen" => Value::Text(c.main_screen),
         _ => Value::Bool(c.lock),
     })
 }
@@ -327,6 +384,13 @@ pub fn set(env: &Env, setting: &Setting, value: Option<&Value>) -> Result<(), St
         }
         "screensaver.after" => c.after = number(),
         "screensaver.blank-after" => c.blank_after = number(),
+        "screensaver.every-screen" => c.every_screen = value.as_bool().unwrap_or(false),
+        "screensaver.main-screen" => {
+            value
+                .as_text()
+                .unwrap_or_default()
+                .clone_into(&mut c.main_screen);
+        }
         _ => c.lock = value.as_bool().unwrap_or(false),
     }
     crate::generated::replace(&file(env), &c.to_toml())?;

@@ -90,6 +90,23 @@ pub struct Options {
     /// premultiplied `0xAARRGGBB`, for a dialog that wants the whole
     /// screen's attention.
     pub backdrop: u32,
+    /// The output to be on, by name (`DP-3`). `None` is wherever the
+    /// compositor puts a new surface, which is the output with focus.
+    pub output: Option<String>,
+    /// With [`Placement::FullScreen`], cover every other output in black as
+    /// well, and any output plugged in while it is up: a screensaver on one
+    /// screen and the others dark.
+    pub cover_others: bool,
+}
+
+/// What the other outputs are covered in: opaque black, which is as dark as a
+/// screen that is on gets, and on OLED as good as off.
+const COVER: u32 = 0xFF00_0000;
+
+/// A black surface on an output the widget is not on.
+struct Cover {
+    output: wl_output::WlOutput,
+    layer: LayerSurface,
 }
 
 /// Where a panel is put on the output.
@@ -116,6 +133,8 @@ impl Options {
             margin: 6,
             placement: Placement::UnderBar,
             backdrop: 0,
+            output: None,
+            cover_others: false,
         }
     }
 }
@@ -130,6 +149,19 @@ struct Host<W: Widget> {
     pool: SlotPool,
     layer: LayerSurface,
     probe: Option<LayerSurface>,
+    compositor: CompositorState,
+    layer_shell: LayerShell,
+    namespace: String,
+    /// Whether to cover the other outputs, and those covered so far.
+    cover_others: bool,
+    covers: Vec<Cover>,
+    /// The output the widget's surface is on, once the compositor says, and
+    /// its name. By name as well: an output asked for by name was found on a
+    /// queue of its own, and the same output is then two objects here.
+    on: Option<wl_output::WlOutput>,
+    on_name: Option<String>,
+    /// Where the pointer was first seen on a cover, so only a real move counts.
+    cover_pointer: Option<(f64, f64)>,
     cursor_shapes: Option<CursorShapeManager>,
     cursor: Option<WpCursorShapeDeviceV1>,
     loop_handle: LoopHandle<'static, Host<W>>,
@@ -197,6 +229,19 @@ pub fn run<W: Widget>(
 
     let size = widget.layout(1);
 
+    // A named output costs two round trips to find; everything else starts
+    // on the output with focus, with no wait.
+    let output = match &options.output {
+        Some(name) => Some(
+            crate::outputs::on(&conn)?
+                .into_iter()
+                .find(|(screen, _)| &screen.name == name)
+                .map(|(_, output)| output)
+                .ok_or_else(|| format!("no output called {name}"))?,
+        ),
+        None => None,
+    };
+
     // Anchored to every edge, the compositor sizes it; an exclusive zone of
     // -1 puts it over the bar as well.
     let layer = layer_shell.create_layer_surface(
@@ -204,7 +249,7 @@ pub fn run<W: Widget>(
         compositor.create_surface(&qh),
         Layer::Overlay,
         Some(options.namespace.clone()),
-        None,
+        output.as_ref(),
     );
     layer.set_anchor(Anchor::all());
     layer.set_exclusive_zone(-1);
@@ -269,6 +314,14 @@ pub fn run<W: Widget>(
         pool,
         layer,
         probe,
+        compositor,
+        layer_shell,
+        namespace: options.namespace.clone(),
+        cover_others: options.cover_others && options.placement == Placement::FullScreen,
+        covers: Vec::new(),
+        on: None,
+        on_name: options.output.clone(),
+        cover_pointer: None,
         cursor_shapes: CursorShapeManager::bind(&globals, &qh).ok(),
         cursor: None,
         loop_handle: event_loop.handle(),
@@ -302,12 +355,74 @@ pub fn run<W: Widget>(
     }
     let dismissed = host.dismissed;
     drop(host.probe.take());
+    host.covers.clear();
     drop(host.layer);
     conn.flush().ok();
     Ok(dismissed)
 }
 
 impl<W: Widget> Host<W> {
+    /// Put a black surface on every output the widget is not on, once it is
+    /// known which one that is.
+    fn cover(&mut self) {
+        if !self.cover_others || (self.on.is_none() && self.on_name.is_none()) {
+            return;
+        }
+        for output in self.outputs.outputs() {
+            let name = self.outputs.info(&output).and_then(|i| i.name);
+            let ours =
+                self.on.as_ref() == Some(&output) || (name.is_some() && name == self.on_name);
+            if ours || self.covers.iter().any(|c| c.output == output) {
+                continue;
+            }
+            let layer = self.layer_shell.create_layer_surface(
+                &self.qh,
+                self.compositor.create_surface(&self.qh),
+                Layer::Overlay,
+                Some(format!("{}-cover", self.namespace)),
+                Some(&output),
+            );
+            layer.set_anchor(Anchor::all());
+            layer.set_exclusive_zone(-1);
+            layer.set_keyboard_interactivity(KeyboardInteractivity::None);
+            layer.set_size(0, 0);
+            layer.commit();
+            self.covers.push(Cover { output, layer });
+        }
+    }
+
+    /// Fill a cover the compositor has sized. Once: it never changes.
+    fn paint_cover(&mut self, index: usize, width: u32, height: u32) {
+        let (Ok(w), Ok(h)) = (i32::try_from(width), i32::try_from(height)) else {
+            return;
+        };
+        let Ok((buffer, canvas)) = self
+            .pool
+            .create_buffer(w, h, w * 4, wl_shm::Format::Argb8888)
+        else {
+            return;
+        };
+        let black = COVER.to_ne_bytes();
+        for px in canvas.chunks_exact_mut(4) {
+            px.copy_from_slice(&black);
+        }
+        let Some(cover) = self.covers.get(index) else {
+            return;
+        };
+        let surface = cover.layer.wl_surface();
+        surface.damage_buffer(0, 0, w, h);
+        if buffer.attach_to(surface).is_ok() {
+            cover.layer.commit();
+        }
+    }
+
+    /// Which cover, if any, `surface` is.
+    fn cover_of(&self, surface: &wl_surface::WlSurface) -> Option<usize> {
+        self.covers
+            .iter()
+            .position(|c| c.layer.wl_surface() == surface)
+    }
+
     fn dismiss(&mut self) {
         self.dismissed = !self.exit;
         self.exit = true;
@@ -618,9 +733,18 @@ impl<W: Widget> CompositorHandler for Host<W> {
         &mut self,
         _: &Connection,
         _: &QueueHandle<Self>,
-        _: &wl_surface::WlSurface,
-        _: &wl_output::WlOutput,
+        surface: &wl_surface::WlSurface,
+        output: &wl_output::WlOutput,
     ) {
+        if surface == self.layer.wl_surface() {
+            if self.on.is_none() {
+                self.on = Some(output.clone());
+            }
+            if self.on_name.is_none() {
+                self.on_name = self.outputs.info(output).and_then(|i| i.name);
+            }
+            self.cover();
+        }
     }
 
     fn surface_leave(
@@ -637,14 +761,29 @@ impl<W: Widget> OutputHandler for Host<W> {
     fn output_state(&mut self) -> &mut OutputState {
         &mut self.outputs
     }
-    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
+    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {
+        // Plugged in while the widget is up: dark as well, if the rest are.
+        self.cover();
+    }
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
-    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
+    fn output_destroyed(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        output: wl_output::WlOutput,
+    ) {
+        self.covers.retain(|c| c.output != output);
+    }
 }
 
 impl<W: Widget> LayerShellHandler for Host<W> {
-    fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &LayerSurface) {
-        // Either surface: the popup means nothing without the other.
+    fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, layer: &LayerSurface) {
+        // A cover goes with its output, and the widget carries on.
+        if let Some(index) = self.cover_of(layer.wl_surface()) {
+            self.covers.remove(index);
+            return;
+        }
+        // Either other surface: the popup means nothing without the other.
         self.exit = true;
     }
 
@@ -657,6 +796,10 @@ impl<W: Widget> LayerShellHandler for Host<W> {
         _: u32,
     ) {
         let (w, h) = configure.new_size;
+        if let Some(index) = self.cover_of(layer.wl_surface()) {
+            self.paint_cover(index, w, h);
+            return;
+        }
         if self
             .probe
             .as_ref()
@@ -760,8 +903,11 @@ impl<W: Widget> KeyboardHandler for Host<W> {
         _: u32,
     ) {
         // Focus taken without a click — a workspace switch from the keyboard:
-        // a popup left open behind it is in the way.
-        if self.layer.wl_surface() == surface {
+        // a popup left open behind it is in the way. Not a full-screen widget,
+        // which nothing is behind: with one on each screen, each takes the
+        // keyboard from the last as it comes up, and only a key or the pointer
+        // should take them away.
+        if self.layer.wl_surface() == surface && self.placement != Placement::FullScreen {
             self.dismiss();
         }
     }
@@ -815,6 +961,23 @@ impl<W: Widget> PointerHandler for Host<W> {
     ) {
         for event in events {
             if &event.surface != self.layer.wl_surface() {
+                // Moving over a darkened screen is someone back, as it would
+                // be over the widget's own. Only a move: a cover appearing
+                // under a still pointer is told where the pointer is, and that
+                // is not anybody.
+                if self.cover_of(&event.surface).is_some() {
+                    match event.kind {
+                        PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
+                            match self.cover_pointer {
+                                None => self.cover_pointer = Some(event.position),
+                                Some(first) if first != event.position => self.dismiss(),
+                                Some(_) => {}
+                            }
+                        }
+                        PointerEventKind::Leave { .. } => self.cover_pointer = None,
+                        _ => {}
+                    }
+                }
                 continue;
             }
             let at = self.on_panel(event.position);
