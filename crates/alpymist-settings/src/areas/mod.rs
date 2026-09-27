@@ -1,6 +1,7 @@
 //! Every area, and which one answers for a setting.
 
 pub mod appearance;
+pub mod bluetooth;
 pub mod input;
 pub mod keyboard;
 pub mod power;
@@ -65,6 +66,13 @@ pub const AREAS: &[Area] = &[
         keywords: &["network", "wireless", "internet"],
     },
     Area {
+        id: "bluetooth",
+        title: "Bluetooth",
+        description: "Headphones, keyboards and other wireless devices",
+        icon: "\u{f00af}",
+        keywords: &["bluez", "pair", "headphones", "wireless"],
+    },
+    Area {
         id: "power",
         title: "Power",
         description: "The lid, the power button, the battery and power modes",
@@ -127,6 +135,7 @@ pub fn all() -> Vec<Setting> {
         keyboard::settings(),
         input::settings(),
         wifi::settings(),
+        bluetooth::settings(),
         power::settings(),
         screensaver::settings(),
         updates::settings(),
@@ -142,6 +151,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "keyboard" if s.id == "keyboard.layout" => keyboard::get(env, s),
         "keyboard" | "touchpad" | "mouse" => input::get(env, s),
         "wifi" => wifi::get(env),
+        "bluetooth" => Ok(bluetooth::get(env)),
         "power" => power::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
         "updates" => updates::get(env),
@@ -163,6 +173,7 @@ pub fn set(
         "keyboard" if s.id == "keyboard.layout" => keyboard::set(env, s, value, force),
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
         "wifi" => none(wifi::set(env, value)),
+        "bluetooth" => none(bluetooth::set(env, value)),
         "power" => none(power::set(env, s, value)),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
         "updates" => none(updates::set(env, value)),

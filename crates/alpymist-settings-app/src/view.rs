@@ -109,6 +109,8 @@ pub enum Action {
     CheckUpdates,
     /// Put the About details on the clipboard.
     CopyAbout,
+    /// Pair and connect Bluetooth devices.
+    OpenBluetooth,
 }
 
 /// What the window should do after input.
@@ -880,6 +882,9 @@ impl View {
                 let extra = match area {
                     "wifi" => Some(("Networks…".to_owned(), Msg::Action(Action::OpenWifi))),
                     "power" => Some(("Battery…".to_owned(), Msg::Action(Action::OpenPower))),
+                    "bluetooth" => {
+                        Some(("Devices…".to_owned(), Msg::Action(Action::OpenBluetooth)))
+                    }
                     "updates" => Some((
                         "Check for updates".to_owned(),
                         Msg::Action(Action::CheckUpdates),

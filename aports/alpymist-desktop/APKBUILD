@@ -31,9 +31,13 @@ license="MIT OR Apache-2.0"
 # impala stays for a terminal, and for the Legacy tier, which has neither.
 # Terminals use FiraCode Nerd Font: Fira Code's ligatures, with the prompt's
 # icons at the size and place they were made for, which a separate symbols
-# font gets wrong.
+# font gets wrong. Bluetooth is bluez, with PipeWire's plugin for headphones and
+# bluetuith to pair from a terminal; bluetoothd is not started at boot until
+# Settings › Bluetooth turns it on (ADR 0011).
 depends="
 	adwaita-icon-theme
+	bluetuith
+	bluez
 	alpymist-greeter
 	alpymist-keys
 	alpymist-shell=$pkgver-r$pkgrel
@@ -57,6 +61,7 @@ depends="
 	pam-rundir
 	pipewire
 	pipewire-pulse
+	pipewire-spa-bluez
 	polkit
 	seatd
 	wireplumber

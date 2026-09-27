@@ -74,6 +74,8 @@ items = [
 title = "Setup"
 items = [
   { name = "Audio", icon = "󰕾", exec = "pavucontrol", keywords = ["sound", "volume", "speakers", "microphone"] },
+  # Pairing and connecting; Settings › Bluetooth turns it on first.
+  { name = "Bluetooth", icon = "󰂯", exec = "bluetuith", terminal = true, keywords = ["pair", "headphones", "bluez", "devices"] },
   { name = "Wi-Fi", icon = "󰖩", exec = "alpymist-wifi", keywords = ["wireless", "network", "wlan", "iwd"] },
   { name = "Power", icon = "\U000F0084", exec = "alpymist-power", keywords = ["battery", "power mode", "performance", "lid", "suspend", "charge"] },
   { name = "Config", icon = "", menu = "config", keywords = ["edit", "dotfiles"] },

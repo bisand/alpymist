@@ -256,6 +256,9 @@ impl SettingsApp {
                 }
                 Effect::Action(Action::OpenWifi) => spawn(&["alpymist-wifi"]),
                 Effect::Action(Action::OpenPower) => spawn(&["alpymist-power"]),
+                Effect::Action(Action::OpenBluetooth) => {
+                    spawn(&["foot", "--title", "Bluetooth", "bluetuith"]);
+                }
                 Effect::Action(Action::CheckUpdates) => spawn(&["alpymist-store", "updates"]),
                 Effect::Action(Action::CopyAbout) => {
                     let sender = self.sender.clone();
