@@ -1,0 +1,6 @@
+# Alpymist Thunderbolt: when a Thunderbolt or USB4 device arrives waiting to
+# be let in, let it in if it was allowed always and proves who it is with its
+# key. Anything else waits for the session to ask, or to reconnect it while
+# unlocked. At boot, udev's coldplug replays this for what is already plugged
+# in. See ADR 0012.
+ACTION=="add", SUBSYSTEM=="thunderbolt", ENV{DEVTYPE}=="thunderbolt_device", ATTR{authorized}=="0", RUN+="/usr/libexec/alpymist-thunderbolt-helper boot"

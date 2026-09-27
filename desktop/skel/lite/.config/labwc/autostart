@@ -14,6 +14,10 @@ mako >/dev/null 2>&1 &
 # Screensaver. This starts the watch; running it again — as Settings does after
 # a change — restarts it with the new times rather than starting a second one.
 alpymist-screensaver idle >/dev/null 2>&1 &
+# Thunderbolt and USB4 devices: a dock waits, keyboard and network and all,
+# until you allow it here, and one allowed always is let in again when it
+# comes back (ADR 0012).
+alpymist-thunderbolt >/dev/null 2>&1 &
 # Flathub, for this account: Flatpak installs per user, since without elogind
 # polkit never counts the session as active and would ask every install for a
 # password nobody is there to type. The file ships with the desktop, so this

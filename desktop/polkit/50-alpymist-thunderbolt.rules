@@ -1,0 +1,18 @@
+// Alpymist Thunderbolt: anyone at the machine may let in again a device an
+// administrator allowed always, and forget one, without a password. Letting a
+// device in for the first time is not here: it always asks. See ADR 0012.
+//
+// Without elogind polkit knows no sessions, so "at the machine" is the seat
+// group, as in 50-alpymist-power.rules. The session's watch only reconnects
+// while its screen is unlocked; the helper refuses a device that was never
+// allowed always.
+polkit.addRule(function(action, subject) {
+    var free = [
+        "org.alpymist.thunderbolt.reconnect",
+        "org.alpymist.thunderbolt.forget"
+    ];
+    if (free.indexOf(action.id) >= 0 && subject.isInGroup("seat")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});
