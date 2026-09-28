@@ -161,7 +161,7 @@ mod drm_run {
 
     /// Restart the machine, after the console has been handed back.
     ///
-    /// Through `reboot` rather than the syscall, so OpenRC stops services and
+    /// Through `reboot` rather than the syscall, so `OpenRC` stops services and
     /// unmounts filesystems properly. A dry run never restarts: it is how the
     /// installer is tried on machines nobody wants rebooted.
     fn restart() -> Result<(), Box<dyn std::error::Error>> {
@@ -212,44 +212,8 @@ mod drm_run {
         let mut complained = false;
         let mut input = open_input(size, &mut complained);
 
-        let hyprland = probe();
-        let disks = alpymist_install::disks::discover(&alpymist_install::safety::gather());
-        eprintln!(
-            "disks: {}",
-            if disks.is_empty() {
-                "none offered".to_string()
-            } else {
-                disks
-                    .iter()
-                    .map(|d| d.label())
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            }
-        );
-        // Whatever the live system is already set to is how this keyboard
-        // types right now, which makes it a better default than US.
-        let configured = std::fs::read_to_string("/etc/conf.d/loadkmap")
-            .ok()
-            .and_then(|text| typing::configured_keymap(&text));
-        let answers = Answers {
-            hyprland,
-            disks,
-            firmware: Firmware::detect(),
-            keyboard: configured.map(|(layout, _)| layout.to_string()),
-            keyboard_variant: configured.map(|(_, variant)| variant.to_string()),
-            ..Answers::default()
-        }
-        .with_defaults();
-        eprintln!("firmware: {:?}", answers.firmware);
-        let adapter = alpymist_install::wifi::adapter();
-        let answers = Answers {
-            wired_interface: alpymist_install::wifi::wired_interface(),
-            wifi: alpymist_install::wifi::Wifi {
-                adapter: adapter.clone(),
-                ..Default::default()
-            },
-            ..answers
-        };
+        let answers = detect();
+        let adapter = answers.wifi.adapter.clone();
         let mut app = App::with_mode(answers, size.width, size.height, crate::install_mode());
         eprintln!("{}", app.face.status.describe());
         // Joining a network on the live system writes nothing to a disk, so it
@@ -315,6 +279,48 @@ mod drm_run {
             } else {
                 std::thread::sleep(IDLE);
             }
+        }
+    }
+
+    /// What the machine already says about itself, before anyone is asked:
+    /// how Hyprland will do, the disks, the keyboard, the firmware, the network.
+    fn detect() -> Answers {
+        let hyprland = probe();
+        let disks = alpymist_install::disks::discover(&alpymist_install::safety::gather());
+        eprintln!(
+            "disks: {}",
+            if disks.is_empty() {
+                "none offered".to_string()
+            } else {
+                disks
+                    .iter()
+                    .map(alpymist_install::disks::Disk::label)
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            }
+        );
+        // Whatever the live system is already set to is how this keyboard
+        // types right now, which makes it a better default than US.
+        let configured = std::fs::read_to_string("/etc/conf.d/loadkmap")
+            .ok()
+            .and_then(|text| typing::configured_keymap(&text));
+        let answers = Answers {
+            hyprland,
+            disks,
+            firmware: Firmware::detect(),
+            keyboard: configured.map(|(layout, _)| layout.to_string()),
+            keyboard_variant: configured.map(|(_, variant)| variant.to_string()),
+            ..Answers::default()
+        }
+        .with_defaults();
+        eprintln!("firmware: {:?}", answers.firmware);
+        Answers {
+            wired_interface: alpymist_install::wifi::wired_interface(),
+            wifi: alpymist_install::wifi::Wifi {
+                adapter: alpymist_install::wifi::adapter(),
+                ..Default::default()
+            },
+            ..answers
         }
     }
 

@@ -193,7 +193,7 @@ mod console {
             // every time; walking every process for a getty costs more and
             // matters less, so it happens every half second.
             looks = looks.wrapping_add(1);
-            let processes = if looks % 10 == 0 {
+            let processes = if looks.is_multiple_of(10) {
                 handover::processes()
             } else {
                 Vec::new()
