@@ -26,7 +26,7 @@ use alpymist_install::app::App;
 use alpymist_install::execute::Mode;
 use denise::geom::{Rect, Size};
 use denise::{PixelFormat, Surface};
-use denise_drm::SurfaceConfig;
+use denise_drm::{DrmSurface, SurfaceConfig};
 use denise_render::Canvas;
 use std::time::{Duration, Instant};
 
@@ -36,6 +36,63 @@ const ROUNDS: u32 = 20;
 /// Mean of `total` over [`ROUNDS`] rounds, as milliseconds.
 fn mean_ms(total: Duration) -> f64 {
     total.as_secs_f64() * 1000.0 / f64::from(ROUNDS)
+}
+
+/// What a shadow buffer would cost: paint once in memory, copy the result.
+///
+/// Row by row, because the scanout stride is padded -- 1376 words for a
+/// 1366-pixel panel on this machine -- so the buffer is wider than the
+/// picture and a single `copy_from_slice` does not line up.
+fn blits(
+    surface: &mut DrmSurface,
+    pixels: &[u32],
+    size: Size,
+    everything: &[Rect],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let height = size.height as usize;
+    let width = size.width as usize;
+    let stride = {
+        let mut frame = surface.acquire()?;
+        let words = frame.pixels_mut().len();
+        drop(frame);
+        surface.present(everything)?;
+        words / height
+    };
+    println!("\n  scanout stride {stride} words for a {width}-pixel panel\n");
+
+    // `rows` of `span` words each, which is what a damage rectangle costs.
+    let mut blit =
+        |label: &str, span: usize, rows: usize| -> Result<(), Box<dyn std::error::Error>> {
+            let mut copying = Duration::ZERO;
+            for round in 0..=ROUNDS {
+                let mut frame = surface.acquire()?;
+                let dst = frame.pixels_mut();
+                let start = Instant::now();
+                for y in 0..rows {
+                    let d = y * stride;
+                    let s = y * width;
+                    dst[d..d + span].copy_from_slice(&pixels[s..s + span]);
+                }
+                let taken = start.elapsed();
+                drop(frame);
+                surface.present(everything)?;
+                if round > 0 {
+                    copying += taken;
+                }
+            }
+            report(label, mean_ms(copying));
+            Ok(())
+        };
+
+    blit("blit: whole screen into scanout", width, height)?;
+    // The panel is about two thirds of the screen each way; the cursor is a
+    // small square. These are what damage-limited copies would actually move.
+    blit(
+        "blit: a panel-sized rectangle",
+        width * 2 / 3,
+        height * 2 / 3,
+    )?;
+    blit("blit: a 32x32 cursor", 32, 32)
 }
 
 /// Report one measurement.
@@ -116,60 +173,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         report("draw: into ordinary memory", mean_ms(start.elapsed()));
     }
 
-    // What a shadow buffer would cost: paint once in memory, copy the result.
-    //
-    // Row by row, because the scanout stride is padded -- 1376 words for a
-    // 1366-pixel panel on this machine -- so the buffer is wider than the
-    // picture and a single copy_from_slice does not line up.
-    let height = size.height as usize;
-    let width = size.width as usize;
-    let stride = {
-        let mut frame = surface.acquire()?;
-        let words = frame.pixels_mut().len();
-        drop(frame);
-        surface.present(&everything)?;
-        words / height
-    };
-    println!("\n  scanout stride {stride} words for a {width}-pixel panel\n");
-
-    // `rows` of `span` words each, which is what a damage rectangle costs.
-    let mut blit =
-        |label: &str, span: usize, rows: usize| -> Result<(), Box<dyn std::error::Error>> {
-            let mut copying = Duration::ZERO;
-            for round in 0..=ROUNDS {
-                let mut frame = surface.acquire()?;
-                let dst = frame.pixels_mut();
-                let start = Instant::now();
-                for y in 0..rows {
-                    let d = y * stride;
-                    let s = y * width;
-                    dst[d..d + span].copy_from_slice(&pixels[s..s + span]);
-                }
-                let taken = start.elapsed();
-                drop(frame);
-                surface.present(&everything)?;
-                if round > 0 {
-                    copying += taken;
-                }
-            }
-            report(label, mean_ms(copying));
-            Ok(())
-        };
-
-    blit("blit: whole screen into scanout", width, height)?;
-    // The panel is about two thirds of the screen each way; the cursor is a
-    // small square. These are what damage-limited copies would actually move.
-    blit(
-        "blit: a panel-sized rectangle",
-        width * 2 / 3,
-        height * 2 / 3,
-    )?;
-    blit("blit: a 32x32 cursor", 32, 32)?;
+    blits(&mut surface, &pixels, size, &everything)?;
 
     // The shipping path, end to end: paint into ordinary memory, copy it over,
     // flip. This is the number the installer actually runs at, flip wait and
     // all, so it is the one to compare against a frame's 1/60th of a second.
-    drop(blit);
     drop(surface);
     let mut screen = alpymist_ui::display::Screen::open_patiently(
         SurfaceConfig::default(),

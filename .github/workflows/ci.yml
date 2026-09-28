@@ -32,5 +32,6 @@ jobs:
       # default features, and for these three that is the desktop preview, not
       # the DRM backend the packages are built with. A change to something they
       # share would otherwise be found by the package build, twenty minutes
-      # into Dev, which is how it was found once.
-      - run: cargo check --no-default-features --features drm -p alpymist-greeter -p alpymist-install -p alpymist-splash
+      # into Dev, which is how it was found once. Linted here too, since clippy
+      # above only ever sees the preview.
+      - run: cargo clippy --no-default-features --features drm -p alpymist-greeter -p alpymist-install -p alpymist-splash --all-targets -- -D warnings
