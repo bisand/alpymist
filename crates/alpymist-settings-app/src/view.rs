@@ -412,6 +412,19 @@ impl View {
         true
     }
 
+    /// Settings made again, with their values: after a change that adds or
+    /// takes away settings, such as a program added under Startup. The page
+    /// stays where it was.
+    pub fn reload(
+        &mut self,
+        settings: Settings,
+        values: BTreeMap<&'static str, Result<Value, String>>,
+    ) {
+        self.settings = settings;
+        self.values = values;
+        self.build();
+    }
+
     /// A setting's value changed, or could not be changed: show what it is.
     pub fn set_value(&mut self, id: &'static str, value: Result<Value, String>) {
         let moved = id == WALLPAPER && self.values.get(id) != Some(&value);

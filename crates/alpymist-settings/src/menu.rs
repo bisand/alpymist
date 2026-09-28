@@ -51,7 +51,12 @@ pub fn fragment(settings: &Settings) -> String {
             quote(area.icon),
             quote(&format!("alpymist-settings {}", area.id)),
         );
-        for s in settings.in_area(area.id) {
+        // A program's switch under Startup is this account's, and the fragment
+        // is made once, when the package is built.
+        for s in settings
+            .in_area(area.id)
+            .filter(|s| !crate::areas::startup::is_program(s.id))
+        {
             let _ = writeln!(
                 out,
                 "  {{ name = {}, icon = {}, exec = {}, keywords = [{}] }},",

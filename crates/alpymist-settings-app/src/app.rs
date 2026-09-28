@@ -3,7 +3,7 @@
 
 use alpymist_about::info::About;
 
-use alpymist_settings::{Env, Error, Settings, Value};
+use alpymist_settings::{Env, Error, Settings, Value, startup};
 use alpymist_settings_app::view::{Action, Effect, Fonts, THUMB_H, THUMB_W, View};
 use alpymist_ui::picture::Picture;
 use alpymist_widget::Outcome;
@@ -474,7 +474,14 @@ impl App for SettingsApp {
         };
         match event {
             Event::Applied { id, result, now } => {
-                view.set_value(id, now);
+                if result.is_ok() && [startup::ADD, startup::REMOVE].contains(&id) {
+                    // A program's switch comes or goes with it.
+                    let settings = Settings::new();
+                    let values = read_values(&settings);
+                    view.reload(settings, values);
+                } else {
+                    view.set_value(id, now);
+                }
                 match result {
                     Ok(notes) => {
                         if let Some(note) = notes.first() {
