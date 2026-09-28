@@ -10,6 +10,7 @@ mod channel;
 mod firmware;
 mod launch;
 mod root;
+mod secrets;
 mod settings;
 
 use alpymist_core::Channel;
@@ -262,24 +263,33 @@ fn session(
         Desktop::Hyprland => "start-hyprland",
         Desktop::Prepare => return Ok(()),
     };
-    let mut command = std::process::Command::new(program);
-    command.args(args);
-    match all.session_environment(env) {
-        Ok(vars) if !vars.is_empty() => {
-            // What D-Bus starts for the desktop, the portals among them, has
-            // the environment D-Bus started with, from before this login's
-            // settings: hand it these too.
-            let pairs: Vec<String> = vars.iter().map(|(k, v)| format!("{k}={v}")).collect();
-            if let Err(e) = std::process::Command::new("dbus-update-activation-environment")
-                .args(&pairs)
-                .status()
-            {
-                eprintln!("alpymist session: dbus-update-activation-environment: {e}");
-            }
-            command.envs(vars);
+    // The SSH agent is the compositor's parent, so it ends with the session.
+    let socket = std::env::var_os("XDG_RUNTIME_DIR")
+        .filter(|d| !d.is_empty())
+        .map(|d| PathBuf::from(d).join(secrets::AGENT_SOCKET));
+    let line = secrets::under_agent(program, args, socket.as_deref());
+    let mut command = std::process::Command::new(&line[0]);
+    command.args(&line[1..]);
+    let mut vars: Vec<(String, String)> = match all.session_environment(env) {
+        Ok(vars) => vars.into_iter().map(|(k, v)| (k.to_owned(), v)).collect(),
+        Err(e) => {
+            eprintln!("alpymist session: {e}");
+            Vec::new()
         }
-        Ok(_) => {}
-        Err(e) => eprintln!("alpymist session: {e}"),
+    };
+    vars.extend(secrets::environment(socket.as_deref()));
+    if !vars.is_empty() {
+        // What D-Bus starts for the desktop, the portals among them, has
+        // the environment D-Bus started with, from before this login's
+        // settings: hand it these too.
+        let pairs: Vec<String> = vars.iter().map(|(k, v)| format!("{k}={v}")).collect();
+        if let Err(e) = std::process::Command::new("dbus-update-activation-environment")
+            .args(&pairs)
+            .status()
+        {
+            eprintln!("alpymist session: dbus-update-activation-environment: {e}");
+        }
+        command.envs(vars);
     }
     if let Some(log) = session_log()
         && let Ok(err) = log.try_clone()
@@ -287,7 +297,7 @@ fn session(
         command.stdout(log).stderr(err);
     }
     let e = command.exec();
-    Err(format!("{program}: {e}").into())
+    Err(format!("{}: {e}", line[0]).into())
 }
 
 /// Where the compositor's own output goes: `session.log` in
