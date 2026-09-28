@@ -274,7 +274,7 @@ pub fn set(
         "ssh" => ssh::set(env, value),
         "power" => none(power::set(env, s, value)),
         "notifications" => notifications::set(env, s, value, force),
-        "default" => none(default_apps::set(env, s, value)),
+        "default" => default_apps::set(env, s, value),
         "startup" => none(startup::set(env, s, value)),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
         "datetime" => none(datetime::set(env, s, value, force)),
