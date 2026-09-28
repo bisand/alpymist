@@ -5,7 +5,9 @@
 //! `alpymist-screensaver screens` command instead: [`connected`] runs it and
 //! reads back what [`line`] wrote.
 
-use std::process::Command;
+use std::io::Read as _;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 /// A screen the picture can be put on.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,22 +50,81 @@ pub fn parse(printed: &str) -> Vec<Screen> {
         .collect()
 }
 
+/// How long [`connected`] waits for an answer. Listing the screens is one
+/// round trip to the compositor, a few milliseconds; one that is stuck — a
+/// virtual machine whose display stopped taking frames did it — would
+/// otherwise hold up every `alpymist` command and Settings with it.
+pub const WAIT: Duration = Duration::from_secs(2);
+
 /// The screens connected now, from `alpymist-screensaver screens`; empty where
-/// it is not installed, or finds no session.
+/// it is not installed, finds no session, or does not answer within [`WAIT`].
 #[must_use]
 pub fn connected() -> Vec<Screen> {
-    Command::new("alpymist-screensaver")
-        .arg("screens")
-        .output()
-        .ok()
-        .filter(|out| out.status.success())
-        .map(|out| parse(&String::from_utf8_lossy(&out.stdout)))
+    run_within(Command::new("alpymist-screensaver").arg("screens"), WAIT)
+        .map(|out| parse(&out))
         .unwrap_or_default()
+}
+
+/// What `command` printed, if it finished well within `wait`. One that takes
+/// longer is killed.
+fn run_within(command: &mut Command, wait: Duration) -> Option<String> {
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    // Read on the side, so a child that fills the pipe is not waited on
+    // while it waits on us.
+    let mut stdout = child.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut out = String::new();
+        let _ = stdout.read_to_string(&mut out);
+        out
+    });
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if started.elapsed() < wait => std::thread::sleep(Duration::from_millis(10)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    };
+    let out = reader.join().ok()?;
+    status.success().then_some(out)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Screen, line, main_screen, parse};
+    use super::{Screen, line, main_screen, parse, run_within};
+    use std::process::Command;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_command_that_does_not_answer_is_given_up_on() {
+        let started = Instant::now();
+        let out = run_within(
+            Command::new("sh").args(["-c", "sleep 30"]),
+            Duration::from_millis(200),
+        );
+        assert_eq!(out, None);
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert_eq!(
+            run_within(
+                Command::new("sh").args(["-c", "echo hi"]),
+                Duration::from_secs(5)
+            ),
+            Some("hi\n".to_owned())
+        );
+        assert_eq!(
+            run_within(&mut Command::new("false"), Duration::from_secs(5)),
+            None
+        );
+    }
 
     fn screens(names: &[&str]) -> Vec<Screen> {
         names
