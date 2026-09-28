@@ -188,6 +188,9 @@ impl PlanError {
 const ROOT: &str = "/mnt";
 /// The desktop, which is Hyprland, and everything it needs.
 pub const DESKTOP: &str = "alpymist-desktop";
+/// git, ssh, nano and the rest of the first ten minutes: the desktop depends
+/// on it, and it is installed on its own too, for a system without one.
+pub const TOOLS: &str = "alpymist-tools";
 /// What `/etc/conf.d/greetd` says: the configuration that starts Hyprland,
 /// and that greetd waits for seatd, through which the desktop opens the
 /// screen and keyboard. The login screen needs no seat, so without the wait
@@ -564,6 +567,24 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         )
         .may_fail(),
     );
+    // Again on its own: already there with the desktop, and a system whose
+    // desktop could not be installed still gets git, ssh and nano.
+    steps.push(
+        Step::new(
+            "Installing the tools",
+            &[
+                "apk",
+                "add",
+                "--root",
+                ROOT,
+                "--repositories-file",
+                "/etc/apk/repositories",
+                "--no-progress",
+                TOOLS,
+            ],
+        )
+        .may_fail(),
+    );
 
     // zsh is in the image's world, not the desktop's, so it is installed even
     // when the desktop is not: a login shell that does not exist is a login
@@ -934,7 +955,7 @@ mod tests {
     /// skipped past: only firmware, services, and the desktop and the steps
     /// that configure it.
     #[test]
-    fn only_firmware_services_and_the_desktop_may_fail() {
+    fn only_firmware_services_the_desktop_and_the_tools_may_fail() {
         let plan = build(&encrypted()).unwrap();
         let optional: Vec<&str> = plan
             .steps
@@ -949,6 +970,7 @@ mod tests {
                     || title.starts_with("Adding your account to ")
                     || title.starts_with("Showing the splash at boot")
                     || *title == "Installing the desktop"
+                    || *title == "Installing the tools"
                     || *title == "Choosing the desktop session",
                 "{title} may fail but is not desktop setup"
             );
@@ -1055,6 +1077,9 @@ mod tests {
         let plan = build(&a).unwrap();
         let desktop = step(&plan, "Installing the desktop");
         assert!(desktop.argv.contains(&super::DESKTOP.to_string()));
+        let tools = step(&plan, "Installing the tools");
+        assert!(tools.argv.contains(&super::TOOLS.to_string()));
+        assert!(tools.may_fail, "a system is bootable without git");
         assert!(
             desktop
                 .argv
@@ -1092,6 +1117,10 @@ mod tests {
     fn the_desktop_and_its_session_are_what_the_packaging_ships() {
         let apkbuild = include_str!("../../../aports/alpymist-desktop/APKBUILD");
         assert!(apkbuild.contains(&format!("pkgname={}\n", super::DESKTOP)));
+        assert!(
+            apkbuild.contains(&format!("\t{}:_tools\n", super::TOOLS)),
+            "the desktop's aport makes the tools subpackage the installer adds"
+        );
         let cfgfile = super::GREETD_SERVICE
             .lines()
             .find_map(|l| l.strip_prefix("cfgfile="))
