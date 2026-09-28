@@ -20,6 +20,9 @@ pub struct Env {
     pub is_root: bool,
     /// Whether a Hyprland session can be spoken to.
     pub hyprland: bool,
+    /// The account a setting about an account is for: this process's, or as
+    /// root, the one pkexec or doas ran it for. `None` for root itself.
+    pub user: Option<String>,
     run: Box<Runner>,
 }
 
@@ -32,12 +35,14 @@ impl Env {
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
             .unwrap_or_else(|| PathBuf::from("/nonexistent/.config"));
+        let uid = uid();
         Self {
             root: PathBuf::from("/"),
             config,
-            is_root: uid() == Some(0),
+            is_root: uid == Some(0),
             hyprland: std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE")
                 .is_some_and(|s| !s.is_empty()),
+            user: account(uid),
             run: Box::new(run),
         }
     }
@@ -52,6 +57,7 @@ impl Env {
             config: dir.join("config"),
             is_root,
             hyprland: true,
+            user: Some("someone".into()),
             run: Box::new(move |argv| {
                 ran.lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -92,6 +98,28 @@ fn uid() -> Option<u32> {
         .next()?
         .parse()
         .ok()
+}
+
+/// Who a setting about an account is for. As root, only who pkexec or doas
+/// says ran it: both set that themselves, from the caller's real identity,
+/// and clear anything the caller set.
+fn account(uid: Option<u32>) -> Option<String> {
+    let passwd = std::fs::read_to_string("/etc/passwd").ok()?;
+    let name_of = |uid: &str| {
+        passwd.lines().find_map(|l| {
+            let mut fields = l.split(':');
+            let name = fields.next()?;
+            (fields.nth(1)? == uid).then(|| name.to_owned())
+        })
+    };
+    match uid? {
+        0 => std::env::var("PKEXEC_UID")
+            .ok()
+            .and_then(|u| name_of(&u))
+            .or_else(|| std::env::var("DOAS_USER").ok())
+            .filter(|n| !n.is_empty() && n != "root"),
+        own => name_of(&own.to_string()),
+    }
 }
 
 fn run(argv: &[&str]) -> Result<String, String> {

@@ -9,6 +9,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 fn kind_json(kind: &Kind) -> serde_json::Value {
     match kind {
         Kind::Action { label } => json!({ "type": "action", "label": label }),
+        Kind::Text { max, .. } => json!({ "type": "text", "max": max }),
         Kind::Switch => json!({ "type": "switch" }),
         Kind::Number {
             min,
@@ -98,6 +99,7 @@ pub fn list(settings: &Settings, env: &Env, filter: Option<&str>, as_json: bool)
         }
         match &s.kind {
             Kind::Action { label } => println!("  does: {label}"),
+            Kind::Text { max, .. } => println!("  values: text, up to {max} characters"),
             Kind::Switch => println!("  values: on, off"),
             Kind::Number {
                 min,
