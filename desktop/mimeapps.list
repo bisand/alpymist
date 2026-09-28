@@ -1,10 +1,26 @@
-# Alpymist: LibreWolf opens links and web pages. System-wide, so a user's own
-# ~/.config/mimeapps.list overrides it.
+# Alpymist: what opens what until you choose otherwise in Settings › Default
+# applications, which writes ~/.config/mimeapps.list; that file overrides this
+# one, type by type.
 [Default Applications]
+# LibreWolf opens links and web pages.
 text/html=librewolf.desktop
 application/xhtml+xml=librewolf.desktop
 x-scheme-handler/http=librewolf.desktop
 x-scheme-handler/https=librewolf.desktop
+# squint opens text.
+text/plain=squint.desktop
+text/x-log=squint.desktop
+text/markdown=squint.desktop
+text/csv=squint.desktop
+text/xml=squint.desktop
+text/x-rust=squint.desktop
+text/x-python=squint.desktop
+text/x-shellscript=squint.desktop
+application/json=squint.desktop
+application/xml=squint.desktop
+application/x-yaml=squint.desktop
+application/toml=squint.desktop
+application/x-shellscript=squint.desktop
 # A .flatpakref downloaded from flathub.org's Install button opens the store at
 # that application's page.
 application/vnd.flatpak.ref=alpymist-store.desktop

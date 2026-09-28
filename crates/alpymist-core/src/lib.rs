@@ -8,6 +8,7 @@
 mod capabilities;
 pub mod catalog;
 mod channel;
+pub mod defaults;
 pub mod desktop_entry;
 pub mod firmware;
 pub mod hyprland;
