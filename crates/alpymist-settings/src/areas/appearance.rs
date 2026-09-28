@@ -104,6 +104,9 @@ pub fn set(env: &Env, setting: &Setting, value: Option<&Value>) -> Result<Vec<St
     if let Err(e) = super::input::write_conf(env, &values, false) {
         notes.push(e);
     }
+    if let Err(e) = super::notifications::write_conf(env, &values, false) {
+        notes.push(e);
+    }
     notes.extend(super::themed::take_over(env));
     Ok(notes)
 }

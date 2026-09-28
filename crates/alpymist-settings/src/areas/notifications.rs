@@ -176,8 +176,11 @@ fn adopt(text: &str) -> bool {
     text == SHIPPED
 }
 
-/// mako's configuration for `values`.
-fn conf(values: &Values) -> String {
+/// mako's configuration for `values`, in `theme`'s colours: the page a little
+/// see-through behind the text, and the accent around it.
+fn conf(values: &Values, theme: &alpymist_theme::ThemeFile) -> String {
+    let p = theme.palette();
+    let hex = alpymist_theme::hex;
     let all = settings();
     let value = |id: &str| {
         values
@@ -192,9 +195,9 @@ fn conf(values: &Values) -> String {
     };
     format!(
         "font=Fira Mono 10\n\
-         background-color=#0b121eee\n\
-         text-color=#eaf0f6\n\
-         border-color=#7fb8d9\n\
+         background-color=#{}ee\n\
+         text-color=#{}\n\
+         border-color=#{}\n\
          border-size=2\n\
          border-radius=8\n\
          anchor={}\n\
@@ -203,16 +206,23 @@ fn conf(values: &Values) -> String {
          # Do not disturb, from Settings or the menu: new notifications are not shown.\n\
          [mode={MODE}]\n\
          invisible=1\n",
+        hex(p.page),
+        hex(p.text),
+        hex(p.accent),
         value("notifications.position"),
     )
 }
 
-fn write_conf(env: &Env, values: &Values, force: bool) -> Result<(), String> {
+/// Write mako's file from `values` and the account's theme.
+///
+/// # Errors
+/// It was edited by hand, or could not be written.
+pub fn write_conf(env: &Env, values: &Values, force: bool) -> Result<(), String> {
     generated::write(
         &env.account(MAKO_CONF),
         "#",
         "~/.config/alpymist/settings.toml",
-        &conf(values),
+        &conf(values, &super::appearance::load(env)),
         adopt,
         force,
     )
@@ -256,18 +266,33 @@ mod tests {
             crate::generated::render(
                 "#",
                 "~/.config/alpymist/settings.toml",
-                &conf(&Values::default())
+                &conf(&Values::default(), &alpymist_theme::ThemeFile::default())
             )
         );
     }
 
     #[test]
     fn the_defaults_keep_what_every_account_had() {
-        let body = conf(&Values::default());
+        let body = conf(&Values::default(), &alpymist_theme::ThemeFile::default());
         for line in SHIPPED.lines().skip(1) {
             assert!(body.lines().any(|l| l == line), "{line} went missing");
         }
         assert!(body.contains("anchor=top-right\n"), "{body}");
+    }
+
+    /// The page a little see-through, its text, and the accent around it:
+    /// dark Mist is exactly what every account had.
+    #[test]
+    fn the_colours_are_the_themes() {
+        let light = alpymist_theme::ThemeFile {
+            scheme: alpymist_theme::Scheme::Light,
+            accent: alpymist_theme::Accent::Moss,
+            ..alpymist_theme::ThemeFile::default()
+        };
+        let body = conf(&Values::default(), &light);
+        assert!(body.contains("background-color=#f4f7faee\n"), "{body}");
+        assert!(body.contains("text-color=#0b121e\n"), "{body}");
+        assert!(body.contains("border-color=#3c7a3c\n"), "{body}");
     }
 
     #[test]

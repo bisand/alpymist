@@ -234,3 +234,9 @@ that names one never names nothing.
 mako's colours are not here yet. They belong in the mako configuration that
 Settings › Notifications generates, per the addendum above, and come with a
 change of their own.
+
+*2026-09-28:* they are now. The mako configuration Settings › Notifications
+generates takes its background from the theme's page, a little see-through,
+its text from the theme's text and its border from the accent; a change of
+scheme or accent writes it again and has mako read it with `makoctl reload`.
+Dark Mist is exactly the colours it had before.

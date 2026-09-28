@@ -1,5 +1,5 @@
 //! The theme beyond Alpymist's own windows: the top bar, the terminal,
-//! Hyprland's borders and GTK (ADR 0007 §7).
+//! Hyprland's borders, notifications and GTK (ADR 0007 §7).
 //!
 //! Each gets a file of Alpymist's own, written from the account's theme:
 //!
@@ -11,7 +11,9 @@
 //! - `~/.config/gtk-3.0/settings.ini` and `gtk-4.0`'s, GTK's dark preference,
 //!   unless the account already has its own;
 //! - Hyprland's border colours, in the `settings.conf` the input settings
-//!   write.
+//!   write;
+//! - mako's colours, in the configuration Settings › Notifications writes
+//!   whole.
 //!
 //! waybar and foot refuse to start when a file they import is missing, so
 //! `alpymist session` writes these before the desktop starts, every login.
@@ -24,7 +26,7 @@
 //!
 //! GTK and the portal learn the scheme and the accent from `gsettings`, which
 //! libadwaita and Flatpak's apps follow at once; the bar reloads and the
-//! terminals change palette on a signal.
+//! terminals change palette on a signal, and mako reads its file again.
 
 use crate::env::Env;
 use crate::generated;
@@ -279,6 +281,7 @@ pub fn live(env: &Env, theme: &ThemeFile) {
         Scheme::Light => "-USR2",
     };
     let _ = env.run(&["pkill", signal, "-x", "foot"]);
+    let _ = env.run(&["makoctl", "reload"]);
     if env.hyprland {
         let p = theme.palette();
         let active = format!("rgb({})", hex(p.accent));
@@ -438,6 +441,9 @@ mod tests {
             "{ran:?}"
         );
         assert!(ran.contains(&"pkill -USR2 -x foot".to_owned()), "{ran:?}");
+        assert!(ran.contains(&"makoctl reload".to_owned()), "{ran:?}");
+        let mako = std::fs::read_to_string(env.account("mako/config")).unwrap();
+        assert!(mako.contains("background-color=#f4f7faee\n"), "{mako}");
 
         let again = settings
             .set(&env, "appearance.accent", "moss", false)
