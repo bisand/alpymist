@@ -8,7 +8,7 @@
 //! still start.
 
 use alpymist_settings::{Env, startup};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 /// What D-Bus is told about the session before anything is started, as
 /// `hyprland.conf` tells it: this can run first, and a program that starts a
@@ -43,26 +43,8 @@ pub fn run(env: &Env, dry_run: bool) {
             println!("{}\t{}", p.file, argv.join(" "));
             continue;
         }
-        if let Err(e) = spawn(&argv) {
+        if let Err(e) = crate::launch::spawn(&argv) {
             eprintln!("alpymist autostart: {}: {}: {e}", p.file, argv[0]);
         }
     }
-}
-
-fn spawn(argv: &[String]) -> std::io::Result<()> {
-    use std::os::unix::process::CommandExt as _;
-    let (program, rest) = argv
-        .split_first()
-        .ok_or_else(|| std::io::Error::other("nothing to run"))?;
-    let mut command = Command::new(program);
-    command
-        .args(rest)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .process_group(0);
-    if let Some(home) = std::env::var_os("HOME") {
-        command.current_dir(home);
-    }
-    command.spawn().map(drop)
 }

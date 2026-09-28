@@ -240,3 +240,36 @@ generates takes its background from the theme's page, a little see-through,
 its text from the theme's text and its border from the accent; a change of
 scheme or accent writes it again and has mako read it with `makoctl reload`.
 Dark Mist is exactly the colours it had before.
+
+## Addendum, 2026-09-28 — default applications, and the files other programs write too
+
+**Status:** accepted · makes an exception to §3, as the wallpaper's addendum does.
+
+Settings › Default applications chooses what opens each kind of thing, and
+the terminal commands run in. What opens a MIME type is said in
+`~/.config/mimeapps.list`, and every program that asks reads that file: GIO,
+the portals Flatpak apps open things through, and anything that follows the
+freedesktop.org spec. Programs write it too. A browser asked to be the default
+writes it, and so do GIO and Flatpak when something is chosen to open a file.
+
+A file generated whole, with §3's hash in its first line, would call each of
+those writes a hand edit and refuse Settings' next change, or overwrite what
+the other program chose. So this file is edited in place instead. A category
+sets the keys for its types under `[Default Applications]`, and only those; a
+type the chosen application does not say it opens is taken out, so it falls
+back to whatever does. Automatic takes the category's keys out. Every other
+line, group and comment stays as it was. What Settings shows is what the
+file says, as another program may have left it, and not a copy of its own.
+
+The terminal has no MIME type. It is chosen in `~/.config/xdg-terminals.list`,
+the list `xdg-terminal-exec` reads, with the chosen terminal put first and the
+rest of the list kept; Automatic removes the file. `alpymist open terminal`
+reads it, and so do the menu, the Bluetooth button and the password button,
+so no part of Alpymist names foot any more but as the terminal to use when
+nothing is chosen. `alpymist open browser` is the same for the browser, and
+what the keys and the menu run.
+
+Accounts made before this still name `foot` and `librewolf` in their own
+`hyprland.conf`, for Super+Return and Super+B. That file is theirs, and is not
+changed; `$terminal = alpymist open terminal` and `$browser = alpymist open
+browser` there make the keys follow the choice.

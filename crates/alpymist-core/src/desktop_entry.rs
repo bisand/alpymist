@@ -313,16 +313,88 @@ pub fn installed(program: &str, path: &[PathBuf]) -> bool {
 /// Split an `Exec` value into arguments, dropping field codes.
 ///
 /// Quoting is the spec's, not the shell's: double quotes only, with `\"`,
-/// `` \` ``, `\$` and `\\` escaped inside them. Nothing here opens a file, so
-/// `%f`, `%u` and their plural forms expand to nothing; `%%` is a percent sign.
+/// `` \` ``, `\$` and `\\` escaped inside them. Nothing is opened, so `%f`,
+/// `%u` and their plural forms expand to nothing; `%%` is a percent sign.
 /// `None` when nothing is left to run.
 #[must_use]
 pub fn exec_argv(exec: &str) -> Option<Vec<String>> {
-    let mut args = Vec::new();
+    exec_with(exec, &[]).into_iter().next()
+}
+
+/// What to run to open `args` — files or URLs — with an `Exec` value: one
+/// command line, or one for each when it takes a single one (`%f`, `%u`).
+///
+/// `%F` and `%U` take all of them. An `Exec` without either kind gets them
+/// on the end, which is what a program that forgot to say it takes them
+/// usually wants. Empty when nothing is left to run.
+#[must_use]
+pub fn exec_with(exec: &str, args: &[String]) -> Vec<Vec<String>> {
+    let words = words(exec);
+    let has = |codes: &[char]| {
+        words.iter().any(|w| match w {
+            Word::Code(c) | Word::Inside(_, c, _) => codes.contains(c),
+            Word::Text(_) => false,
+        })
+    };
+    let fill = |one: Option<&String>, all: bool| -> Vec<String> {
+        let mut line = Vec::new();
+        for w in &words {
+            match w {
+                Word::Text(t) => line.push(t.clone()),
+                Word::Code('F' | 'U') if all => line.extend(args.iter().cloned()),
+                Word::Code('f' | 'u') => line.extend(one.cloned()),
+                Word::Code(_) => {}
+                Word::Inside(before, code, after) => {
+                    let file = match code {
+                        'f' | 'u' => one.map_or("", String::as_str),
+                        _ => "",
+                    };
+                    line.push(format!("{before}{file}{after}"));
+                }
+            }
+        }
+        line
+    };
+    let runs: Vec<Vec<String>> = if args.is_empty() {
+        vec![fill(None, false)]
+    } else if has(&['F', 'U']) {
+        vec![fill(None, true)]
+    } else if has(&['f', 'u']) {
+        args.iter().map(|a| fill(Some(a), false)).collect()
+    } else {
+        let mut line = fill(None, false);
+        line.extend(args.iter().cloned());
+        vec![line]
+    };
+    runs.into_iter().filter(|line| !line.is_empty()).collect()
+}
+
+/// One argument of an `Exec` value.
+enum Word {
+    /// Text, its quoting and escapes undone.
+    Text(String),
+    /// An argument that is a field code and nothing else: `%u`.
+    Code(char),
+    /// An argument with a field code inside it, `--file=%f`: what comes
+    /// before it, the code, and what comes after.
+    Inside(String, char, String),
+}
+
+fn words(exec: &str) -> Vec<Word> {
+    let mut words = Vec::new();
     let mut current = String::new();
+    // The code inside `current`, and where: only the first one counts.
+    let mut inside: Option<(usize, char)> = None;
     let mut started = false;
     let mut quoted = false;
     let mut chars = exec.chars().peekable();
+    let finish = |current: &mut String, inside: &mut Option<(usize, char)>| {
+        let text = std::mem::take(current);
+        match inside.take() {
+            Some((at, code)) => Word::Inside(text[..at].to_owned(), code, text[at..].to_owned()),
+            None => Word::Text(text),
+        }
+    };
     while let Some(c) = chars.next() {
         match c {
             '"' => {
@@ -342,18 +414,30 @@ pub fn exec_argv(exec: &str) -> Option<Vec<String>> {
             }
             c if c.is_whitespace() && !quoted => {
                 if started {
-                    args.push(std::mem::take(&mut current));
+                    words.push(finish(&mut current, &mut inside));
                     started = false;
                 }
             }
-            // Field codes expand to nothing, and an argument that was only
-            // a field code is dropped rather than passed empty.
-            '%' => {
-                if chars.next() == Some('%') {
+            '%' => match chars.next() {
+                Some('%') => {
                     current.push('%');
                     started = true;
                 }
-            }
+                // A code standing alone is where the files go, as is the
+                // first inside other text; any other expands to nothing, and
+                // an argument that was only codes is dropped rather than
+                // passed empty.
+                Some(code)
+                    if !started && !quoted && chars.peek().is_none_or(|n| n.is_whitespace()) =>
+                {
+                    words.push(Word::Code(code));
+                }
+                Some(code) if inside.is_none() && "fFuU".contains(code) => {
+                    inside = Some((current.len(), code));
+                    started = true;
+                }
+                _ => {}
+            },
             c => {
                 current.push(c);
                 started = true;
@@ -361,14 +445,14 @@ pub fn exec_argv(exec: &str) -> Option<Vec<String>> {
         }
     }
     if started {
-        args.push(current);
+        words.push(finish(&mut current, &mut inside));
     }
-    (!args.is_empty()).then_some(args)
+    words
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Entry, Environment, applications, exec_argv, locale_keys};
+    use super::{Entry, Environment, applications, exec_argv, exec_with, locale_keys};
 
     fn env() -> Environment {
         Environment {
@@ -439,6 +523,30 @@ mod tests {
         let args = exec_argv(exec).unwrap();
         assert_eq!(args[0], "/usr/bin/flatpak");
         assert_eq!(args.last().unwrap(), "@@");
+    }
+
+    #[test]
+    fn files_and_urls_go_where_the_field_codes_say() {
+        let two = ["a b.txt".to_owned(), "c.txt".to_owned()];
+        assert_eq!(
+            exec_with("librewolf %u", &two[..1]),
+            [["librewolf", "a b.txt"]]
+        );
+        assert_eq!(
+            exec_with("squint %f", &two),
+            [["squint", "a b.txt"], ["squint", "c.txt"]]
+        );
+        assert_eq!(
+            exec_with("viewer --x %F", &two),
+            [["viewer", "--x", "a b.txt", "c.txt"]]
+        );
+        assert_eq!(exec_with("plain", &two), [["plain", "a b.txt", "c.txt"]]);
+        assert_eq!(exec_with("librewolf %u", &[]), [["librewolf"]]);
+        assert_eq!(
+            exec_with("app --file=%f", &two[..1]),
+            [["app", "--file=a b.txt"]]
+        );
+        assert_eq!(exec_with("app --file=%f", &[]), [["app", "--file="]]);
     }
 
     #[test]

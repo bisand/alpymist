@@ -220,10 +220,6 @@ package() {
 	# file.
 	install -Dm644 "$builddir"/desktop/hypr/hyprland-security.conf \
 		"$pkgdir"/usr/share/alpymist/hyprland-security.conf
-	# Text files open in squint: XDG reads hyprland-mimeapps.list when
-	# XDG_CURRENT_DESKTOP is Hyprland, which it always is.
-	install -Dm644 "$builddir"/desktop/hypr/hyprland-mimeapps.list \
-		"$pkgdir"/etc/xdg/hyprland-mimeapps.list
 	_skel common "$pkgdir"
 	_skel wayland "$pkgdir"
 	_skel full "$pkgdir"

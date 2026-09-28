@@ -26,7 +26,6 @@ use crate::io_error;
 use crate::model::{Applies, Choice, Kind, Scope, Setting, Value};
 use alpymist_core::desktop_entry::{self, Entry, Environment};
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 /// Where packages put what starts at login.
@@ -84,12 +83,16 @@ impl Program {
         format!("startup.{}", stem(&self.file))
     }
 
-    /// What to run, with a terminal in front when it wants one.
+    /// What to run, in the terminal chosen in Settings › Default
+    /// applications when it wants one.
     #[must_use]
     pub fn argv(&self) -> Option<Vec<String>> {
-        let mut argv = self.entry.argv()?;
+        let argv = self.entry.argv()?;
         if self.entry.yes("Terminal") {
-            argv.insert(0, "foot".into());
+            return Some(alpymist_core::defaults::terminal_argv(
+                &alpymist_core::defaults::Places::current(),
+                &argv,
+            ));
         }
         Some(argv)
     }
@@ -429,46 +432,14 @@ fn write(path: &Path, text: &str) -> Result<(), String> {
     std::fs::write(path, text).map_err(|e| io_error(path, &e))
 }
 
-/// `text` with `key` in its main group set to `value`, or taken out with
-/// `None`. A key set that was not there goes straight under the group's
-/// heading. Every other line is left exactly as it was.
+/// `text` with `key` in its main group set to `value`, or taken out.
 fn with_key(text: &str, key: &str, value: Option<&str>) -> String {
-    let mut out = String::with_capacity(text.len() + key.len() + 8);
-    let mut in_entry = false;
-    let mut done = false;
-    for line in text.split_inclusive('\n') {
-        let trimmed = line.trim();
-        if trimmed.starts_with('[') {
-            in_entry = trimmed == "[Desktop Entry]";
-            out.push_str(line);
-            if in_entry
-                && !done
-                && let Some(v) = value
-            {
-                if !line.ends_with('\n') {
-                    out.push('\n');
-                }
-                // Put first, and any line that set it before is dropped below.
-                let _ = writeln!(out, "{key}={v}");
-                done = true;
-            }
-            continue;
-        }
-        if in_entry
-            && trimmed
-                .split_once('=')
-                .is_some_and(|(k, _)| k.trim() == key)
-        {
-            continue;
-        }
-        out.push_str(line);
-    }
-    out
+    crate::ini::with_key(text, "Desktop Entry", key, value)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ACCOUNT, ADD, REMOVE, SYSTEM, programs_for, set_in, settings_for, with_key};
+    use super::{ACCOUNT, ADD, REMOVE, SYSTEM, programs_for, set_in, settings_for};
     use crate::env::Env;
     use crate::model::{Kind, Value};
     use alpymist_core::desktop_entry::Environment;
@@ -655,18 +626,5 @@ mod tests {
         assert!(!copy.exists());
         assert_eq!(ids(&env, &dirs), ["startup.nm-applet", ADD]);
         std::fs::remove_dir_all(d).ok();
-    }
-
-    #[test]
-    fn a_key_is_set_in_the_main_group_only() {
-        let text = "# hi\n[Desktop Entry]\nName=X\nHidden=false\n[Desktop Action a]\nHidden=keep\n";
-        assert_eq!(
-            with_key(text, "Hidden", Some("true")),
-            "# hi\n[Desktop Entry]\nHidden=true\nName=X\n[Desktop Action a]\nHidden=keep\n"
-        );
-        assert_eq!(
-            with_key(text, "Hidden", None),
-            "# hi\n[Desktop Entry]\nName=X\n[Desktop Action a]\nHidden=keep\n"
-        );
     }
 }

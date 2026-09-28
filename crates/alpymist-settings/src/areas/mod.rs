@@ -3,6 +3,7 @@
 pub mod appearance;
 pub mod bluetooth;
 pub mod datetime;
+pub mod default_apps;
 pub mod input;
 pub mod keyboard;
 pub mod language;
@@ -116,6 +117,20 @@ pub const AREAS: &[Area] = &[
         keywords: &["mako", "popups", "alerts", "dnd", "do not disturb"],
     },
     Area {
+        id: "default",
+        title: "Default applications",
+        description: "Which application opens links, files and folders, and which terminal runs commands",
+        icon: "\u{f003b}",
+        keywords: &[
+            "default",
+            "browser",
+            "open with",
+            "mime",
+            "file associations",
+            "terminal",
+        ],
+    },
+    Area {
         id: "startup",
         title: "Startup",
         description: "The programs that start when you log in",
@@ -205,6 +220,7 @@ pub fn all() -> Vec<Setting> {
         ssh::settings(),
         power::settings(),
         notifications::settings(),
+        default_apps::settings(),
         startup::settings(),
         screensaver::settings(),
         datetime::settings(),
@@ -228,6 +244,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "ssh" => Ok(ssh::get(env)),
         "power" => power::get(env, s),
         "notifications" => notifications::get(env, s),
+        "default" => default_apps::get(env, s),
         "startup" => startup::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
         "datetime" => datetime::get(env, s),
@@ -257,6 +274,7 @@ pub fn set(
         "ssh" => ssh::set(env, value),
         "power" => none(power::set(env, s, value)),
         "notifications" => notifications::set(env, s, value, force),
+        "default" => none(default_apps::set(env, s, value)),
         "startup" => none(startup::set(env, s, value)),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
         "datetime" => none(datetime::set(env, s, value, force)),

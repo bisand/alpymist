@@ -8,6 +8,7 @@
 mod autostart;
 mod channel;
 mod firmware;
+mod launch;
 mod root;
 mod settings;
 
@@ -108,6 +109,20 @@ enum Command {
     /// Each desktop runs this at login, and Settings after a change;
     /// `alpymist set appearance.wallpaper` chooses the picture.
     Wallpaper,
+    /// Open things with the application chosen for them in Settings ›
+    /// Default applications: `alpymist open browser https://…`, `alpymist
+    /// open terminal -- htop`, or a category alone to start its application.
+    Open {
+        /// Print the command lines, and start nothing.
+        #[arg(long)]
+        print: bool,
+        /// browser, mail, files, editor, terminal, images, pdf, video, music,
+        /// archives or calendar.
+        category: String,
+        /// Files or URLs to open; for the terminal, a command to run in it.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Start the programs that start at login, as Settings › Startup has
     /// them. Hyprland runs this once it is up.
     Autostart {
@@ -163,6 +178,16 @@ fn main() -> std::process::ExitCode {
 }
 
 fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
+    // Before the registry is made: this is on every key that opens the
+    // browser or a terminal, and needs none of it.
+    if let Command::Open {
+        print,
+        category,
+        args,
+    } = &cli.command
+    {
+        return open(category, args, *print);
+    }
     let env = Env::detect();
     let all = Settings::new();
     match &cli.command {
@@ -191,6 +216,7 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Probe { format } => Ok(probe(*format)?),
         Command::Session { desktop, args } => session(&all, &env, *desktop, args),
         Command::Wallpaper => Ok(alpymist_settings::wallpaper::show(&env)?),
+        Command::Open { .. } => unreachable!("opened above"),
         Command::Autostart { dry_run } => {
             autostart::run(&env, *dry_run);
             Ok(())
@@ -206,6 +232,18 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
     }
+}
+
+/// Start what a category's default application makes of `args`.
+fn open(category: &str, args: &[String], print: bool) -> Result<(), Box<dyn std::error::Error>> {
+    for argv in alpymist_settings::default_apps::open(category, args)? {
+        if print {
+            println!("{}", argv.join(" "));
+            continue;
+        }
+        launch::spawn(&argv).map_err(|e| format!("{}: {e}", argv[0]))?;
+    }
+    Ok(())
 }
 
 /// Prepare what the compositor reads, then become it. Whatever goes wrong

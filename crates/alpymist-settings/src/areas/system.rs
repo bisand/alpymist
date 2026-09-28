@@ -152,19 +152,23 @@ fn administrator(env: &Env, on: bool) -> Result<(), String> {
 }
 
 /// Open a terminal for `passwd`, and leave it: it asks, and it says whether
-/// it worked, before the window goes.
+/// it worked, before the window goes. The terminal is the one chosen in
+/// Settings › Default applications.
 fn change_password() -> Result<(), String> {
-    std::process::Command::new("foot")
-        .args([
-            "--title",
-            "Change password",
-            "sh",
-            "-c",
-            "passwd; printf '\\nPress Enter to close. '; read -r _",
-        ])
+    let command = [
+        "sh".to_owned(),
+        "-c".to_owned(),
+        "passwd; printf '\\nPress Enter to close. '; read -r _".to_owned(),
+    ];
+    let argv = alpymist_core::defaults::terminal_argv(
+        &alpymist_core::defaults::Places::current(),
+        &command,
+    );
+    std::process::Command::new(&argv[0])
+        .args(&argv[1..])
         .spawn()
         .map(drop)
-        .map_err(|e| format!("foot: {e}"))
+        .map_err(|e| format!("{}: {e}", argv[0]))
 }
 
 /// The name in `/etc/hostname`.

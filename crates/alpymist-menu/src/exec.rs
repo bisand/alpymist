@@ -102,17 +102,18 @@ impl Launch {
 
 /// How to run a command in a terminal, when the configuration does not say.
 ///
-/// `$TERMINAL` if set, otherwise foot, the terminal on every Wayland tier.
-/// foot takes the command as its trailing arguments. Anything else in
-/// `$TERMINAL` is assumed to follow the xterm convention of `-e`, which almost
-/// all do.
+/// `$TERMINAL` if set, otherwise the terminal chosen in Settings › Default
+/// applications, which is foot until another is. foot takes the command as
+/// its trailing arguments. Anything else in `$TERMINAL` is assumed to follow
+/// the xterm convention of `-e`, which almost all do.
 #[must_use]
 pub fn default_terminal() -> Vec<String> {
-    let chosen = std::env::var("TERMINAL")
-        .ok()
-        .filter(|t| !t.is_empty())
-        .unwrap_or_else(|| "foot".into());
-    terminal_for(&chosen)
+    match std::env::var("TERMINAL").ok().filter(|t| !t.is_empty()) {
+        Some(chosen) => terminal_for(&chosen),
+        None => {
+            alpymist_core::defaults::terminal_prefix(&alpymist_core::defaults::Places::current())
+        }
+    }
 }
 
 /// The argument prefix for a named terminal.

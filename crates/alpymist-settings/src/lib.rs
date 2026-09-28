@@ -24,12 +24,13 @@
 mod areas;
 pub mod env;
 pub mod generated;
+mod ini;
 pub mod menu;
 pub mod model;
 mod service;
 pub mod values;
 
-pub use areas::{startup, wallpaper};
+pub use areas::{default_apps, startup, wallpaper};
 pub use env::Env;
 pub use model::{Applies, Area, Choice, Kind, Scope, Setting, TextRule, Value};
 
