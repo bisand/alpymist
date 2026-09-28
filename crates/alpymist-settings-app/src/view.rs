@@ -96,6 +96,8 @@ pub enum Msg {
     Wallpaper(usize),
     /// Enter in the search field.
     Submit,
+    /// Enter in a text setting's field: the setting's index.
+    SubmitText(usize),
 }
 
 /// Something only the window can do.
@@ -522,6 +524,7 @@ impl View {
                 }
                 InputEvent::Text { ch }
                     if self.ui.focused() != Some(self.search)
+                        && self.text_row().is_none()
                         && !self.ui.popup_open()
                         && self.dialog.is_none() =>
                 {
@@ -549,6 +552,16 @@ impl View {
     fn key(&mut self, code: KeyCode, modifiers: Modifiers) -> Option<Effect> {
         let ctrl = modifiers.contains(Modifiers::CTRL);
         match code {
+            // Leaving a field unsubmitted leaves the setting as it was.
+            KeyCode::Escape if let Some(row) = self.text_row() => {
+                let shown = self.rows[row].shown.clone();
+                let control = self.rows[row].control;
+                if let Some(field) = self.ui.widget_mut::<TextInput<Msg>>(control) {
+                    field.set_text(shown.as_ref().and_then(Value::as_text).unwrap_or_default());
+                }
+                self.ui.focus(Some(self.areas));
+                None
+            }
             KeyCode::Escape if self.dialog.is_some() => {
                 self.close_dialog();
                 None
@@ -591,6 +604,37 @@ impl View {
         }
     }
 
+    /// Enter in a text setting's field: set what it says, if the setting
+    /// takes it and it changed, or say why not.
+    fn submit_text(&mut self, index: usize, effects: &mut Vec<Effect>) {
+        let Some(row) = self.rows.iter().position(|r| r.setting == index) else {
+            return;
+        };
+        let setting = &self.settings.all()[index];
+        let text = self
+            .ui
+            .widget::<TextInput<Msg>>(self.rows[row].control)
+            .map(|f| f.text().to_owned())
+            .unwrap_or_default();
+        match setting.parse(&text) {
+            Err(e) => self.toast(&e, true),
+            Ok(value) if self.rows[row].shown.as_ref() != Some(&value) => {
+                let id = setting.id;
+                self.rows[row].shown = Some(value.clone());
+                effects.push(Effect::Set { id, value });
+            }
+            Ok(_) => {}
+        }
+    }
+
+    /// The row whose text field has focus, if one has.
+    fn text_row(&self) -> Option<usize> {
+        let focused = self.ui.focused()?;
+        self.rows.iter().position(|r| {
+            r.control == focused && matches!(self.settings.all()[r.setting].kind, Kind::Text { .. })
+        })
+    }
+
     fn focus_page(&mut self) {
         let first = self.rows.first().map(|r| r.control);
         self.ui.focus(first.or(Some(self.areas)));
@@ -626,6 +670,7 @@ impl View {
                 }
             }
             Msg::Submit => self.focus_page(),
+            Msg::SubmitText(index) => self.submit_text(index, effects),
             Msg::Do(index) => {
                 if let Some(setting) = self.settings.all().get(index) {
                     // Nothing to read back off a button: what it is worth is
@@ -700,9 +745,10 @@ impl View {
                     let n = Value::Number(sl.value().round() as i64);
                     (!sl.dragging()).then_some(n)
                 }),
-                // A button holds nothing to read back, and a choice answers
-                // through its own list rather than here.
-                Kind::Action { .. } | Kind::Choice(_) => None,
+                // A button holds nothing to read back, a choice answers
+                // through its own list and a field when Enter is pressed in
+                // it, rather than here.
+                Kind::Action { .. } | Kind::Choice(_) | Kind::Text { .. } => None,
             };
             // While a slider is dragged, only its number follows.
             if let Kind::Number { .. } = setting.kind
@@ -1225,7 +1271,7 @@ impl View {
         let control_w = match setting.kind {
             Kind::Switch => TOGGLE_W,
             Kind::Number { .. } => SLIDER_W + VALUE_W,
-            Kind::Choice(_) => SELECT_W,
+            Kind::Choice(_) | Kind::Text { .. } => SELECT_W,
             Kind::Action { .. } => BUTTON_W,
         } * s;
         let text_w = width - control_w - 3 * PAD * s;
@@ -1322,6 +1368,20 @@ impl View {
                     CONTROL_H * s,
                 );
                 (self.ui.add(card, button, r), None)
+            }
+            Kind::Text { max, .. } => {
+                let mut field = TextInput::new()
+                    .with_max_chars(*max)
+                    .with_submit(Msg::SubmitText(index))
+                    .with_style(self.style(self.text, 15));
+                field.set_text(shown.as_ref().and_then(Value::as_text).unwrap_or_default());
+                let r = Rect::new(
+                    right - SELECT_W * s,
+                    middle - CONTROL_H * s / 2,
+                    SELECT_W * s,
+                    CONTROL_H * s,
+                );
+                (self.ui.add(card, field, r), None)
             }
             Kind::Choice(choices) => {
                 let selected = shown
@@ -1460,6 +1520,11 @@ impl View {
             }
             // A button says the same thing however often it is pressed.
             Kind::Action { .. } => {}
+            Kind::Text { .. } => {
+                if let Some(field) = self.ui.widget_mut::<TextInput<Msg>>(control) {
+                    field.set_text(value.as_text().unwrap_or_default());
+                }
+            }
             Kind::Choice(choices) => {
                 let i = value
                     .as_text()
@@ -1597,6 +1662,45 @@ mod tests {
         events.insert(1, InputEvent::Text { ch: ' ' });
         let effects = v.handle(&events, 1010);
         assert_eq!(effects.len(), 1, "{effects:?}");
+    }
+
+    #[test]
+    fn a_text_field_keeps_its_typing_and_sets_on_enter() {
+        let mut v = view();
+        assert!(v.open("system.hostname"));
+        v.resize(Size::new(1260, 754), 1);
+        assert!(v.text_row().is_some(), "{}", v.trace());
+        // Focus selects what is there, so typing replaces it.
+        let typed: Vec<InputEvent> = "x1".chars().map(|ch| InputEvent::Text { ch }).collect();
+        let _ = v.handle(&typed, 10);
+        assert!(v.query.is_empty(), "typing went to the search: {}", v.query);
+        let effects = v.handle(&key(KeyCode::Enter), 20);
+        assert_eq!(
+            effects,
+            [Effect::Set {
+                id: "system.hostname",
+                value: Value::Text("x1".into())
+            }]
+        );
+
+        // A name it does not take is said, and not set.
+        let typed: Vec<InputEvent> = " x".chars().map(|ch| InputEvent::Text { ch }).collect();
+        let _ = v.handle(&typed, 30);
+        assert!(v.handle(&key(KeyCode::Enter), 40).is_empty());
+
+        // Escape puts back what it was.
+        let _ = v.handle(&key(KeyCode::Escape), 50);
+        let row = v
+            .rows
+            .iter()
+            .find(|r| v.settings.all()[r.setting].id == "system.hostname")
+            .unwrap();
+        assert_eq!(
+            v.ui.widget::<super::TextInput<super::Msg>>(row.control)
+                .unwrap()
+                .text(),
+            "x1"
+        );
     }
 
     #[test]
