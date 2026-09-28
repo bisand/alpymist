@@ -2,6 +2,7 @@
 
 pub mod appearance;
 pub mod bluetooth;
+pub mod clipboard;
 pub mod datetime;
 pub mod default_apps;
 pub mod input;
@@ -117,6 +118,13 @@ pub const AREAS: &[Area] = &[
         keywords: &["mako", "popups", "alerts", "dnd", "do not disturb"],
     },
     Area {
+        id: "clipboard",
+        title: "Clipboard",
+        description: "Copy and paste on Super+C and Super+V, and a history of what was copied",
+        icon: "\u{f0147}",
+        keywords: &["copy", "paste", "clipboard history", "super+v"],
+    },
+    Area {
         id: "default",
         title: "Default applications",
         description: "Which application opens links, files and folders, and which terminal runs commands",
@@ -220,6 +228,7 @@ pub fn all() -> Vec<Setting> {
         ssh::settings(),
         power::settings(),
         notifications::settings(),
+        clipboard::settings(),
         default_apps::settings(),
         startup::settings(),
         screensaver::settings(),
@@ -244,6 +253,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "ssh" => Ok(ssh::get(env)),
         "power" => power::get(env, s),
         "notifications" => notifications::get(env, s),
+        "clipboard" => Ok(clipboard::get(env, s)),
         "default" => default_apps::get(env, s),
         "startup" => startup::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
@@ -274,6 +284,7 @@ pub fn set(
         "ssh" => ssh::set(env, value),
         "power" => none(power::set(env, s, value)),
         "notifications" => notifications::set(env, s, value, force),
+        "clipboard" => clipboard::set(env, s, value),
         "default" => default_apps::set(env, s, value),
         "startup" => none(startup::set(env, s, value)),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
@@ -295,6 +306,7 @@ pub fn live(env: &Env, s: &Setting, value: &Value) -> Result<(), String> {
         "keyboard" if s.id == "keyboard.layout" => keyboard::live(env, value),
         "keyboard" | "touchpad" | "mouse" => input::live(env, s, value),
         "notifications" => notifications::live(env, s),
+        "clipboard" => clipboard::live(env, s),
         "datetime" => {
             datetime::live(env, s);
             Ok(())

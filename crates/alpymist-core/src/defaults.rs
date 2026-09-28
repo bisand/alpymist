@@ -120,6 +120,34 @@ pub fn is_terminal(entry: &Entry) -> bool {
         .is_some_and(|c| list(c).any(|c| c == "TerminalEmulator"))
 }
 
+/// Whether a window of Hyprland class `class` is a terminal: one of the
+/// installed terminals' entries names it as its `StartupWMClass`, its id
+/// (`foot`, or the last part of `org.wezfurlong.wezterm`), or its program.
+#[must_use]
+pub fn is_terminal_window(class: &str, apps: &[Found]) -> bool {
+    let class = class.to_lowercase();
+    if class.is_empty() {
+        return false;
+    }
+    apps.iter().filter(|f| is_terminal(&f.entry)).any(|f| {
+        let id =
+            f.id.strip_suffix(".desktop")
+                .unwrap_or(&f.id)
+                .to_lowercase();
+        let program = f.entry.argv().and_then(|argv| {
+            Path::new(&argv[0])
+                .file_name()
+                .map(|n| n.to_string_lossy().to_lowercase())
+        });
+        f.entry
+            .raw("StartupWMClass")
+            .is_some_and(|c| c.to_lowercase() == class)
+            || id == class
+            || id.rsplit('.').next() == Some(class.as_str())
+            || program.as_deref() == Some(class.as_str())
+    })
+}
+
 /// The desktop entry ids `files` name as the default for `mime`, in order.
 #[must_use]
 pub fn listed(files: &[PathBuf], mime: &str) -> Vec<String> {
@@ -350,6 +378,17 @@ mod tests {
             ["missing.desktop", "kitty.desktop"]
         );
         assert_eq!(pick().as_deref(), Some("kitty.desktop"));
+        std::fs::remove_dir_all(d).ok();
+    }
+
+    #[test]
+    fn a_terminal_window_is_known_by_its_entry() {
+        let (d, places) = places("window");
+        let apps = places.applications();
+        assert!(super::is_terminal_window("foot", &apps));
+        assert!(super::is_terminal_window("kitty", &apps));
+        assert!(!super::is_terminal_window("librewolf", &apps));
+        assert!(!super::is_terminal_window("", &apps));
         std::fs::remove_dir_all(d).ok();
     }
 

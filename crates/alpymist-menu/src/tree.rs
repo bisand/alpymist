@@ -25,6 +25,16 @@ pub enum Action {
     Run(Launch),
 }
 
+/// Something else an entry can have done to it without closing the menu:
+/// the clipboard picker's pin and forget.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Alternate {
+    /// Ctrl+S: pin it, or unpin it.
+    Pin,
+    /// Delete: forget it.
+    Forget,
+}
+
 /// One row of a menu.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
@@ -40,6 +50,9 @@ pub struct Entry {
     pub action: Action,
     /// Identifies it in launch history across restarts.
     pub key: String,
+    /// What its other keys run. The menu stays open, and the entries are
+    /// read again afterwards.
+    pub alternates: Vec<(Alternate, Launch)>,
 }
 
 /// One submenu.
@@ -98,6 +111,7 @@ impl Tree {
                     detail: app.detail,
                     keywords: app.keywords,
                     action: Action::Run(app.launch),
+                    alternates: Vec::new(),
                 };
                 tree.push(id, entry);
             }
@@ -126,6 +140,7 @@ impl Tree {
                     detail: item.detail.clone(),
                     keywords: item.keywords.clone(),
                     action,
+                    alternates: Vec::new(),
                 };
                 tree.push(id, entry);
             }
@@ -148,6 +163,21 @@ impl Tree {
     fn push(&mut self, menu: MenuId, entry: Entry) {
         self.menus[menu].entries.push(self.entries.len());
         self.entries.push(entry);
+    }
+
+    /// Add a menu of entries made elsewhere — the clipboard's — or replace
+    /// the entries of the one there is. Returns it.
+    pub fn graft(&mut self, name: &str, title: &str, entries: Vec<Entry>) -> MenuId {
+        let id = self
+            .find(name)
+            .unwrap_or_else(|| self.add_menu(name, title.to_owned()));
+        // The old entries stay in the arena, unreachable: a picker is open
+        // for seconds, and holds a few dozen.
+        self.menus[id].entries.clear();
+        for entry in entries {
+            self.push(id, entry);
+        }
+        id
     }
 
     /// A menu by its configuration name.

@@ -72,6 +72,26 @@ impl Launch {
         }
     }
 
+    /// Run it and wait, for something quick the menu stays open across.
+    ///
+    /// # Errors
+    /// It could not be started, or said it failed.
+    pub fn run(&self) -> Result<(), String> {
+        let argv = self.argv(&[]);
+        let (program, rest) = argv.split_first().ok_or("nothing to run")?;
+        let status = Command::new(program)
+            .args(rest)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .status()
+            .map_err(|e| format!("{program}: {e}"))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("{program} failed ({status})"))
+        }
+    }
+
     /// Start it, and do not wait.
     ///
     /// # Errors

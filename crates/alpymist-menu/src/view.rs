@@ -458,7 +458,11 @@ pub fn paint(
         } else {
             "close"
         };
-        let hints = format!("↑↓ move    enter open    esc {back}");
+        let hints = if menu.is_clipboard() {
+            format!("↑↓ move    enter paste    ctrl+s pin    del forget    esc {back}")
+        } else {
+            format!("↑↓ move    enter open    esc {back}")
+        };
         engine.draw(&mut clip, small, Point::new(foot.x, top), &hints, dim);
         if !menu.query().is_empty() {
             let count = format!("{} of {}", total.min(9999), menu_size(menu));

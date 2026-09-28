@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 pub mod apps;
+pub mod clip;
 pub mod config;
 pub mod exec;
 pub mod fuzzy;

@@ -14,7 +14,7 @@
 
 use alpymist_menu::config::Appearance;
 use alpymist_menu::menu::{Key, Menu, Outcome};
-use alpymist_menu::tree::EntryId;
+use alpymist_menu::tree::{Alternate, EntryId};
 use alpymist_menu::view::{self, Fonts, Layout};
 use denise::geom::Point;
 use denise::{BufferAge, Frame, PixelFormat};
@@ -313,6 +313,12 @@ impl Host {
                 self.chosen = Some(entry);
                 self.exit = true;
             }
+            Outcome::Alternate(entry, which) => {
+                if let Some(menu) = self.menu.as_mut() {
+                    menu.perform(entry, which);
+                }
+                self.draw();
+            }
             Outcome::Close => self.exit = true,
         }
     }
@@ -339,6 +345,8 @@ impl Host {
             Keysym::k | Keysym::p if ctrl => Some(Key::Up),
             Keysym::j | Keysym::n if ctrl => Some(Key::Down),
             Keysym::c | Keysym::g if ctrl => Some(Key::Escape),
+            Keysym::s if ctrl => Some(Key::Alternate(Alternate::Pin)),
+            Keysym::Delete | Keysym::KP_Delete => Some(Key::Alternate(Alternate::Forget)),
             _ => None,
         };
         if let Some(key) = key {

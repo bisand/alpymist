@@ -1,0 +1,18 @@
+[package]
+name = "alpymist-clipboard"
+description = "Alpymist's clipboard: copy and paste on Super+C and Super+V in any window, and a history kept only when asked for."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Which windows are terminals, from their desktop entries.
+alpymist-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { version = "0.9", default-features = false, features = ["parse", "display", "serde", "std"] }
+
+[lints]
+workspace = true

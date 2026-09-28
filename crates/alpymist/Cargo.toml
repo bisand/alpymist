@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+alpymist-clipboard = { workspace = true }
 alpymist-core = { workspace = true }
 alpymist-hwprobe = { workspace = true }
 alpymist-settings = { workspace = true }

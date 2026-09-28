@@ -41,6 +41,7 @@ dependencies = [
 name = "alpymist"
 version = "0.2.0"
 dependencies = [
+ "alpymist-clipboard",
  "alpymist-core",
  "alpymist-hwprobe",
  "alpymist-settings",
@@ -75,6 +76,16 @@ dependencies = [
  "serde_json",
  "zbus",
  "zeroize",
+]
+
+[[package]]
+name = "alpymist-clipboard"
+version = "0.2.0"
+dependencies = [
+ "alpymist-core",
+ "serde",
+ "serde_json",
+ "toml",
 ]
 
 [[package]]
@@ -158,6 +169,7 @@ dependencies = [
 name = "alpymist-menu"
 version = "0.2.0"
 dependencies = [
+ "alpymist-clipboard",
  "alpymist-core",
  "alpymist-theme",
  "bytemuck",
@@ -222,6 +234,7 @@ dependencies = [
 name = "alpymist-settings"
 version = "0.2.0"
 dependencies = [
+ "alpymist-clipboard",
  "alpymist-core",
  "alpymist-power",
  "alpymist-screensaver",
