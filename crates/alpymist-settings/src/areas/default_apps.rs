@@ -15,12 +15,21 @@
 //!
 //! The terminal has no type. It is chosen in `~/.config/xdg-terminals.list`,
 //! as `xdg-terminal-exec` reads it, and `alpymist open terminal` runs it.
+//!
+//! Super+B and Super+Return run `$browser` and `$terminal` from the account's
+//! own `hyprland.conf`, which named `librewolf` and `foot` outright until new
+//! accounts were given `alpymist open`. The first time an older account
+//! changes its browser or terminal here, that one line is changed to
+//! `alpymist open …` if it is still as every account started with it, the
+//! file kept as it was beside it, and Hyprland reloaded, as the theme does
+//! with its lines (ADR 0007). A line of the account's own is left alone.
 
 use crate::env::Env;
 use crate::io_error;
 use crate::model::{Applies, Choice, Kind, Scope, Setting, Value};
 use alpymist_core::defaults::{self, Places};
 use alpymist_core::desktop_entry::{self, Environment, Found};
+use std::fmt::Write as _;
 use std::path::Path;
 
 /// The group of `mimeapps.list` that says what opens what.
@@ -29,6 +38,16 @@ const GROUP: &str = "Default Applications";
 const MIMEAPPS: &str = "mimeapps.list";
 /// The account's terminal list.
 const TERMINALS: &str = "xdg-terminals.list";
+/// The account's Hyprland configuration.
+const HYPRLAND: &str = "hypr/hyprland.conf";
+/// What `hyprland.conf` is kept beside it as, before a key is changed.
+pub const KEPT: &str = ".bak-defaults";
+/// The variables Hyprland's keys run, what every account was given at first,
+/// and the category each follows once changed.
+const KEYS: &[(&str, &str, &str)] = &[
+    ("$browser", "librewolf", "browser"),
+    ("$terminal", "foot", "terminal"),
+];
 
 /// A kind of thing to open.
 #[derive(Debug)]
@@ -370,8 +389,68 @@ fn get_in(places: &Places, s: &Setting) -> Result<Value, String> {
 /// # Errors
 /// Not a category, not an application that opens it, or the list could not
 /// be written.
-pub fn set(env: &Env, s: &Setting, value: Option<&Value>) -> Result<(), String> {
-    set_in(env, &places(env), &here(), s, value)
+pub fn set(env: &Env, s: &Setting, value: Option<&Value>) -> Result<Vec<String>, String> {
+    set_in(env, &places(env), &here(), s, value)?;
+    Ok(category(s.id)
+        .map(|c| take_over(env, c))
+        .unwrap_or_default())
+}
+
+/// Make the account's key for a category follow the choice, if its
+/// `hyprland.conf` still names what every account started with. Says what it
+/// did.
+fn take_over(env: &Env, c: &Category) -> Vec<String> {
+    let Some(&(variable, shipped, _)) = KEYS.iter().find(|(_, _, id)| *id == c.id) else {
+        return Vec::new();
+    };
+    let path = env.account(HYPRLAND);
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    let Some(new) = follow(&text, variable, shipped, c.id) else {
+        return Vec::new();
+    };
+    let kept = crate::generated::beside(&path, KEPT);
+    if std::fs::write(&kept, &text).is_err() || crate::generated::replace(&path, &new).is_err() {
+        return Vec::new();
+    }
+    // The key's command is read when the file is: without this, the old
+    // one stays until the next login.
+    if env.hyprland {
+        let _ = env.run(&["hyprctl", "reload"]);
+    }
+    vec![format!(
+        "{} now follows this choice ({} as it was).",
+        if c.id == "browser" {
+            "Super+B"
+        } else {
+            "Super+Return"
+        },
+        kept.display()
+    )]
+}
+
+/// `hyprland.conf` with `variable = shipped` made `variable = alpymist open
+/// category`, or `None` when no line says exactly that.
+fn follow(conf: &str, variable: &str, shipped: &str, category: &str) -> Option<String> {
+    let mut changed = false;
+    let mut out = String::with_capacity(conf.len() + 16);
+    for line in conf.split_inclusive('\n') {
+        let is_shipped = line
+            .trim()
+            .split_once('=')
+            .is_some_and(|(k, v)| k.trim() == variable && v.trim() == shipped);
+        if is_shipped && !changed {
+            let _ = write!(out, "{variable} = alpymist open {category}");
+            if line.ends_with('\n') {
+                out.push('\n');
+            }
+            changed = true;
+        } else {
+            out.push_str(line);
+        }
+    }
+    changed.then_some(out)
 }
 
 fn set_in(
@@ -650,6 +729,38 @@ mod tests {
 
         let nothing = Value::Text("gimp".into());
         assert!(set_in(&env, &places, &here(), browser, Some(&nothing)).is_err());
+        std::fs::remove_dir_all(d).ok();
+    }
+
+    #[test]
+    fn an_older_accounts_keys_follow_its_first_change() {
+        let (d, env, _places) = setup("keys");
+        let conf = env.account("hypr/hyprland.conf");
+        let old = "$terminal = foot\n$browser = librewolf\nbind = SUPER, B, exec, $browser\n";
+        put(&conf, old);
+        let browser = super::category("browser").unwrap();
+        let notes = super::take_over(&env, browser);
+        assert!(notes[0].starts_with("Super+B now follows"), "{notes:?}");
+        assert_eq!(
+            std::fs::read_to_string(&conf).unwrap(),
+            "$terminal = foot\n$browser = alpymist open browser\nbind = SUPER, B, exec, $browser\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(env.account("hypr/hyprland.conf.bak-defaults")).unwrap(),
+            old
+        );
+        assert!(RAN.lock().unwrap().contains(&"hyprctl reload".to_owned()));
+        // Once is enough, and another category leaves the file be.
+        assert!(super::take_over(&env, browser).is_empty());
+        assert!(super::take_over(&env, super::category("pdf").unwrap()).is_empty());
+
+        // A browser of the account's own choosing is its own.
+        put(&conf, "$browser = firefox --private\n");
+        assert!(super::take_over(&env, browser).is_empty());
+        assert_eq!(
+            super::follow("$terminal=foot\n", "$terminal", "foot", "terminal").as_deref(),
+            Some("$terminal = alpymist open terminal\n")
+        );
         std::fs::remove_dir_all(d).ok();
     }
 

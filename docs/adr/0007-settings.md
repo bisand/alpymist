@@ -273,3 +273,13 @@ Accounts made before this still name `foot` and `librewolf` in their own
 `hyprland.conf`, for Super+Return and Super+B. That file is theirs, and is not
 changed; `$terminal = alpymist open terminal` and `$browser = alpymist open
 browser` there make the keys follow the choice.
+
+*2026-09-28, later:* choosing Vivaldi on the dev VM left Super+B opening
+LibreWolf, which is what the paragraph above allows and nobody would expect.
+So the theme's rule now applies here too. The first time an account changes
+its browser or terminal in Settings, `$browser = librewolf` or `$terminal =
+foot` in its `hyprland.conf`, if still exactly that, becomes `alpymist open
+browser` or `alpymist open terminal`. The file is kept as it was beside it as
+`hyprland.conf.bak-defaults`, Hyprland is reloaded so the key follows at
+once, and a note says so. A line of the account's own is left alone, and
+nothing happens on an upgrade.
