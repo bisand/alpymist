@@ -65,7 +65,8 @@ pub fn settings() -> Vec<Setting> {
     ]
 }
 
-fn load(env: &Env) -> ThemeFile {
+/// The account's theme, or the system's, or the default.
+pub fn load(env: &Env) -> ThemeFile {
     alpymist_theme::load_from(&[env.account(ACCOUNT), env.system(SYSTEM)]).file
 }
 
@@ -79,8 +80,10 @@ pub fn get(env: &Env, setting: &Setting) -> Value {
     }
 }
 
-/// Change the account's theme file. The rest of it is kept.
-pub fn set(env: &Env, setting: &Setting, value: Option<&Value>) -> Result<(), String> {
+/// Change the account's theme file. The rest of it is kept. A new scheme or
+/// accent goes on to the bar, the terminal, Hyprland and GTK; says what of
+/// that could not be done, and what of the account's own it changed.
+pub fn set(env: &Env, setting: &Setting, value: Option<&Value>) -> Result<Vec<String>, String> {
     let mut theme = load(env);
     let value = value.unwrap_or(&setting.default);
     match setting.id {
@@ -92,5 +95,22 @@ pub fn set(env: &Env, setting: &Setting, value: Option<&Value>) -> Result<(), St
                 .clamp(FONT_SIZES.0, FONT_SIZES.1);
         }
     }
-    alpymist_theme::save(&theme, &env.account(ACCOUNT))
+    alpymist_theme::save(&theme, &env.account(ACCOUNT))?;
+    if setting.id == "appearance.text-size" {
+        return Ok(Vec::new());
+    }
+    let mut notes = super::themed::write(env, &theme);
+    let values = crate::values::Values::load(&env.account(super::input::VALUES))?;
+    if let Err(e) = super::input::write_conf(env, &values, false) {
+        notes.push(e);
+    }
+    notes.extend(super::themed::take_over(env));
+    Ok(notes)
+}
+
+/// Show a new scheme or accent in the running session.
+pub fn live(env: &Env, setting: &Setting) {
+    if setting.id != "appearance.text-size" {
+        super::themed::live(env, &load(env));
+    }
 }

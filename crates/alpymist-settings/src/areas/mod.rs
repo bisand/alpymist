@@ -12,6 +12,7 @@ pub mod screensaver;
 pub mod sound;
 pub mod ssh;
 pub mod system;
+pub mod themed;
 pub mod updates;
 pub mod wallpaper;
 pub mod wifi;
@@ -236,7 +237,7 @@ pub fn set(
     let none = |r: Result<(), String>| r.map(|()| Vec::new());
     match s.area() {
         "appearance" if s.id == wallpaper::ID => wallpaper::set(env, s, value),
-        "appearance" => none(appearance::set(env, s, value)),
+        "appearance" => appearance::set(env, s, value),
         "keyboard" if s.id == "keyboard.layout" => keyboard::set(env, s, value, force),
         "language" => language::set(env, s, value),
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
@@ -258,6 +259,10 @@ pub fn set(
 pub fn live(env: &Env, s: &Setting, value: &Value) -> Result<(), String> {
     match s.area() {
         "appearance" if s.id == wallpaper::ID => wallpaper::live(env),
+        "appearance" => {
+            appearance::live(env, s);
+            Ok(())
+        }
         "keyboard" if s.id == "keyboard.layout" => keyboard::live(env, value),
         "keyboard" | "touchpad" | "mouse" => input::live(env, s, value),
         "notifications" => notifications::live(env, s),

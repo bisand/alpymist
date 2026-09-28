@@ -30,12 +30,14 @@ fn hash(body: &str) -> u64 {
 }
 
 /// A generated file's whole text: the two header lines, commented with
-/// `comment`, then `body`.
+/// `comment`, then `body`. CSS has only block comments, so with `/*` each
+/// header line closes its own.
 #[must_use]
 pub fn render(comment: &str, source: &str, body: &str) -> String {
+    let close = if comment == "/*" { " */" } else { "" };
     format!(
-        "{comment} Written by alpymist from {source}. Change it with Settings or `alpymist set`;\n\
-         {comment} {HASH} {:016x} (an edit below keeps this file as you leave it)\n{body}",
+        "{comment} Written by alpymist from {source}. Change it with Settings or `alpymist set`;{close}\n\
+         {comment} {HASH} {:016x} (an edit below keeps this file as you leave it){close}\n{body}",
         hash(body)
     )
 }
@@ -100,6 +102,25 @@ pub fn write(
     replace(path, &render(comment, source, body))
 }
 
+/// Where to keep `path` as it was before Alpymist changed it: beside it with
+/// `suffix` after its name, or a number after that if something is there
+/// already, which is never replaced.
+#[must_use]
+pub fn beside(path: &Path, suffix: &str) -> std::path::PathBuf {
+    let named = |n: u32| {
+        let mut name = path.as_os_str().to_owned();
+        name.push(suffix);
+        if n > 1 {
+            name.push(format!("-{n}"));
+        }
+        std::path::PathBuf::from(name)
+    };
+    (1..=u32::MAX)
+        .map(named)
+        .find(|p| !p.exists())
+        .unwrap_or_else(|| named(1))
+}
+
 /// Replace `path` with `text` in one step.
 ///
 /// # Errors
@@ -118,6 +139,18 @@ pub fn replace(path: &Path, text: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{State, classify, render};
+
+    #[test]
+    fn a_css_file_closes_its_header_and_is_still_ours() {
+        let text = super::render("/*", "theme.toml", "@define-color a #000000;\n");
+        assert!(
+            text.lines()
+                .take(2)
+                .all(|l| l.starts_with("/*") && l.ends_with("*/")),
+            "{text}"
+        );
+        assert_eq!(super::classify(&text, "/*", |_| false), super::State::Ours);
+    }
 
     #[test]
     fn a_file_alpymist_wrote_is_ours_until_edited() {

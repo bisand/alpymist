@@ -193,3 +193,44 @@ with `makoctl`, and lasts until it is turned off or the session ends. The mode
 only hides anything because the generated file gives it `invisible=1`. The
 skeleton's file had no such section, so the menu's toggle, which has switched
 that mode since the desktop was first configured, has had nothing to switch.
+
+---
+
+## Addendum, 2026-09-27 — the theme, and the one line of each of three of an account's files
+
+**Status:** accepted · makes an exception to §3, as the wallpaper's addendum does.
+
+§7 says the top bar, foot, mako, Hyprland's borders and GTK's dark preference
+follow the theme "later". They now do, through files of Alpymist's own written
+from the account's `theme.toml`: `~/.config/alpymist/waybar/colours.css`,
+`~/.config/alpymist/foot/theme.ini`, GTK 3's and 4's `settings.ini` where the
+account has none of its own, and the border colours in the Hyprland
+`settings.conf` the input settings already write. GTK's `color-scheme` and
+`accent-color` go through `gsettings`, which libadwaita and Flatpak's apps
+follow at once.
+
+Three of them reach a program only through a file that is the account's:
+waybar's `style.css` has to import the colours, foot's `foot.ini` has to
+include the palettes, and Hyprland's `hyprland.conf` set its own border
+colours after sourcing Alpymist's, so its won. Accounts made from now on have
+the import and the include, and no border colours of Hyprland's own. Accounts
+made before cannot follow the theme without a change to those files.
+
+So the first time an account changes its scheme or accent, each of those files
+that is still in the shape Alpymist gave it gets that one change and nothing
+else: the import after the line that imports Alpymist's style, the include at
+the top of `[main]`, and Hyprland's two border lines taken out only when they
+are still the colours every account started with; colours of the account's
+own are left. The file as it was is kept beside it, as `….bak-theme`, and the
+change is said in a note. It happens only because the person changed their
+theme, never on an upgrade.
+
+waybar and foot both refuse to start when a file they import or include is
+missing: tried on the dev VM, waybar exits on a missing `@import` and foot
+calls a missing include a configuration error. `alpymist session` writes
+every one of these files before the desktop starts, at every login, so a line
+that names one never names nothing.
+
+mako's colours are not here yet. They belong in the mako configuration that
+Settings › Notifications generates, per the addendum above, and come with a
+change of their own.

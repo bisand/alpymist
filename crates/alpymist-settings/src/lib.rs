@@ -225,7 +225,8 @@ impl Settings {
     /// # Errors
     /// A file could not be written.
     pub fn prepare_session(&self, env: &Env) -> Result<(), Error> {
-        // Each is tried whatever became of the other.
+        // Each is tried whatever became of the others.
+        areas::themed::prepare_session(env, &areas::appearance::load(env));
         let input = areas::input::prepare_session(env);
         let notifications = areas::notifications::prepare_session(env);
         input.and(notifications).map_err(Error::Failed)

@@ -235,22 +235,9 @@ fn rewrite(text: &str, launcher: &Launcher) -> Option<String> {
     Some(out)
 }
 
-/// Where to keep `path` as it was: beside it with [`KEPT`] after its name, or
-/// a number after that if something is there already, which is never
-/// replaced.
+/// Where to keep `path` as it was: beside it with [`KEPT`] after its name.
 fn keeping(path: &Path) -> std::path::PathBuf {
-    let named = |n: u32| {
-        let mut name = path.as_os_str().to_owned();
-        name.push(KEPT);
-        if n > 1 {
-            name.push(format!("-{n}"));
-        }
-        std::path::PathBuf::from(name)
-    };
-    (1..=u32::MAX)
-        .map(named)
-        .find(|p| !p.exists())
-        .unwrap_or_else(|| named(1))
+    crate::generated::beside(path, KEPT)
 }
 
 /// Make each of the account's desktops start the wallpaper with `alpymist
