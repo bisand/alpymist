@@ -118,6 +118,7 @@ mod lock {
             writeln!(out, "{READY}").ok();
             out.flush().ok();
             forget_keys();
+            forget_clipboard();
         });
         match host::run(app, covered)? {
             Ending::Unlocked => Ok(()),
@@ -137,6 +138,17 @@ mod lock {
         }
         let _ = Command::new("ssh-add")
             .arg("-D")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+
+    /// Have the clipboard history forget all but pinned entries, if Settings
+    /// › Clipboard says to; with no history kept it does nothing.
+    fn forget_clipboard() {
+        let _ = Command::new("alpymist")
+            .args(["clipboard", "lock"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())

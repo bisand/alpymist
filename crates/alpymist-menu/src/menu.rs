@@ -13,7 +13,7 @@
 
 use crate::fuzzy;
 use crate::history::History;
-use crate::tree::{Action, EntryId, MenuId, Reachable, Tree};
+use crate::tree::{Action, Alternate, EntryId, MenuId, Reachable, Tree};
 
 /// What a keypress means to the menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,6 +44,8 @@ pub enum Key {
     DeleteWord,
     /// Clear the query.
     ClearQuery,
+    /// The selected entry's other action, if it has one: pin or forget.
+    Alternate(Alternate),
 }
 
 /// What the host should do after an event.
@@ -55,6 +57,8 @@ pub enum Outcome {
     Redraw,
     /// Run this entry, then close.
     Run(EntryId),
+    /// Do this to this entry, and stay open.
+    Alternate(EntryId, Alternate),
     /// Close without running anything.
     Close,
 }
@@ -189,6 +193,39 @@ impl Menu {
     pub fn record_launch(&mut self, entry: EntryId) {
         let key = self.tree.entries[entry].key.clone();
         self.history.record(&key);
+    }
+
+    /// Whether the open menu is the clipboard picker.
+    #[must_use]
+    pub fn is_clipboard(&self) -> bool {
+        self.tree.menus[self.open].name == crate::clip::MENU
+    }
+
+    /// Do an entry's other action, and read the clipboard's entries again,
+    /// keeping the selection where it was.
+    pub fn perform(&mut self, entry: EntryId, which: Alternate) {
+        let launch = self.tree.entries[entry]
+            .alternates
+            .iter()
+            .find(|(a, _)| *a == which)
+            .map(|(_, l)| l.clone());
+        if let Some(launch) = launch
+            && let Err(e) = launch.run()
+        {
+            eprintln!("alpymist-menu: {e}");
+        }
+        if self.is_clipboard() {
+            let selected = self.selected;
+            self.tree.graft(
+                crate::clip::MENU,
+                crate::clip::TITLE,
+                crate::clip::entries(),
+            );
+            self.enter_scope();
+            self.refilter();
+            let last = self.rows.len().saturating_sub(1);
+            self.select(selected.min(last));
+        }
     }
 
     fn enter_scope(&mut self) {
@@ -371,6 +408,17 @@ impl Menu {
                 self.refilter();
                 Outcome::Redraw
             }
+            Key::Alternate(which) => match self.rows.get(self.selected) {
+                Some(row)
+                    if self.tree.entries[row.entry]
+                        .alternates
+                        .iter()
+                        .any(|(a, _)| *a == which) =>
+                {
+                    Outcome::Alternate(row.entry, which)
+                }
+                _ => Outcome::Unchanged,
+            },
             Key::Up | Key::Down => Outcome::Unchanged,
         }
     }
@@ -439,7 +487,7 @@ mod tests {
     use crate::config::Config;
     use crate::exec::Launch;
     use crate::history::History;
-    use crate::tree::{Action, Tree};
+    use crate::tree::{Action, Alternate, Entry, Tree};
 
     const CONFIG: &str = r#"
         [menu.root]
@@ -698,5 +746,48 @@ mod tests {
         let mut m = menu();
         assert_eq!(m.text('\u{8}'), Outcome::Unchanged);
         assert_eq!(m.query(), "");
+    }
+
+    #[test]
+    fn a_pickers_other_keys_act_only_where_an_entry_has_them() {
+        let run = |cmd: &str| Launch::Argv {
+            argv: vec![cmd.into()],
+            terminal: false,
+        };
+        let entry = |name: &str, alternates: Vec<(Alternate, Launch)>| Entry {
+            name: name.into(),
+            icon: String::new(),
+            detail: None,
+            keywords: Vec::new(),
+            key: format!("clip:{name}"),
+            action: Action::Run(run("paste")),
+            alternates,
+        };
+        let mut tree = Tree::default();
+        let id = tree.graft(
+            crate::clip::MENU,
+            crate::clip::TITLE,
+            vec![
+                entry("copied", vec![(Alternate::Forget, run("forget"))]),
+                entry("note", Vec::new()),
+            ],
+        );
+        let mut m = Menu::new(tree, History::default(), id, 4);
+        assert!(m.is_clipboard());
+        let first = m.rows()[0].entry;
+        assert_eq!(
+            m.key(Key::Alternate(Alternate::Forget)),
+            Outcome::Alternate(first, Alternate::Forget)
+        );
+        assert_eq!(m.key(Key::Alternate(Alternate::Pin)), Outcome::Unchanged);
+        m.key(Key::Down);
+        assert_eq!(m.key(Key::Alternate(Alternate::Forget)), Outcome::Unchanged);
+        // Grafting again replaces what the picker lists.
+        m.tree.graft(
+            crate::clip::MENU,
+            crate::clip::TITLE,
+            vec![entry("only", Vec::new())],
+        );
+        assert_eq!(m.tree.menus[id].entries.len(), 1);
     }
 }

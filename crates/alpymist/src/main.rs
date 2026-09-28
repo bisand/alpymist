@@ -7,6 +7,7 @@
 
 mod autostart;
 mod channel;
+mod clipboard;
 mod firmware;
 mod launch;
 mod root;
@@ -124,6 +125,11 @@ enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Copy and paste in the focused window, and the clipboard history.
+    Clipboard {
+        #[command(subcommand)]
+        action: clipboard::Action,
+    },
     /// Start the programs that start at login, as Settings › Startup has
     /// them. Hyprland runs this once it is up.
     Autostart {
@@ -181,6 +187,11 @@ fn main() -> std::process::ExitCode {
 fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     // Before the registry is made: this is on every key that opens the
     // browser or a terminal, and needs none of it.
+    // The keys and the history are on every copy and paste: none of the
+    // registry either.
+    if let Command::Clipboard { action } = &cli.command {
+        return clipboard::run(action);
+    }
     if let Command::Open {
         print,
         category,
@@ -217,7 +228,7 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Probe { format } => Ok(probe(*format)?),
         Command::Session { desktop, args } => session(&all, &env, *desktop, args),
         Command::Wallpaper => Ok(alpymist_settings::wallpaper::show(&env)?),
-        Command::Open { .. } => unreachable!("opened above"),
+        Command::Open { .. } | Command::Clipboard { .. } => unreachable!("handled above"),
         Command::Autostart { dry_run } => {
             autostart::run(&env, *dry_run);
             Ok(())

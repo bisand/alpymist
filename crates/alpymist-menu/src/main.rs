@@ -167,7 +167,14 @@ fn run(start: &str, trace: Option<Instant>, listener: Option<UnixListener>) -> E
 
     let history_path = History::path();
     let history = History::load(history_path.as_deref());
-    let tree = Tree::build(&loaded.config, found);
+    let mut tree = Tree::build(&loaded.config, found);
+    if start == alpymist_menu::clip::MENU {
+        tree.graft(
+            alpymist_menu::clip::MENU,
+            alpymist_menu::clip::TITLE,
+            alpymist_menu::clip::entries(),
+        );
+    }
     let Some(start_id) = tree.find(start) else {
         let names: Vec<&str> = tree.menus.iter().map(|m| m.name.as_str()).collect();
         eprintln!(
@@ -207,9 +214,12 @@ fn run(start: &str, trace: Option<Instant>, listener: Option<UnixListener>) -> E
         );
         return ExitCode::FAILURE;
     }
-    menu.record_launch(entry);
-    if let Some(path) = history_path {
-        menu.history().save(&path);
+    // What was pasted from the clipboard is not something to rank by.
+    if !menu.tree.entries[entry].key.starts_with("clip:") {
+        menu.record_launch(entry);
+        if let Some(path) = history_path {
+            menu.history().save(&path);
+        }
     }
     ExitCode::SUCCESS
 }

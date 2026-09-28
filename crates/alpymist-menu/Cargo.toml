@@ -10,6 +10,8 @@ repository.workspace = true
 [dependencies]
 # Desktop entries, read as Settings and `alpymist autostart` read them.
 alpymist-core = { workspace = true }
+# The clipboard picker's entries, and what pinning and forgetting say.
+alpymist-clipboard = { workspace = true }
 # The colours and fonts every hand-drawn Alpymist window starts from.
 alpymist-theme = { workspace = true }
 denise = { workspace = true }
