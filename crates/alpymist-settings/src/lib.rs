@@ -29,7 +29,7 @@ pub mod model;
 mod service;
 pub mod values;
 
-pub use areas::wallpaper;
+pub use areas::{startup, wallpaper};
 pub use env::Env;
 pub use model::{Applies, Area, Choice, Kind, Scope, Setting, TextRule, Value};
 

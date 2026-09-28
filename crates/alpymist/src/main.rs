@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+mod autostart;
 mod channel;
 mod firmware;
 mod root;
@@ -107,6 +108,13 @@ enum Command {
     /// Each desktop runs this at login, and Settings after a change;
     /// `alpymist set appearance.wallpaper` chooses the picture.
     Wallpaper,
+    /// Start the programs that start at login, as Settings › Startup has
+    /// them. Hyprland runs this once it is up.
+    Autostart {
+        /// Print what would be started, and start nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Install firmware that a driver asked for and did not find. As root;
     /// the alpymist-firmware service runs `watch` at boot.
     Firmware {
@@ -183,6 +191,10 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Probe { format } => Ok(probe(*format)?),
         Command::Session { desktop, args } => session(&all, &env, *desktop, args),
         Command::Wallpaper => Ok(alpymist_settings::wallpaper::show(&env)?),
+        Command::Autostart { dry_run } => {
+            autostart::run(&env, *dry_run);
+            Ok(())
+        }
         Command::Firmware {
             action: FirmwareAction::Check,
         } => firmware::check(),

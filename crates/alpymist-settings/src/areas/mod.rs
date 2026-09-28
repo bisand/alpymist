@@ -11,6 +11,7 @@ pub mod power;
 pub mod screensaver;
 pub mod sound;
 pub mod ssh;
+pub mod startup;
 pub mod system;
 pub mod themed;
 pub mod updates;
@@ -115,6 +116,13 @@ pub const AREAS: &[Area] = &[
         keywords: &["mako", "popups", "alerts", "dnd", "do not disturb"],
     },
     Area {
+        id: "startup",
+        title: "Startup",
+        description: "The programs that start when you log in",
+        icon: "\u{f14de}",
+        keywords: &["autostart", "login", "start at login", "launch", "programs"],
+    },
+    Area {
         id: "screensaver",
         title: "Screensaver",
         description: "Which screensaver appears when nobody is there, and when the screen turns off",
@@ -197,6 +205,7 @@ pub fn all() -> Vec<Setting> {
         ssh::settings(),
         power::settings(),
         notifications::settings(),
+        startup::settings(),
         screensaver::settings(),
         datetime::settings(),
         updates::settings(),
@@ -219,6 +228,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "ssh" => Ok(ssh::get(env)),
         "power" => power::get(env, s),
         "notifications" => notifications::get(env, s),
+        "startup" => startup::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
         "datetime" => datetime::get(env, s),
         "updates" => updates::get(env),
@@ -247,6 +257,7 @@ pub fn set(
         "ssh" => ssh::set(env, value),
         "power" => none(power::set(env, s, value)),
         "notifications" => notifications::set(env, s, value, force),
+        "startup" => none(startup::set(env, s, value)),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
         "datetime" => none(datetime::set(env, s, value, force)),
         "updates" => none(updates::set(env, value)),
