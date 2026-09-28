@@ -2,6 +2,21 @@
 # the prompt. Everything here is installed and updated by apk, signed like the
 # rest of the system.
 
+# A terminal can name itself something this machine has no terminfo entry for
+# -- Ghostty's xterm-ghostty over SSH, say, which Alpine ships only as
+# `ghostty`. zsh then cannot move the cursor, and every redraw the plugins
+# below make leaves the line garbled. Fall back to the name without its xterm-
+# prefix, then to plain xterm-256color, which every modern terminal speaks.
+zmodload zsh/terminfo
+if [[ -n $TERM && -z $terminfo[cuu1] ]]; then
+	for t in "${TERM#xterm-}" xterm-256color; do
+		if [[ -e /usr/share/terminfo/${t[1]}/$t || -e /etc/terminfo/${t[1]}/$t ]]; then
+			export TERM=$t
+			break
+		fi
+	done
+fi
+
 export ZSH=/usr/share/oh-my-zsh
 
 # oh-my-zsh's own updater runs `git pull` in its directory, which would fetch
