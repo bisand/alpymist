@@ -57,6 +57,13 @@ package owns, sets `credential.helper` to `libsecret`, and the desktop brings
 helper. `gh` stores its token in the Secret Service by itself once there is
 one.
 
+**The login screen does not get a keyring.** greetd runs it as its own
+`greetd` account, through the same PAM stack, so `base-session` started a
+keyring daemon for that account too, before anyone logged in. The greeter has
+its own PAM service, `alpymist-greeter`, set per session in greetd's
+configuration: the runtime directory and the keyboard layout a login gets, and
+`base-session-noninteractive`, which starts nothing else.
+
 **`passwd` is shadow's,** which goes through PAM. busybox's writes
 `/etc/shadow` itself, so the keyring would keep the old password and ask for
 it at the next login. Settings' password button runs `passwd`, and gets
@@ -75,9 +82,13 @@ password. So:
 - `/etc/ssh/ssh_config.d/alpymist.conf` says `AddKeysToAgent yes`: a key's
   passphrase is asked the first time it is used in a session, and not again
   until the session ends or the screen locks.
-- The passphrase is asked in gcr's dialog (`SSH_ASKPASS`, with
-  `SSH_ASKPASS_REQUIRE=prefer`), from a terminal as from an editor: one way of
-  being asked, which a program cannot draw over.
+- The passphrase is asked in OpenSSH's own dialog, from `openssh-askpass`
+  (`SSH_ASKPASS`, with `SSH_ASKPASS_REQUIRE=prefer`), from a terminal as from
+  an editor: one way of being asked. gcr's `gcr4-ssh-askpass`, chosen at first,
+  refuses to run as anything but gcr's own agent's helper; found on the dev
+  VM, where no dialog appeared. The dialog is GTK's, not Alpymist's, and
+  Ctrl+Alt+Delete cannot vouch for it the way it does for `alpymist-auth`'s
+  prompt; an askpass of Alpymist's own is left for later.
 - The lock screen runs `ssh-add -D` once the screen is covered, so a machine
   left locked has no key unlocked.
 

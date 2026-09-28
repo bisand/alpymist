@@ -14,3 +14,6 @@ vt = 7
 # becomes the compositor (ADR 0007).
 command = "alpymist-greeter --cmd 'dbus-run-session alpymist session hyprland'"
 user = "greetd"
+# The login screen's own PAM service: the same, without the keyring a login
+# gets. See alpymist-greeter.pam.
+service = "alpymist-greeter"
