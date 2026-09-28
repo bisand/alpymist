@@ -26,6 +26,7 @@ pub mod env;
 pub mod generated;
 pub mod menu;
 pub mod model;
+mod service;
 pub mod values;
 
 pub use areas::wallpaper;

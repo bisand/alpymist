@@ -9,8 +9,6 @@
 use crate::env::Env;
 use crate::model::{Applies, Kind, Scope, Setting, Value};
 
-/// sshd's link in the default runlevel.
-pub const RUNLEVEL: &str = "etc/runlevels/default/sshd";
 /// The server itself.
 pub const SSHD: &str = "usr/sbin/sshd";
 /// Its init script.
@@ -33,7 +31,7 @@ pub fn settings() -> Vec<Setting> {
 
 /// Whether sshd starts at boot.
 pub fn get(env: &Env) -> Value {
-    Value::Bool(env.system(RUNLEVEL).symlink_metadata().is_ok())
+    Value::Bool(crate::service::at_boot(env, "sshd"))
 }
 
 /// Turn it on, installing it first if it has to be, or off. Returns where it
@@ -41,18 +39,13 @@ pub fn get(env: &Env) -> Value {
 pub fn set(env: &Env, value: Option<&Value>) -> Result<Vec<String>, String> {
     let on = value.and_then(Value::as_bool).unwrap_or(false);
     if !on {
-        env.run(&["rc-service", "--ifstarted", "sshd", "stop"])?;
-        // rc-update fails for a service that is not in the runlevel.
-        if env.system(RUNLEVEL).symlink_metadata().is_ok() {
-            env.run(&["rc-update", "del", "sshd", "default"])?;
-        }
+        crate::service::stop(env, "sshd")?;
         return Ok(Vec::new());
     }
     if !env.system(SSHD).exists() || !env.system(SERVICE).exists() {
         env.run(&["apk", "add", "openssh-server"])?;
     }
-    env.run(&["rc-update", "add", "sshd", "default"])?;
-    env.run(&["rc-service", "sshd", "start"])?;
+    crate::service::start(env, "sshd")?;
     Ok(address(env)
         .map(|a| format!("Reach it at {a}, port 22."))
         .into_iter()
@@ -126,7 +119,7 @@ mod tests {
         );
 
         RAN.lock().unwrap().clear();
-        let link = env.system(super::RUNLEVEL);
+        let link = crate::service::link(&env, "sshd");
         std::fs::create_dir_all(link.parent().unwrap()).unwrap();
         std::fs::write(&link, "").unwrap();
         assert_eq!(get(&env), Value::Bool(true));

@@ -14,8 +14,6 @@ use crate::model::{Applies, Kind, Scope, Setting, Value};
 
 /// The switch's id.
 pub const ID: &str = "bluetooth.enabled";
-/// bluetoothd's link in the default runlevel.
-pub const RUNLEVEL: &str = "etc/runlevels/default/bluetooth";
 
 /// The settings.
 pub fn settings() -> Vec<Setting> {
@@ -42,7 +40,7 @@ pub fn settings() -> Vec<Setting> {
 
 /// Whether bluetoothd starts at boot.
 pub fn get(env: &Env) -> Value {
-    Value::Bool(env.system(RUNLEVEL).symlink_metadata().is_ok())
+    Value::Bool(crate::service::at_boot(env, "bluetooth"))
 }
 
 /// Start bluetoothd now and at every boot, or stop it and take it out, as
@@ -52,20 +50,14 @@ pub fn set(env: &Env, value: Option<&Value>) -> Result<(), String> {
         // A radio blocked in software cannot be powered; one blocked by a
         // switch on the machine stays blocked, which this cannot change.
         let _ = env.run(&["rfkill", "unblock", "bluetooth"]);
-        env.run(&["rc-update", "add", "bluetooth", "default"])?;
-        return env.run(&["rc-service", "bluetooth", "start"]).map(drop);
+        return crate::service::start(env, "bluetooth");
     }
-    env.run(&["rc-service", "--ifstarted", "bluetooth", "stop"])?;
-    // rc-update fails for a service that is not in the runlevel.
-    if env.system(RUNLEVEL).symlink_metadata().is_ok() {
-        env.run(&["rc-update", "del", "bluetooth", "default"])?;
-    }
-    Ok(())
+    crate::service::stop(env, "bluetooth")
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ID, RUNLEVEL};
+    use super::ID;
     use crate::env::Env;
     use crate::{Error, Settings, Value};
     use std::sync::Mutex;
@@ -85,7 +77,7 @@ mod tests {
         let env = Env::test(&d, true, &RAN);
         assert_eq!(settings.get(&env, ID), Ok(Value::Bool(false)));
         settings.set(&env, ID, "on", false).unwrap();
-        let link = env.system(RUNLEVEL);
+        let link = crate::service::link(&env, "bluetooth");
         std::fs::create_dir_all(link.parent().unwrap()).unwrap();
         std::fs::write(&link, "").unwrap();
         assert_eq!(settings.get(&env, ID), Ok(Value::Bool(true)));

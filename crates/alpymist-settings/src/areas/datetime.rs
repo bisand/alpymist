@@ -31,8 +31,6 @@ pub const LOCALTIME: &str = "etc/localtime";
 pub const COPIES: &str = "etc/zoneinfo";
 /// Where tzdata keeps every zone.
 pub const TZDATA: &str = "usr/share/zoneinfo";
-/// ntpd's link in the default runlevel.
-pub const RUNLEVEL: &str = "etc/runlevels/default/ntpd";
 /// The 24-hour clock's id.
 pub const TWENTY_FOUR: &str = "datetime.24-hour";
 /// The top bar's clock, generated.
@@ -105,7 +103,7 @@ fn zone_of(link: &Path) -> Option<String> {
 /// Its value.
 pub fn get(env: &Env, setting: &Setting) -> Result<Value, String> {
     if setting.id == "datetime.network-time" {
-        return Ok(Value::Bool(env.system(RUNLEVEL).symlink_metadata().is_ok()));
+        return Ok(Value::Bool(crate::service::at_boot(env, "ntpd")));
     }
     if setting.id == TWENTY_FOUR {
         return Ok(Values::load(&env.system(super::keyboard::VALUES))?
@@ -209,20 +207,15 @@ pub fn live(env: &Env, setting: &Setting) {
 /// Start ntpd now and at every boot, or stop it and take it out.
 fn network_time(env: &Env, on: bool) -> Result<(), String> {
     if on {
-        env.run(&["rc-update", "add", "ntpd", "default"])?;
-        return env.run(&["rc-service", "ntpd", "start"]).map(drop);
+        crate::service::start(env, "ntpd")
+    } else {
+        crate::service::stop(env, "ntpd")
     }
-    env.run(&["rc-service", "--ifstarted", "ntpd", "stop"])?;
-    // rc-update fails for a service that is not in the runlevel.
-    if env.system(RUNLEVEL).symlink_metadata().is_ok() {
-        env.run(&["rc-update", "del", "ntpd", "default"])?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{BAR_CLOCK, COPIES, LOCALTIME, RUNLEVEL, TWENTY_FOUR, TZDATA, bar_clock, label};
+    use super::{BAR_CLOCK, COPIES, LOCALTIME, TWENTY_FOUR, TZDATA, bar_clock, label};
     use crate::env::Env;
     use crate::{Error, Settings, Value};
     use alpymist_core::catalog::zones;
@@ -368,7 +361,7 @@ mod tests {
         settings
             .reset(&env, "datetime.network-time", false)
             .unwrap();
-        let link = env.system(RUNLEVEL);
+        let link = crate::service::link(&env, "ntpd");
         std::fs::create_dir_all(link.parent().unwrap()).unwrap();
         std::fs::write(&link, "").unwrap();
         assert_eq!(
