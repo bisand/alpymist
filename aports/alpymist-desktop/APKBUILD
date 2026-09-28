@@ -66,6 +66,7 @@ depends="
 	alpymist-screensaver
 	alpymist-settings
 	alpymist-shell=$pkgver-r$pkgrel
+	alpymist-tools=$pkgver-r$pkgrel
 	alpymist-splash-openrc
 	alpymist-store
 	alpymist-thunderbolt
@@ -121,6 +122,7 @@ replaces="$pkgname-wayland $pkgname-full"
 makedepends="cargo"
 subpackages="
 	alpymist-shell:_shell
+	alpymist-tools:_tools
 	alpymist-wallpapers:_wallpapers
 	"
 options="!check"  # the test suite runs in CI, not in the package build
@@ -228,6 +230,29 @@ package() {
 # sit beside it for whoever wants another. All 16:9 at 1920x1080, so each
 # desktop's fill mode crops a little off a 16:10 or 4:3 screen and nothing is
 # stretched. See brand/wallpapers/README.md.
+# What a developer reaches for in the first ten minutes, so it is there
+# without a trip to the store: git and an SSH client (the SSH server stays a
+# switch in Settings, off until turned on), nano, which hyprland.conf leaves as
+# the editor outside the desktop, curl and rsync, less and unzip beyond what
+# busybox's do, man with the pages to read, and GitHub's command line. The
+# desktop depends on it, and the installer adds it without one too.
+_tools() {
+	pkgdesc="Alpymist tools: git, ssh, nano, curl, rsync, man and gh"
+	depends="
+		curl
+		git
+		github-cli
+		less
+		man-pages
+		mandoc
+		nano
+		openssh-client
+		rsync
+		unzip
+		"
+	mkdir -p "$subpkgdir"
+}
+
 _wallpapers() {
 	pkgdesc="Alpymist wallpapers: mountain photographs and paintings"
 	depends=""
