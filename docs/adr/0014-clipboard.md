@@ -16,10 +16,12 @@ keeps a secret in the clear is on by default.
 
 ## Decision
 
-**Super+C and Super+V work in every window.** `alpymist clipboard copy` and
+**Super+C, Super+X and Super+V work in every window.** `alpymist clipboard copy` and
 `paste` ask Hyprland which window has the focus and send it the shortcut it
 understands. Terminals are known by their desktop entries (`TerminalEmulator`,
-matched to the window's class), not by a list here. Floating a window moves
+matched to the window's class), not by a list here. Super+X sends Ctrl+X to anything
+but a terminal, which has nothing to cut and to which Ctrl+X is not harmless
+(nano exits on it); a terminal is sent nothing. Floating a window moves
 from Super+V to Super+Shift+F. The screenshot key puts the picture on the
 clipboard as well as in a file.
 
@@ -48,7 +50,9 @@ in Settings › Clipboard turns `bind = SUPER, V, togglefloating`, if still as
 shipped, into the four new keys, and the screenshot key into the one that
 copies. The file is kept beside it as `hyprland.conf.bak-clipboard`, and
 Hyprland is reloaded. If Super+C, Super+Shift+V or Super+Shift+F is already
-the account's own, nothing is changed.
+the account's own, nothing is changed. Super+X is added with them where
+it is free, and an account given the keys before Super+X existed gets it,
+after Super+C, the next time Settings › Clipboard is changed.
 
 ## Consequences
 

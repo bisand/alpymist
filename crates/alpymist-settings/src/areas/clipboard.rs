@@ -31,9 +31,9 @@ const OLD_FLOAT: &str = "bind = SUPER, V, togglefloating";
 const OLD_PRINT: &str = r#"bind = , Print, exec, sh -c 'grim -g "$(slurp)" "$HOME/screenshot-$(date +%Y%m%d-%H%M%S).png"'"#;
 /// The same, copying the picture as well.
 const NEW_PRINT: &str = r#"bind = , Print, exec, sh -c 'f="$HOME/screenshot-$(date +%Y%m%d-%H%M%S).png"; grim -g "$(slurp)" "$f" && wl-copy --type image/png < "$f"'"#;
-/// The keys, in place of the old floating one.
+/// The keys, in place of the old floating one: each chord, and its line.
 const KEYS: [(&str, &str); 4] = [
-    ("SUPER|C", "bind = SUPER, C, exec, alpymist clipboard copy"),
+    ("SUPER|C", COPY),
     ("SUPER|V", "bind = SUPER, V, exec, alpymist clipboard paste"),
     (
         "SHIFT SUPER|V",
@@ -41,6 +41,11 @@ const KEYS: [(&str, &str); 4] = [
     ),
     ("SHIFT SUPER|F", "bind = SUPER SHIFT, F, togglefloating"),
 ];
+
+/// Super+C's line, which Super+X's goes after.
+const COPY: &str = "bind = SUPER, C, exec, alpymist clipboard copy";
+/// Super+X: cut, given where it is free.
+const CUT: (&str, &str) = ("SUPER|X", "bind = SUPER, X, exec, alpymist clipboard cut");
 
 /// The settings.
 pub fn settings() -> Vec<Setting> {
@@ -172,8 +177,16 @@ fn take_over(env: &Env) -> Vec<String> {
     let Ok(text) = std::fs::read_to_string(&path) else {
         return Vec::new();
     };
-    let Some(new) = with_keys(&text) else {
-        return Vec::new();
+    let (new, what) = match with_keys(&text) {
+        Some(new) => (
+            new,
+            "Super+C and Super+V now copy and paste, Super+Shift+V opens the history, \
+             and floating a window moved to Super+Shift+F",
+        ),
+        None => match with_cut(&text) {
+            Some(new) => (new, "Super+X now cuts"),
+            None => return Vec::new(),
+        },
     };
     let kept = crate::generated::beside(&path, KEPT);
     if std::fs::write(&kept, &text).is_err() || crate::generated::replace(&path, &new).is_err() {
@@ -182,11 +195,7 @@ fn take_over(env: &Env) -> Vec<String> {
     if env.hyprland {
         let _ = env.run(&["hyprctl", "reload"]);
     }
-    vec![format!(
-        "Super+C and Super+V now copy and paste, Super+Shift+V opens the history, \
-         and floating a window moved to Super+Shift+F ({} as it was).",
-        kept.display()
-    )]
+    vec![format!("{what} ({} as it was).", kept.display())]
 }
 
 /// A bind's modifiers and key, as `SHIFT SUPER|V`: the same whatever order
@@ -206,27 +215,36 @@ fn chord(line: &str) -> Option<String> {
     Some(format!("{}|{key}", mods.join(" ")))
 }
 
+/// Every chord the file binds, but the line at `except`.
+fn taken(lines: &[&str], except: Option<usize>) -> Vec<String> {
+    lines
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| Some(*i) != except)
+        .filter_map(|(_, l)| chord(l))
+        .collect()
+}
+
 /// `hyprland.conf` with the clipboard's keys where the old floating key was,
-/// and the screenshot key copying too; `None` when the floating key is not
-/// as shipped, or a key of the account's own is already on one the
-/// clipboard's would take.
+/// Super+X among them where it is free, and the screenshot key copying too;
+/// `None` when the floating key is not as shipped, or a key of the account's
+/// own is already on one of the four the clipboard needs.
 fn with_keys(conf: &str) -> Option<String> {
     let lines: Vec<&str> = conf.lines().collect();
     let at = lines.iter().position(|l| l.trim() == OLD_FLOAT)?;
-    let taken: Vec<String> = lines
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| *i != at)
-        .filter_map(|(_, l)| chord(l))
-        .collect();
+    let taken = taken(&lines, Some(at));
     if KEYS.iter().any(|(c, _)| taken.iter().any(|t| t == c)) {
         return None;
     }
-    let mut out = String::with_capacity(conf.len() + 200);
+    let cut_free = !taken.iter().any(|t| t == CUT.0);
+    let mut out = String::with_capacity(conf.len() + 240);
     for (i, line) in lines.iter().enumerate() {
         if i == at {
             for (_, key) in KEYS {
                 let _ = writeln!(out, "{key}");
+                if key == COPY && cut_free {
+                    let _ = writeln!(out, "{}", CUT.1);
+                }
             }
         } else if line.trim() == OLD_PRINT {
             let _ = writeln!(out, "{NEW_PRINT}");
@@ -237,9 +255,30 @@ fn with_keys(conf: &str) -> Option<String> {
     Some(out)
 }
 
+/// `hyprland.conf` with Super+X after Super+C, for an account given the
+/// clipboard's keys before there was a Super+X; `None` when Super+C is not
+/// the clipboard's, or Super+X is already bound.
+fn with_cut(conf: &str) -> Option<String> {
+    let lines: Vec<&str> = conf.lines().collect();
+    let at = lines.iter().position(|l| l.trim() == COPY)?;
+    if taken(&lines, None).iter().any(|t| t == CUT.0) {
+        return None;
+    }
+    let mut out = String::with_capacity(conf.len() + 60);
+    for (i, line) in lines.iter().enumerate() {
+        let _ = writeln!(out, "{line}");
+        if i == at {
+            let _ = writeln!(out, "{}", CUT.1);
+        }
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{NEW_PRINT, OLD_FLOAT, OLD_PRINT, chord, get, set, settings, with_keys};
+    use super::{
+        COPY, CUT, NEW_PRINT, OLD_FLOAT, OLD_PRINT, chord, get, set, settings, with_cut, with_keys,
+    };
     use crate::env::Env;
     use crate::model::Value;
     use std::sync::Mutex;
@@ -264,12 +303,17 @@ mod tests {
         let old = format!("$terminal = foot\n{OLD_FLOAT}\n{OLD_PRINT}\nbind = SUPER, L, exec, x\n");
         let new = with_keys(&old).unwrap();
         assert!(new.contains("bind = SUPER, C, exec, alpymist clipboard copy\n"));
+        assert!(new.contains("bind = SUPER, X, exec, alpymist clipboard cut\n"));
         assert!(new.contains("bind = SUPER, V, exec, alpymist clipboard paste\n"));
         assert!(new.contains("bind = SUPER SHIFT, F, togglefloating\n"));
         assert!(new.contains(NEW_PRINT));
         assert!(!new.contains(OLD_FLOAT));
         assert!(new.ends_with("bind = SUPER, L, exec, x\n"));
         assert_eq!(with_keys(&new), None, "once");
+        // Super+X the account's own: the rest is given, and that is kept.
+        let own_x = format!("{OLD_FLOAT}\nbind = SUPER, X, exec, mine\n");
+        let new = with_keys(&own_x).unwrap();
+        assert!(!new.contains(CUT.1) && new.contains("exec, mine"));
         // Super+C the account's own: nothing is touched.
         let own = format!("{OLD_FLOAT}\nbind = SUPER, C, exec, mine\n");
         assert_eq!(with_keys(&own), None);
@@ -294,5 +338,24 @@ mod tests {
         set(&env, size, Some(&Value::Number(120))).unwrap();
         assert_eq!(get(&env, size), Value::Number(120));
         std::fs::remove_dir_all(d).ok();
+    }
+
+    #[test]
+    fn an_account_given_the_keys_before_super_x_gets_it_once() {
+        let before = format!("{COPY}\nbind = SUPER, V, exec, alpymist clipboard paste\n");
+        let new = with_cut(&before).unwrap();
+        assert_eq!(
+            new,
+            format!(
+                "{COPY}\n{}\nbind = SUPER, V, exec, alpymist clipboard paste\n",
+                CUT.1
+            )
+        );
+        assert_eq!(with_cut(&new), None, "once");
+        assert_eq!(with_cut("bind = SUPER, C, exec, mine\n"), None);
+        assert_eq!(
+            with_cut(&format!("{COPY}\nbind = SUPER, X, killactive\n")),
+            None
+        );
     }
 }
