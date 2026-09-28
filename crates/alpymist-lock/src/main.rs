@@ -117,6 +117,7 @@ mod lock {
             let mut out = std::io::stdout();
             writeln!(out, "{READY}").ok();
             out.flush().ok();
+            forget_keys();
         });
         match host::run(app, covered)? {
             Ending::Unlocked => Ok(()),
@@ -125,6 +126,21 @@ mod lock {
                 Ok(())
             }
         }
+    }
+
+    /// Have the session's SSH agent forget every key it holds, once the
+    /// screen is covered: a machine left locked has none unlocked, and the
+    /// next use asks for the passphrase again (ADR 0013).
+    fn forget_keys() {
+        if std::env::var_os("SSH_AUTH_SOCK").is_none_or(|s| s.is_empty()) {
+            return;
+        }
+        let _ = Command::new("ssh-add")
+            .arg("-D")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
     }
 
     /// Lock, and return once the screen is covered.

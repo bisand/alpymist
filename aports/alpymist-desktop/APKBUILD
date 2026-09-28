@@ -35,6 +35,12 @@ license="MIT OR Apache-2.0"
 # font gets wrong. musl-locales is how musl writes dates and messages in the
 # language chosen in Settings; the programs' own translations are Alpine's
 # -lang packages, every language at once, and Settings installs them when asked.
+# Secrets are gnome-keyring's, unlocked at login by PAM with the login
+# password (Alpine's base PAM stack already calls pam_gnome_keyring where it
+# is installed), and shadow's passwd, which goes through that stack, so the
+# keyring's password changes with the login's; busybox's does not. SSH keys
+# are OpenSSH's agent's, asked for through gcr4's dialog, and git keeps HTTPS
+# credentials in the keyring through git-credential-libsecret (ADR 0013).
 # Bluetooth is bluez, with PipeWire's plugin for headphones and bluetuith to
 # pair from a terminal; bluetoothd is not started at boot until Settings ›
 # Bluetooth turns it on (ADR 0011).
@@ -83,6 +89,10 @@ depends="
 	font-fira-ttf
 	font-nerd-fonts-symbols
 	foot
+	gcr4
+	git-credential-libsecret
+	gnome-keyring
+	gnome-keyring-pam
 	greetd
 	grim
 	gsettings-desktop-schemas
@@ -100,6 +110,7 @@ depends="
 	pipewire-spa-bluez
 	polkit
 	seatd
+	shadow
 	slurp
 	squint
 	swaybg
@@ -206,6 +217,12 @@ package() {
 		install -Dm644 "$builddir"/desktop/waybar/$conf \
 			"$pkgdir"/usr/share/alpymist/waybar/$conf
 	done
+	# git's HTTPS credentials go to the keyring; see the file. No package
+	# owns /etc/gitconfig.
+	install -Dm644 "$builddir"/desktop/git/gitconfig "$pkgdir"/etc/gitconfig
+	# Keys go to the session's agent at first use; see the file.
+	install -Dm644 "$builddir"/desktop/ssh/alpymist.conf \
+		"$pkgdir"/etc/ssh/ssh_config.d/alpymist.conf
 	install -Dm644 "$builddir"/desktop/xdg-desktop-portal/hyprland-portals.conf \
 		"$pkgdir"/etc/xdg/xdg-desktop-portal/hyprland-portals.conf
 	# What greetd starts, named by /etc/conf.d/greetd, which the installer

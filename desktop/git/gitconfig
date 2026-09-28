@@ -1,0 +1,5 @@
+# Alpymist: git keeps HTTPS passwords and tokens in the keyring the login
+# unlocks (ADR 0013), not in a file and not asked for every time. Your own
+# ~/.gitconfig can name another helper, or none.
+[credential]
+	helper = libsecret
