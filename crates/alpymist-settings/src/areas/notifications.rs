@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn the_skeleton_is_what_settings_would_write() {
-        let skel = include_str!("../../../../desktop/skel/common/.config/mako/config");
+        let skel = include_str!("../../../../desktop/skel/desktop/.config/mako/config");
         assert_eq!(
             skel,
             crate::generated::render(

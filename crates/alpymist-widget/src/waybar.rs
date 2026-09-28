@@ -45,7 +45,7 @@ mod tests {
     /// What Settings writes for the bar, which a system may not have yet.
     const GENERATED: &str = "/etc/alpymist/waybar/";
     const TREE: &str = "../../desktop/waybar/";
-    const SKEL: &str = "../../desktop/skel/wayland/.config/waybar/";
+    const SKEL: &str = "../../desktop/skel/desktop/.config/waybar/";
 
     /// JSON with `//` comments, as Waybar reads it.
     fn jsonc(path: &Path) -> Value {

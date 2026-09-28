@@ -150,7 +150,8 @@ build() {
 	"$_release"/alpymist-wallpaper --mark "$builddir"/mark.png 64
 }
 
-# Copy one of desktop/skel's parts into a package's /etc/skel.
+# Copy one of desktop/skel's parts into a package's /etc/skel: desktop into
+# this package, shell into alpymist-shell.
 _skel() {
 	mkdir -p "$2"/etc/skel
 	cp -a "$builddir"/desktop/skel/"$1"/. "$2"/etc/skel/
@@ -220,9 +221,7 @@ package() {
 	# file.
 	install -Dm644 "$builddir"/desktop/hypr/hyprland-security.conf \
 		"$pkgdir"/usr/share/alpymist/hyprland-security.conf
-	_skel common "$pkgdir"
-	_skel wayland "$pkgdir"
-	_skel full "$pkgdir"
+	_skel desktop "$pkgdir"
 }
 
 # The photographs: the default wallpaper is one of them, and the rest
