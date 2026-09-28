@@ -1,11 +1,15 @@
-//! Super+C and Super+V: copy and paste in the focused window, whatever it
-//! is.
+//! Super+C, Super+X and Super+V: copy, cut and paste in the focused window,
+//! whatever it is.
 //!
 //! Terminals copy on Ctrl+Shift+C and paste on Ctrl+Shift+V, since Ctrl+C
 //! interrupts and Ctrl+V quotes the next key; everything else uses Ctrl+C
 //! and Ctrl+V. Which the focused window is, Hyprland says by its class, and
 //! the installed desktop entries say which classes are terminals, so a
 //! terminal installed later is known without a list here to keep up.
+//!
+//! A terminal has nothing to cut, and Ctrl+X is not harmless there — nano
+//! exits on it, and the shell starts an editing command — so Super+X sends a
+//! terminal nothing.
 
 use alpymist_core::defaults::{self, Places};
 use std::process::{Command, Stdio};
@@ -15,19 +19,23 @@ use std::process::{Command, Stdio};
 pub enum Which {
     /// Copy what is selected.
     Copy,
+    /// Cut what is selected.
+    Cut,
     /// Paste what was copied.
     Paste,
 }
 
-/// The shortcut to send, as `sendshortcut` takes it.
+/// The shortcut to send, as `sendshortcut` takes it; `None` for none at all.
 #[must_use]
-pub fn shortcut(which: Which, terminal: bool) -> &'static str {
-    match (which, terminal) {
+pub fn shortcut(which: Which, terminal: bool) -> Option<&'static str> {
+    Some(match (which, terminal) {
         (Which::Copy, true) => "CTRL SHIFT, C",
         (Which::Copy, false) => "CTRL, C",
+        (Which::Cut, true) => return None,
+        (Which::Cut, false) => "CTRL, X",
         (Which::Paste, true) => "CTRL SHIFT, V",
         (Which::Paste, false) => "CTRL, V",
-    }
+    })
 }
 
 /// Send the focused window the key it understands.
@@ -50,7 +58,10 @@ pub fn send(which: Which) -> Result<(), String> {
     };
     let places = Places::current();
     let terminal = defaults::is_terminal_window(class, &places.applications());
-    let arg = format!("{}, address:{address}", shortcut(which, terminal));
+    let Some(keys) = shortcut(which, terminal) else {
+        return Ok(());
+    };
+    let arg = format!("{keys}, address:{address}");
     let status = Command::new("hyprctl")
         .args(["dispatch", "sendshortcut", &arg])
         .stdin(Stdio::null())
@@ -98,7 +109,13 @@ mod tests {
 
     #[test]
     fn a_terminal_gets_shift_as_well() {
-        assert_eq!(shortcut(Which::Copy, true), "CTRL SHIFT, C");
-        assert_eq!(shortcut(Which::Paste, false), "CTRL, V");
+        assert_eq!(shortcut(Which::Copy, true), Some("CTRL SHIFT, C"));
+        assert_eq!(shortcut(Which::Paste, false), Some("CTRL, V"));
+        assert_eq!(shortcut(Which::Cut, false), Some("CTRL, X"));
+        assert_eq!(
+            shortcut(Which::Cut, true),
+            None,
+            "nothing to cut in a terminal"
+        );
     }
 }

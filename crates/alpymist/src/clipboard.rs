@@ -11,6 +11,9 @@ use clap::Subcommand;
 pub enum Action {
     /// Copy what is selected in the focused window (Super+C).
     Copy,
+    /// Cut what is selected in the focused window (Super+X); a terminal is
+    /// sent nothing, having nothing to cut.
+    Cut,
     /// Paste into the focused window (Super+V).
     Paste,
     /// Start keeping a history, if Settings › Clipboard says to; Hyprland
@@ -64,6 +67,7 @@ pub enum Action {
 pub fn run(action: &Action) -> Result<(), Box<dyn std::error::Error>> {
     match action {
         Action::Copy => keys::send(Which::Copy)?,
+        Action::Cut => keys::send(Which::Cut)?,
         Action::Paste => keys::send(Which::Paste)?,
         Action::Start => start()?,
         Action::Stop => {
