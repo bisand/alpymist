@@ -226,33 +226,46 @@ package() {
 	_skel desktop "$pkgdir"
 }
 
-# The photographs: the default wallpaper is one of them, and the rest
-# sit beside it for whoever wants another. All 16:9 at 1920x1080, so each
-# desktop's fill mode crops a little off a 16:10 or 4:3 screen and nothing is
-# stretched. See brand/wallpapers/README.md.
 # What a developer reaches for in the first ten minutes, so it is there
 # without a trip to the store: git and an SSH client (the SSH server stays a
 # switch in Settings, off until turned on), nano, which hyprland.conf leaves as
 # the editor outside the desktop, curl and rsync, less and unzip beyond what
-# busybox's do, man with the pages to read, and GitHub's command line. The
-# desktop depends on it, and the installer adds it without one too.
+# busybox's do, man with the pages to read, and GitHub's command line; and
+# each of their own manuals, so `man git` answers (Alpine keeps a program's
+# manual in its -doc package, and `docs`, which pulls in every one, is some
+# 300 MiB). None of them is pinned: apk takes each from Alpine's repositories
+# at whatever version Alpine has. The desktop depends on it, and the installer
+# adds it without one too.
 _tools() {
 	pkgdesc="Alpymist tools: git, ssh, nano, curl, rsync, man and gh"
 	depends="
 		curl
+		curl-doc
 		git
+		git-doc
 		github-cli
+		github-cli-doc
 		less
+		less-doc
 		man-pages
 		mandoc
+		mandoc-doc
 		nano
+		nano-doc
 		openssh-client
+		openssh-doc
 		rsync
+		rsync-doc
 		unzip
+		unzip-doc
 		"
 	mkdir -p "$subpkgdir"
 }
 
+# The photographs: the default wallpaper is one of them, and the rest
+# sit beside it for whoever wants another. All 16:9 at 1920x1080, so each
+# desktop's fill mode crops a little off a 16:10 or 4:3 screen and nothing is
+# stretched. See brand/wallpapers/README.md.
 _wallpapers() {
 	pkgdesc="Alpymist wallpapers: mountain photographs and paintings"
 	depends=""
