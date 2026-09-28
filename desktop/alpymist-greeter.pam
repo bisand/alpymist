@@ -1,0 +1,12 @@
+# PAM for the login screen itself, which greetd runs as its own greetd account
+# before anyone has logged in, with no password asked. It needs what
+# alpymist-greetd gives a login — XDG_RUNTIME_DIR from pam_rundir, and the
+# keyboard layout from session.env, so the password is typed in the layout the
+# console uses — and not what a login gets beyond that: base-session starts
+# gnome-keyring, and the greeter has no secrets to keep (ADR 0013).
+auth		include		base-auth
+account		include		base-account
+password	include		base-password
+session		include		base-session-noninteractive
+session		optional	pam_rundir.so
+session		optional	pam_env.so conffile=/dev/null readenv=1 envfile=/etc/alpymist/session.env

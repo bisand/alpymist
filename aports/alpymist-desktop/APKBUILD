@@ -39,8 +39,10 @@ license="MIT OR Apache-2.0"
 # password (Alpine's base PAM stack already calls pam_gnome_keyring where it
 # is installed), and shadow's passwd, which goes through that stack, so the
 # keyring's password changes with the login's; busybox's does not. SSH keys
-# are OpenSSH's agent's, asked for through gcr4's dialog, and git keeps HTTPS
-# credentials in the keyring through git-credential-libsecret (ADR 0013).
+# are OpenSSH's agent's, asked for through openssh-askpass's dialog, and git
+# keeps HTTPS credentials in the keyring through git-credential-libsecret. The
+# login screen has a PAM service of its own, which starts no keyring
+# (ADR 0013).
 # Bluetooth is bluez, with PipeWire's plugin for headphones and bluetuith to
 # pair from a terminal; bluetoothd is not started at boot until Settings ›
 # Bluetooth turns it on (ADR 0011).
@@ -89,7 +91,6 @@ depends="
 	font-fira-ttf
 	font-nerd-fonts-symbols
 	foot
-	gcr4
 	git-credential-libsecret
 	gnome-keyring
 	gnome-keyring-pam
@@ -103,6 +104,7 @@ depends="
 	mako
 	mesa-dri-gallium
 	musl-locales
+	openssh-askpass
 	pam-rundir
 	pavucontrol
 	pipewire
@@ -180,6 +182,8 @@ package() {
 	# to the greetd package; the desktop's greetd configuration names it.
 	install -Dm644 "$builddir"/desktop/alpymist-greetd.pam \
 		"$pkgdir"/etc/pam.d/alpymist-greetd
+	install -Dm644 "$builddir"/desktop/alpymist-greeter.pam \
+		"$pkgdir"/etc/pam.d/alpymist-greeter
 	install -Dm644 "$builddir"/desktop/mimeapps.list "$pkgdir"/etc/xdg/mimeapps.list
 	# A desktop started from a text console, where there is no PAM to make
 	# XDG_RUNTIME_DIR; see the script.
