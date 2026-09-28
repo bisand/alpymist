@@ -414,6 +414,13 @@ fn set_in(
             .map(|f| f.id.as_str());
         text = crate::ini::with_key(&text, GROUP, t, id);
     }
+    // Nothing chosen and nothing else in it: no file, as before anything was.
+    if text.trim() == format!("[{GROUP}]") {
+        if path.exists() {
+            std::fs::remove_file(&path).map_err(|e| io_error(&path, &e))?;
+        }
+        return Ok(());
+    }
     write(&path, &text)
 }
 
@@ -622,13 +629,24 @@ mod tests {
         // It does not open XHTML, so that is left to whatever does.
         assert!(!text.contains("application/xhtml+xml"));
         assert!(text.contains("application/pdf=librewolf.desktop\n"));
-        assert_eq!(get_in(&places, browser), Ok(pick));
+        assert_eq!(get_in(&places, browser), Ok(pick.clone()));
 
         set_in(&env, &places, &here(), browser, None).unwrap();
         let text = std::fs::read_to_string(&list).unwrap();
+        assert!(
+            text.contains("[Default Applications]\n"),
+            "other keys keep it"
+        );
         assert!(!text.contains("org.example.Browser"), "{text}");
         assert!(text.contains("application/pdf=librewolf.desktop\n"));
         assert_eq!(get_in(&places, browser), Ok(Value::Text(String::new())));
+
+        // A list Settings made, taken back to Automatic, is not left behind
+        // as an empty heading.
+        std::fs::remove_file(&list).unwrap();
+        set_in(&env, &places, &here(), browser, Some(&pick)).unwrap();
+        set_in(&env, &places, &here(), browser, None).unwrap();
+        assert!(!list.exists());
 
         let nothing = Value::Text("gimp".into());
         assert!(set_in(&env, &places, &here(), browser, Some(&nothing)).is_err());
