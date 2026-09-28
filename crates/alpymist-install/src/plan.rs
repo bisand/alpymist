@@ -1042,7 +1042,7 @@ mod tests {
         };
         assert!(conf.contains("kb_layout = no\n"), "{conf}");
         assert!(conf.contains("kb_variant = nodeadkeys\n"), "{conf}");
-        let hyprland = include_str!("../../../desktop/skel/full/.config/hypr/hyprland.conf");
+        let hyprland = include_str!("../../../desktop/skel/desktop/.config/hypr/hyprland.conf");
         assert!(
             hyprland.contains("source = /etc/alpymist/hyprland-keyboard.conf"),
             "hyprland.conf does not source the installer's keyboard file"

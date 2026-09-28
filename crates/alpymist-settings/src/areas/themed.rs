@@ -329,10 +329,10 @@ mod tests {
     use std::sync::Mutex;
 
     const SKEL_STYLE: &str =
-        include_str!("../../../../desktop/skel/wayland/.config/waybar/style.css");
-    const SKEL_FOOT: &str = include_str!("../../../../desktop/skel/common/.config/foot/foot.ini");
+        include_str!("../../../../desktop/skel/desktop/.config/waybar/style.css");
+    const SKEL_FOOT: &str = include_str!("../../../../desktop/skel/desktop/.config/foot/foot.ini");
     const SKEL_HYPR: &str =
-        include_str!("../../../../desktop/skel/full/.config/hypr/hyprland.conf");
+        include_str!("../../../../desktop/skel/desktop/.config/hypr/hyprland.conf");
     const PACKAGED: &str = include_str!("../../../../desktop/waybar/style.css");
 
     /// With the default theme, the bar looks as it did: every colour the
