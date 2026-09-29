@@ -43,6 +43,7 @@ version = "0.2.0"
 dependencies = [
  "alpymist-clipboard",
  "alpymist-core",
+ "alpymist-displays",
  "alpymist-hwprobe",
  "alpymist-settings",
  "clap",
@@ -94,6 +95,15 @@ version = "0.2.0"
 dependencies = [
  "serde",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "alpymist-displays"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "toml",
 ]
 
 [[package]]
