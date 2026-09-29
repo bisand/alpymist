@@ -353,21 +353,11 @@ impl View {
 
     /// Show the areas the search leaves, or every one, with `page` chosen.
     fn refresh_areas(&mut self, page: &Page) {
+        let query = self.query.trim().to_owned();
         let shown: Vec<usize> = match page {
-            Page::Search(q) => {
-                let about = self.settings.pages().len();
-                let mut pages: Vec<usize> = self
-                    .matching(q)
-                    .into_iter()
-                    .filter_map(|j| self.page_of(j))
-                    .collect();
-                if alpymist_core::catalog::matches(q, &["About", "version", "system"]) {
-                    pages.push(about);
-                }
-                pages.sort_unstable();
-                pages.dedup();
-                pages
-            }
+            Page::Search(q) => self.filtered(q),
+            // An area chosen from a search's areas keeps them listed.
+            Page::Area(_) | Page::About if !query.is_empty() => self.filtered(&query),
             Page::Area(_) | Page::About => (0..=self.settings.pages().len()).collect(),
         };
         let chosen = match page {
@@ -411,6 +401,22 @@ impl View {
             self.ui
                 .set_scroll(self.viewport, Point::new(0, top + height - seen));
         }
+    }
+
+    /// The pages with something matching `q`, and About if it does.
+    fn filtered(&self, q: &str) -> Vec<usize> {
+        let about = self.settings.pages().len();
+        let mut pages: Vec<usize> = self
+            .matching(q)
+            .into_iter()
+            .filter_map(|j| self.page_of(j))
+            .collect();
+        if alpymist_core::catalog::matches(q, &["About", "version", "system"]) {
+            pages.push(about);
+        }
+        pages.sort_unstable();
+        pages.dedup();
+        pages
     }
 
     /// The settings matching `q`: by title, description, id, area or
@@ -775,16 +781,20 @@ impl View {
     fn message(&mut self, m: Msg, effects: &mut Vec<Effect>) {
         match m {
             Msg::Area(row) => {
-                // A row of the areas as they are shown, which a search
-                // may have filtered.
+                // A row of the areas as they are shown, which a search may
+                // have filtered. The search stays: its areas are still the
+                // list, until Escape or an empty field brings back the rest.
                 let Some(&i) = self.shown.get(row) else {
                     return;
                 };
-                self.clear_search();
-                if i >= self.settings.pages().len() {
-                    self.show(Page::About);
+                let page = if i >= self.settings.pages().len() {
+                    Page::About
                 } else {
-                    self.show(Page::Area(i));
+                    Page::Area(i)
+                };
+                // A click selects, then activates: one page, built once.
+                if page != self.page {
+                    self.show(page);
                 }
             }
             Msg::Configure => {
@@ -1876,14 +1886,43 @@ mod tests {
         assert!(titles.contains(&"Touchpad"), "{titles:?}");
         assert!(!titles.contains(&"Sound"), "{titles:?}");
         assert!(v.shown.len() < everything);
-        // A row of the filtered list opens its own page, not the page that
-        // was in that row before.
+        // A click on a row of the filtered list selects it, then activates
+        // it: two messages for the row. Both open its own page, not the page
+        // in that row of the full list, and the search stays.
         let touchpad = v.settings.pages().iter().position(|a| a.id == "touchpad");
         let row = v.shown.iter().position(|&i| Some(i) == touchpad).unwrap();
-        let mut effects = Vec::new();
-        v.message(super::Msg::Area(row), &mut effects);
+        let filtered = v.shown.clone();
+        let list = v.ui.bounds(v.areas).unwrap();
+        let height =
+            v.ui.widget::<super::List<super::Msg>>(v.areas)
+                .unwrap()
+                .row_height(v.ui.theme());
+        let at = denise::Point::new(
+            list.x + 20,
+            list.y + i32::try_from(row).unwrap() * height + height / 2,
+        );
+        let click = |state| InputEvent::PointerButton {
+            position: at,
+            button: denise::PointerButton::Left,
+            state,
+            modifiers: Modifiers::NONE,
+        };
+        let _ = v.handle(
+            &[
+                InputEvent::PointerMoved { position: at },
+                click(ElementState::Down),
+                click(ElementState::Up),
+            ],
+            15,
+        );
+        assert_eq!(Some(v.page.clone()), touchpad.map(Page::Area));
+        assert_eq!(v.shown, filtered, "the search's areas are still the list");
+        assert_eq!(v.query, "scroll");
+        // Escape ends the search on the page chosen, with every area back.
+        let _ = v.handle(&key(KeyCode::Escape), 20);
         assert_eq!(Some(v.page.clone()), touchpad.map(Page::Area));
         assert_eq!(v.shown.len(), everything, "every area is back");
+        assert!(v.query.is_empty());
     }
 
     #[test]
