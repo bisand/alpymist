@@ -4,7 +4,7 @@
 use alpymist_about::info::About;
 
 use alpymist_settings::{Env, Error, Settings, Value, startup};
-use alpymist_settings_app::view::{Action, Effect, Fonts, THUMB_H, THUMB_W, View};
+use alpymist_settings_app::view::{Action, Effect, Fonts, Screens, THUMB_H, THUMB_W, View};
 use alpymist_ui::picture::Picture;
 use alpymist_widget::Outcome;
 use alpymist_widget::host::{self, Sender};
@@ -43,6 +43,8 @@ pub enum Event {
         pixels: Vec<u32>,
         size: Size,
     },
+    /// A screen layout was put in place, or not.
+    Laid(Result<(), String>),
 }
 
 /// A change for the worker.
@@ -183,6 +185,41 @@ fn spawn(argv: &[&str]) {
     }
 }
 
+/// The screens Hyprland has, with the layout remembered for them.
+fn screens() -> Screens {
+    match alpymist_displays::hypr::monitors() {
+        Ok(monitors) => {
+            let key = alpymist_displays::layout::key(alpymist_displays::screen::names(&monitors));
+            let all = alpymist_displays::layout::Layouts::load(&alpymist_displays::layout::path());
+            let remembered = all.find(&key).cloned();
+            Screens::new(monitors, remembered.as_ref())
+        }
+        Err(e) => Screens::failed(e),
+    }
+}
+
+/// Put each screen's number on it, in the order the Displays page numbers
+/// them, for a few seconds: one small window of this program's for each.
+fn identify() {
+    let Ok(me) = std::env::current_exe() else {
+        return;
+    };
+    let Ok(monitors) = alpymist_displays::hypr::monitors() else {
+        return;
+    };
+    for (i, m) in monitors.iter().enumerate() {
+        if m.disabled {
+            continue;
+        }
+        let _ = Command::new(&me)
+            .args(["--identify", &m.name, &(i + 1).to_string()])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+    }
+}
+
 fn read_values(settings: &Settings) -> BTreeMap<&'static str, Result<Value, String>> {
     let env = Env::detect();
     settings
@@ -269,6 +306,17 @@ impl SettingsApp {
                     spawn(&["alpymist", "open", "terminal", "--", "bluetuith"]);
                 }
                 Effect::Action(Action::CheckUpdates) => spawn(&["alpymist-store", "updates"]),
+                Effect::Action(Action::Identify) => identify(),
+                Effect::Layout(layout) => {
+                    // hyprctl answers at once, but a screen changing mode
+                    // takes a moment, and the window keeps drawing meanwhile.
+                    let sender = self.sender.clone();
+                    std::thread::spawn(move || {
+                        let laid = alpymist_displays::layout::keep(layout)
+                            .and_then(|()| alpymist_displays::apply().map(drop));
+                        let _ = sender.send(Event::Laid(laid));
+                    });
+                }
                 Effect::Action(Action::CopyAbout) => {
                     let sender = self.sender.clone();
                     std::thread::spawn(move || {
@@ -373,6 +421,7 @@ impl App for SettingsApp {
             {
                 view.toast(&format!("No setting or area `{id}`."), true);
             }
+            view.screens(screens());
             self.view = Some(view);
             thumbnails(self.sender.clone(), scale);
         }
@@ -492,6 +541,12 @@ impl App for SettingsApp {
                 }
             }
             Event::Thumbnail { path, pixels, size } => view.thumbnail(path, pixels, size),
+            Event::Laid(result) => {
+                if let Err(e) = result {
+                    view.toast(&e, true);
+                }
+                view.screens(screens());
+            }
             Event::Copied(Ok(())) => view.toast("Copied the details to the clipboard.", false),
             Event::Copied(Err(e)) => view.toast(&e, true),
         }

@@ -76,7 +76,7 @@ pub fn run(action: &Action) -> Result<(), Box<dyn std::error::Error>> {
                     o.enabled = true;
                 }
             }
-            keep(current)?;
+            layout::keep(current)?;
             println!("Remembered the layout for these screens.");
             Ok(())
         }
@@ -137,18 +137,11 @@ pub fn run(action: &Action) -> Result<(), Box<dyn std::error::Error>> {
             if current.outputs.iter().all(|o| !o.enabled) {
                 return Err("that would leave no screen on".into());
             }
-            keep(current)?;
+            layout::keep(current)?;
             alpymist_displays::apply()?;
             Ok(())
         }
     }
-}
-
-fn keep(layout: Layout) -> Result<(), String> {
-    let path = layout::path();
-    let mut all = Layouts::load(&path);
-    all.put(layout);
-    all.save(&path)
 }
 
 /// Which of `monitors` `wanted` means: its connector, its whole name, or a

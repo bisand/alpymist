@@ -12,6 +12,8 @@
 
 #[cfg(target_os = "linux")]
 mod app;
+#[cfg(target_os = "linux")]
+mod identify;
 
 use std::process::ExitCode;
 
@@ -38,6 +40,7 @@ fn main() -> ExitCode {
             println!("alpymist-settings {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
+        ["--identify", output, number] => identify(output, number),
         [] => open(None),
         [id] if !id.starts_with('-') => open(Some(id)),
         _ => {
@@ -56,6 +59,24 @@ fn open(at: Option<&str>) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// The number the Displays page gives a screen, shown on it.
+#[cfg(target_os = "linux")]
+fn identify(output: &str, number: &str) -> ExitCode {
+    match identify::run(output, number) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("alpymist-settings: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn identify(_: &str, _: &str) -> ExitCode {
+    eprintln!("alpymist-settings: showing a screen's number needs Wayland");
+    ExitCode::FAILURE
 }
 
 #[cfg(not(target_os = "linux"))]

@@ -12,6 +12,8 @@ repository.workspace = true
 alpymist-core = { workspace = true }
 # clipboard.toml, and the history's own limits.
 alpymist-clipboard = { workspace = true }
+# displays.toml: what a closed lid does, kept beside the layouts.
+alpymist-displays = { workspace = true }
 # power.toml, the power modes and the charge limit, without the popup.
 alpymist-power = { workspace = true }
 alpymist-theme = { workspace = true }

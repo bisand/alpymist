@@ -11,6 +11,7 @@
 //! - [`screen`]: a screen as Hyprland reports it, and what it is called.
 //! - [`layout`]: the layouts, and the account's file of them.
 //! - [`hypr`]: asking Hyprland, and telling it.
+//! - [`arrange`]: where a screen goes when it is moved by hand.
 //! - [`watch`]: following screens as they come and go.
 //!
 //! The laptop's own panel is turned off while the lid is closed and another
@@ -18,6 +19,7 @@
 //! Hyprland moves its workspaces to the screens left. That is not part of any
 //! layout: a layout says how the screens are arranged with the lid open.
 
+pub mod arrange;
 pub mod hypr;
 pub mod layout;
 pub mod screen;
@@ -70,7 +72,7 @@ pub fn plan(monitors: &[Monitor], layouts: &Layouts, lid_closed: bool) -> Plan {
         .iter()
         .zip(&names)
         .any(|(m, name)| !m.internal() && output(name, m).enabled);
-    let lid_off = lid_closed && others;
+    let lid_off = lid_closed && others && layouts.lid_off;
     let rules = monitors
         .iter()
         .zip(&names)
@@ -244,6 +246,14 @@ mod tests {
         );
         let alone = plan(&[screen("eDP-1", "Panel")], &Layouts::default(), true);
         assert!(!alone.lid_closed, "never no screen at all");
+        let kept_on = Layouts {
+            lid_off: false,
+            ..Layouts::default()
+        };
+        assert!(
+            !plan(&desk, &kept_on, true).lid_closed,
+            "not when Settings says to leave it on"
+        );
         assert_eq!(alone.rules[0], "desc:Panel, 1920x1080@60.00, 0x0, 1");
     }
 

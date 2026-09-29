@@ -97,6 +97,10 @@ pub struct Options {
     /// well, and any output plugged in while it is up: a screensaver on one
     /// screen and the others dark.
     pub cover_others: bool,
+    /// Whether the panel takes the keyboard while it is up. A label shown
+    /// over another program's window, such as the number Settings puts on
+    /// each screen, leaves it where it was.
+    pub keyboard: bool,
 }
 
 /// What the other outputs are covered in: opaque black, which is as dark as a
@@ -135,6 +139,7 @@ impl Options {
             backdrop: 0,
             output: None,
             cover_others: false,
+            keyboard: true,
         }
     }
 }
@@ -253,8 +258,13 @@ pub fn run<W: Widget>(
     );
     layer.set_anchor(Anchor::all());
     layer.set_exclusive_zone(-1);
-    // Exclusive, as the menu: typing works the moment the popup is up.
-    layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+    // Exclusive, as the menu: typing works the moment the popup is up. A
+    // label over another program's window takes nothing.
+    layer.set_keyboard_interactivity(if options.keyboard {
+        KeyboardInteractivity::Exclusive
+    } else {
+        KeyboardInteractivity::None
+    });
     layer.set_size(0, 0);
     layer.commit();
 

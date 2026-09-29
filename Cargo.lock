@@ -246,6 +246,7 @@ version = "0.2.0"
 dependencies = [
  "alpymist-clipboard",
  "alpymist-core",
+ "alpymist-displays",
  "alpymist-power",
  "alpymist-screensaver",
  "alpymist-theme",
@@ -260,12 +261,14 @@ version = "0.2.0"
 dependencies = [
  "alpymist-about",
  "alpymist-core",
+ "alpymist-displays",
  "alpymist-menu",
  "alpymist-settings",
  "alpymist-theme",
  "alpymist-ui",
  "alpymist-widget",
  "denise",
+ "denise-render",
  "denise-text",
  "denise-ui",
  "png",

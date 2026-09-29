@@ -18,6 +18,10 @@
 //! between screensavers, and open in a dialog over it — so installing five
 //! screensavers adds five entries to that list and none to the side.
 
+mod displays;
+
+pub use displays::Screens;
+
 use alpymist_about::info::About;
 use alpymist_settings::{Area, Kind, Setting, Settings, Value};
 use denise::theme::{Radius, Role, Theme};
@@ -98,6 +102,8 @@ pub enum Msg {
     Submit,
     /// Enter in a text setting's field: the setting's index.
     SubmitText(usize),
+    /// Something on the Displays page.
+    Screen(displays::ScreenMsg),
 }
 
 /// Something only the window can do.
@@ -113,10 +119,12 @@ pub enum Action {
     CopyAbout,
     /// Pair and connect Bluetooth devices.
     OpenBluetooth,
+    /// Show each screen's number on it.
+    Identify,
 }
 
 /// What the window should do after input.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     /// Change a setting.
     Set {
@@ -127,6 +135,8 @@ pub enum Effect {
     },
     /// Do an [`Action`].
     Action(Action),
+    /// Put this layout in place for the screens connected, and remember it.
+    Layout(alpymist_displays::layout::Layout),
     /// Close the window.
     Close,
 }
@@ -212,6 +222,8 @@ pub struct View {
     /// Each thumbnail on the page, as its button and its picture, in the
     /// order of the choices.
     wallpapers: Vec<(NodeId, NodeId)>,
+    /// The screens, for the Displays page, once the window has read them.
+    screens: Option<Screens>,
 }
 
 impl View {
@@ -311,6 +323,7 @@ impl View {
             query: String::new(),
             thumbnails: BTreeMap::new(),
             wallpapers: Vec::new(),
+            screens: None,
         };
         view.place_sidebar();
         view.build();
@@ -479,7 +492,10 @@ impl View {
     /// When the tree next wants to be woken for an animation, in ms.
     #[must_use]
     pub fn next_wake_ms(&self) -> Option<u64> {
-        self.ui.next_wake_ms()
+        match (self.ui.next_wake_ms(), self.displays_wake_ms()) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     /// Paint everything into `frame`, which may be a fresh buffer.
@@ -681,6 +697,7 @@ impl View {
             self.message(m, &mut effects);
         }
         self.poll(&mut effects);
+        self.displays_tick(now_ms, &mut effects);
         self.search_changed();
         effects
     }
@@ -873,6 +890,7 @@ impl View {
                 }
             }
             Msg::Changed => {}
+            Msg::Screen(m) => self.displays_message(m, effects),
         }
     }
 
@@ -972,6 +990,7 @@ impl View {
             .wallpapers
             .iter()
             .position(|&(button, _)| Some(button) == self.ui.focused());
+        let focused_screens = self.displays_focus();
         self.wallpapers.clear();
         // The dialog is a scene over this one, so rebuilding the page beneath
         // it means taking it down and putting it back: its rows live in the
@@ -1048,6 +1067,9 @@ impl View {
             Page::About => y = self.build_about(content, y, inner),
             Page::Area(i) => {
                 let area = self.settings.pages()[i].id;
+                if area == displays::AREA {
+                    y = self.build_displays(content, y, inner);
+                }
                 let chosen: Vec<usize> = (0..self.settings.all().len())
                     .filter(|&j| self.settings.all()[j].area() == area)
                     .collect();
@@ -1115,6 +1137,8 @@ impl View {
         }
         if focused_search {
             self.ui.focus(Some(self.search));
+        } else if let Some(node) = focused_screens.and_then(|f| self.displays_node(f)) {
+            self.ui.focus(Some(node));
         } else if let Some(&(button, _)) = focused_wallpaper.and_then(|i| self.wallpapers.get(i)) {
             self.ui.focus(Some(button));
         } else if let Some(setting) = focused_setting
