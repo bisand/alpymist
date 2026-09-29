@@ -489,6 +489,20 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         );
     }
 
+    // The clock set from the network: busybox's ntpd, asking pool.ntp.org as
+    // /etc/conf.d/ntpd says, and answering nobody, since it is not given -l.
+    // A hardware clock that has lost its time, as a laptop's does when its
+    // battery runs flat, otherwise stays wrong, and every certificate is then
+    // not yet valid: no updates, no store, no web. It retries until the Wi-Fi
+    // is up. Settings › Date & time turns it off.
+    steps.push(
+        Step::new(
+            "Starting ntpd at boot",
+            &["chroot", ROOT, "rc-update", "add", "ntpd", "default"],
+        )
+        .may_fail(),
+    );
+
     // udev rather than BusyBox mdev: libinput finds keyboards and mice through
     // udev, and a Wayland compositor with no input devices refuses to start.
     // setup-devd does the same, but also starts the services, which in a
@@ -1251,6 +1265,17 @@ mod tests {
         let at = |n: &str| t.iter().position(|s| s.contains(n)).unwrap();
         assert!(at("Starting dbus") < at("Starting iwd"), "iwd needs D-Bus");
         assert!(t.contains(&"Adding your account to netdev".to_string()));
+    }
+
+    #[test]
+    fn the_clock_is_set_from_the_network() {
+        let plan = build(&answers()).unwrap();
+        let ntpd = step(&plan, "Starting ntpd at boot");
+        assert_eq!(
+            ntpd.argv,
+            ["chroot", super::ROOT, "rc-update", "add", "ntpd", "default"]
+        );
+        assert!(ntpd.may_fail, "a system with a wrong clock still boots");
     }
 
     #[test]
