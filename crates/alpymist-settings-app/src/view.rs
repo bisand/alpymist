@@ -188,7 +188,13 @@ pub struct View {
     backdrop: NodeId,
     sidebar: NodeId,
     search: NodeId,
+    /// Where the areas scroll, when there are more than fit.
+    viewport: NodeId,
     areas: NodeId,
+    /// The page behind each row of the areas: an index into the pages, or
+    /// one past them for About. Every page, or while searching, the ones
+    /// with something that matches.
+    shown: Vec<usize>,
     content: Option<NodeId>,
     page: Page,
     /// The area or About page a search returns to.
@@ -258,16 +264,15 @@ impl View {
                 Rect::ZERO,
             )
             .unwrap_or(root);
-        let mut items: Vec<ListItem> = settings
-            .pages()
-            .iter()
-            .map(|a| ListItem::new(a.title))
-            .collect();
-        items.push(ListItem::new("About"));
+        // More areas than a short window has room for: they scroll, in a
+        // viewport of their own under the search field, which stays put.
+        let viewport = ui.add(sidebar, Panel::bare(), Rect::ZERO).unwrap_or(root);
+        ui.set_scrollable(viewport, true);
+        let shown: Vec<usize> = (0..=settings.pages().len()).collect();
         let areas = ui
             .add(
-                sidebar,
-                List::new(items, Msg::Area)
+                viewport,
+                List::new(area_items(&settings, &shown), Msg::Area)
                     .on_activate(Msg::Area)
                     .activate_on_click()
                     .with_selected(Some(0))
@@ -292,7 +297,9 @@ impl View {
             backdrop,
             sidebar,
             search,
+            viewport,
             areas,
+            shown,
             content: None,
             page: Page::Area(0),
             last: Page::Area(0),
@@ -324,9 +331,117 @@ impl View {
         );
         let top = (PAD + SEARCH_H) * s;
         self.ui.set_layout(
-            self.areas,
+            self.viewport,
             Rect::new(PAD * s / 4, top, (SIDEBAR - PAD / 2) * s, h - top - PAD * s),
         );
+        self.place_areas();
+    }
+
+    /// The areas as tall as all their rows, for the viewport to scroll, and
+    /// never shorter than the viewport, whose background they are.
+    fn place_areas(&mut self) {
+        let s = self.scale;
+        let rows = self
+            .ui
+            .widget::<List<Msg>>(self.areas)
+            .map_or(0, |l| l.preferred_height(self.ui.theme()));
+        let seen = self.ui.layout(self.viewport).map_or(0, |r| r.height);
+        let height = rows.max(seen);
+        self.ui
+            .set_layout(self.areas, Rect::new(0, 0, (SIDEBAR - PAD / 2) * s, height));
+    }
+
+    /// Show the areas the search leaves, or every one, with `page` chosen.
+    fn refresh_areas(&mut self, page: &Page) {
+        let shown: Vec<usize> = match page {
+            Page::Search(q) => {
+                let about = self.settings.pages().len();
+                let mut pages: Vec<usize> = self
+                    .matching(q)
+                    .into_iter()
+                    .filter_map(|j| self.page_of(j))
+                    .collect();
+                if alpymist_core::catalog::matches(q, &["About", "version", "system"]) {
+                    pages.push(about);
+                }
+                pages.sort_unstable();
+                pages.dedup();
+                pages
+            }
+            Page::Area(_) | Page::About => (0..=self.settings.pages().len()).collect(),
+        };
+        let chosen = match page {
+            Page::Area(i) => shown.iter().position(|p| p == i),
+            Page::About => shown.iter().position(|&p| p == self.settings.pages().len()),
+            Page::Search(_) => None,
+        };
+        if shown != self.shown {
+            let items = area_items(&self.settings, &shown);
+            if let Some(list) = self.ui.widget_mut::<List<Msg>>(self.areas) {
+                list.set_items(items);
+            }
+            self.shown = shown;
+            self.place_areas();
+            self.ui.set_scroll(self.viewport, Point::new(0, 0));
+        }
+        if let Some(list) = self.ui.widget_mut::<List<Msg>>(self.areas) {
+            list.set_selected(chosen);
+        }
+        if let Some(row) = chosen {
+            self.reveal_area(row);
+        }
+    }
+
+    /// Scroll the areas so `row` is in sight: a page opened by its id, not
+    /// by the keyboard, which the list follows itself.
+    fn reveal_area(&mut self, row: usize) {
+        let Some(height) = self
+            .ui
+            .widget::<List<Msg>>(self.areas)
+            .map(|l| l.row_height(self.ui.theme()))
+        else {
+            return;
+        };
+        let seen = self.ui.layout(self.viewport).map_or(0, |r| r.height);
+        let top = i32::try_from(row).unwrap_or(0) * height;
+        let scrolled = self.ui.scroll(self.viewport).y;
+        if top < scrolled {
+            self.ui.set_scroll(self.viewport, Point::new(0, top));
+        } else if top + height > scrolled + seen {
+            self.ui
+                .set_scroll(self.viewport, Point::new(0, top + height - seen));
+        }
+    }
+
+    /// The settings matching `q`: by title, description, id, area or
+    /// keyword.
+    fn matching(&self, q: &str) -> Vec<usize> {
+        (0..self.settings.all().len())
+            .filter(|&j| {
+                let st = &self.settings.all()[j];
+                let area = self.settings.area(st.area()).map_or("", |a| a.title);
+                let keywords = st.keywords.join(" ");
+                alpymist_core::catalog::matches(
+                    q,
+                    &[st.title, st.description, st.id, area, &keywords],
+                )
+            })
+            .collect()
+    }
+
+    /// The page setting `j` is on: its area's, or for a screensaver's own
+    /// setting, the Screensaver page, whose dialog holds it.
+    fn page_of(&self, j: usize) -> Option<usize> {
+        let area = self.settings.all()[j].area();
+        let pages = self.settings.pages();
+        pages.iter().position(|a| a.id == area).or_else(|| {
+            self.settings
+                .screensavers()
+                .iter()
+                .any(|a| a.id == area)
+                .then(|| pages.iter().position(|a| a.id == SCREENSAVER))
+                .flatten()
+        })
     }
 
     /// What the view is doing, for `ALPYMIST_SETTINGS_TRACE`.
@@ -422,6 +537,9 @@ impl View {
     ) {
         self.settings = settings;
         self.values = values;
+        // The pages may be others now: every row is made again.
+        self.shown.clear();
+        self.refresh_areas(&self.page.clone());
         self.build();
     }
 
@@ -656,7 +774,12 @@ impl View {
     #[allow(clippy::needless_pass_by_value)] // drained messages, used once
     fn message(&mut self, m: Msg, effects: &mut Vec<Effect>) {
         match m {
-            Msg::Area(i) => {
+            Msg::Area(row) => {
+                // A row of the areas as they are shown, which a search
+                // may have filtered.
+                let Some(&i) = self.shown.get(row) else {
+                    return;
+                };
                 self.clear_search();
                 if i >= self.settings.pages().len() {
                     self.show(Page::About);
@@ -811,21 +934,7 @@ impl View {
     }
 
     fn show(&mut self, page: Page) {
-        if let Page::Area(i) = page
-            && let Some(list) = self.ui.widget_mut::<List<Msg>>(self.areas)
-        {
-            list.set_selected(Some(i));
-        }
-        if page == Page::About
-            && let Some(list) = self.ui.widget_mut::<List<Msg>>(self.areas)
-        {
-            list.set_selected(Some(self.settings.pages().len()));
-        }
-        if matches!(page, Page::Search(_))
-            && let Some(list) = self.ui.widget_mut::<List<Msg>>(self.areas)
-        {
-            list.set_selected(None);
-        }
+        self.refresh_areas(&page);
         if !matches!(page, Page::Search(_)) {
             self.last = page.clone();
         }
@@ -973,17 +1082,7 @@ impl View {
                 }
             }
             Page::Search(q) => {
-                let matching: Vec<usize> = (0..self.settings.all().len())
-                    .filter(|&j| {
-                        let st = &self.settings.all()[j];
-                        let area = self.settings.area(st.area()).map_or("", |a| a.title);
-                        let keywords = st.keywords.join(" ");
-                        alpymist_core::catalog::matches(
-                            &q,
-                            &[st.title, st.description, st.id, area, &keywords],
-                        )
-                    })
-                    .collect();
+                let matching = self.matching(&q);
                 if matching.is_empty() {
                     self.add_label(
                         content,
@@ -1576,6 +1675,14 @@ fn dialog_header(one: Option<&Area>) -> (String, String) {
 }
 
 /// Logical pixels at a scale, as a text size.
+/// The rows of the areas: each shown page's title, and About.
+fn area_items(settings: &Settings, shown: &[usize]) -> Vec<ListItem> {
+    shown
+        .iter()
+        .map(|&i| ListItem::new(settings.pages().get(i).map_or("About", |a| a.title)))
+        .collect()
+}
+
 fn px(logical: i32, scale: i32) -> u16 {
     u16::try_from(logical * scale).unwrap_or(u16::MAX)
 }
@@ -1753,6 +1860,52 @@ mod tests {
         let _ = v.handle(&key(KeyCode::Escape), 20);
         assert!(matches!(v.page, Page::Area(_)));
         assert_eq!(v.handle(&key(KeyCode::Escape), 30), [Effect::Close]);
+    }
+
+    #[test]
+    fn a_search_leaves_only_the_areas_with_something_that_matches() {
+        let mut v = view();
+        let everything = v.shown.len();
+        let typed: Vec<InputEvent> = "scroll".chars().map(|ch| InputEvent::Text { ch }).collect();
+        let _ = v.handle(&typed, 10);
+        let titles: Vec<&str> = v
+            .shown
+            .iter()
+            .map(|&i| v.settings.pages().get(i).map_or("About", |a| a.title))
+            .collect();
+        assert!(titles.contains(&"Touchpad"), "{titles:?}");
+        assert!(!titles.contains(&"Sound"), "{titles:?}");
+        assert!(v.shown.len() < everything);
+        // A row of the filtered list opens its own page, not the page that
+        // was in that row before.
+        let touchpad = v.settings.pages().iter().position(|a| a.id == "touchpad");
+        let row = v.shown.iter().position(|&i| Some(i) == touchpad).unwrap();
+        let mut effects = Vec::new();
+        v.message(super::Msg::Area(row), &mut effects);
+        assert_eq!(Some(v.page.clone()), touchpad.map(Page::Area));
+        assert_eq!(v.shown.len(), everything, "every area is back");
+    }
+
+    #[test]
+    fn a_short_window_scrolls_the_areas_rather_than_cutting_them_off() {
+        let mut v = view();
+        v.resize(Size::new(920, 300), 1);
+        let viewport = v.ui.layout(v.viewport).unwrap();
+        let areas = v.ui.layout(v.areas).unwrap();
+        assert!(
+            areas.height > viewport.height,
+            "{} rows in {} pixels",
+            v.shown.len(),
+            viewport.height
+        );
+        // The last row, About, is reachable from the keyboard, and opening
+        // it by name scrolls it into sight too.
+        let _ = v.handle(&key(KeyCode::End), 10);
+        assert_eq!(v.page, Page::About);
+        v.open("appearance");
+        assert_eq!(v.ui.scroll(v.viewport).y, 0, "the first row is at the top");
+        v.open("about");
+        assert!(v.ui.scroll(v.viewport).y > 0, "About is below the fold");
     }
 
     /// An area as a screensaver's definition file would produce one.
