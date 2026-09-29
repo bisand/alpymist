@@ -1,0 +1,16 @@
+[package]
+name = "alpymist-displays"
+description = "Alpymist's screens: a layout remembered for each set of screens, applied through Hyprland when screens come and go and when the lid closes."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { version = "0.9", default-features = false, features = ["parse", "display", "serde", "std"] }
+
+[lints]
+workspace = true

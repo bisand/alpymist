@@ -8,6 +8,7 @@
 mod autostart;
 mod channel;
 mod clipboard;
+mod displays;
 mod firmware;
 mod launch;
 mod root;
@@ -125,6 +126,12 @@ enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// The screens: list them, change one, and the layout remembered for each
+    /// set of them.
+    Displays {
+        #[command(subcommand)]
+        action: displays::Action,
+    },
     /// Copy and paste in the focused window, and the clipboard history.
     Clipboard {
         #[command(subcommand)]
@@ -192,6 +199,10 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     if let Command::Clipboard { action } = &cli.command {
         return clipboard::run(action);
     }
+    // Screens coming and going, and the lid: none of the registry either.
+    if let Command::Displays { action } = &cli.command {
+        return displays::run(action);
+    }
     if let Command::Open {
         print,
         category,
@@ -228,7 +239,9 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Probe { format } => Ok(probe(*format)?),
         Command::Session { desktop, args } => session(&all, &env, *desktop, args),
         Command::Wallpaper => Ok(alpymist_settings::wallpaper::show(&env)?),
-        Command::Open { .. } | Command::Clipboard { .. } => unreachable!("handled above"),
+        Command::Open { .. } | Command::Clipboard { .. } | Command::Displays { .. } => {
+            unreachable!("handled above")
+        }
         Command::Autostart { dry_run } => {
             autostart::run(&env, *dry_run);
             Ok(())
@@ -268,6 +281,9 @@ fn session(
     args: &[String],
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = all.prepare_session(env) {
+        eprintln!("alpymist session: {e}");
+    }
+    if let Err(e) = alpymist_displays::prepare(&alpymist_displays::conf_path()) {
         eprintln!("alpymist session: {e}");
     }
     let program = match desktop {

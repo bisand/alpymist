@@ -6,6 +6,7 @@ members = [
     "crates/alpymist-auth",
     "crates/alpymist-clipboard",
     "crates/alpymist-core",
+    "crates/alpymist-displays",
     "crates/alpymist-greeter",
     "crates/alpymist-glesprobe",
     "crates/alpymist-install",
@@ -41,6 +42,7 @@ alpymist-about = { path = "crates/alpymist-about" }
 alpymist-auth = { path = "crates/alpymist-auth" }
 alpymist-clipboard = { path = "crates/alpymist-clipboard" }
 alpymist-core = { path = "crates/alpymist-core" }
+alpymist-displays = { path = "crates/alpymist-displays" }
 alpymist-glesprobe = { path = "crates/alpymist-glesprobe" }
 alpymist-greeter = { path = "crates/alpymist-greeter", default-features = false }
 alpymist-hwprobe = { path = "crates/alpymist-hwprobe" }

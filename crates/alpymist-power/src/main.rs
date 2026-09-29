@@ -24,7 +24,7 @@ use alpymist_power::profile::{Knobs, Profile};
 use alpymist_power::watch::Changes;
 use std::os::unix::net::UnixListener;
 use std::path::Path;
-use std::process::ExitCode;
+use std::process::{Command, ExitCode};
 use std::time::Duration;
 
 const USAGE: &str = "\
@@ -73,7 +73,10 @@ fn main() -> ExitCode {
         // Hyprland's switch binding fires on close; `lid close` reads well
         // in a configuration too.
         ["lid"] | ["lid", "close"] => lid(),
-        ["lid", "open"] => Ok(()),
+        ["lid", "open"] => {
+            screens();
+            Ok(())
+        }
         ["button"] => {
             let config = Config::load();
             actions::run(config.actions.power_button, &config)
@@ -119,11 +122,14 @@ fn print_profiles(knobs: &Knobs) {
 
 fn lid() -> Result<(), String> {
     let config = Config::load();
-    let action = actions::for_lid(
-        &config,
-        &Power::now(),
-        actions::docked(Path::new("/sys/class/drm")),
-    );
+    let docked = actions::docked(Path::new("/sys/class/drm"));
+    // With another screen to show things on, the laptop's panel goes off
+    // behind the closed lid, and its workspaces move to the screens left;
+    // whatever else the lid is set to do, it does after.
+    if docked {
+        screens();
+    }
+    let action = actions::for_lid(&config, &Power::now(), docked);
     let state = match action {
         Action::Suspend => Some("mem"),
         Action::Hibernate => Some("disk"),
@@ -137,6 +143,20 @@ fn lid() -> Result<(), String> {
         return actions::run(Action::Lock, &config);
     }
     actions::run(action, &config)
+}
+
+/// Put the screens as they should be for the lid: `alpymist displays`
+/// decides, and says what went wrong if anything did. A lid is not held up
+/// by a screen that would not change.
+fn screens() {
+    match Command::new("alpymist")
+        .args(["displays", "apply"])
+        .status()
+    {
+        Ok(s) if s.success() => {}
+        Ok(s) => eprintln!("alpymist-power: alpymist displays apply: {s}"),
+        Err(e) => eprintln!("alpymist-power: alpymist displays apply: {e}"),
+    }
 }
 
 /// Print the bar's line now and at every change: a charger, a level the
