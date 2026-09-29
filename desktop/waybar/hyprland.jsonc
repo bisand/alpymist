@@ -21,10 +21,13 @@
     "on-click": "alpymist-menu"
   },
 
+  // Each bar shows its own screen's workspaces, by the names Alpymist gives
+  // them, 1 to 9; the first five of each screen are kept by Hyprland's
+  // workspace rules (alpymist displays), so they are there even when empty.
   "hyprland/workspaces": {
     "format": "{name}",
     "on-click": "activate",
-    "persistent-workspaces": { "*": 5 }
+    "all-outputs": false
   },
 
   "custom/session": {

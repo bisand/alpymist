@@ -41,6 +41,18 @@ pub struct Monitor {
     pub disabled: bool,
     /// Its modes: `1920x1080@60.00Hz`.
     pub available_modes: Vec<String>,
+    /// The workspace it shows; id 0 while it is off.
+    pub active_workspace: Shown,
+    /// Whether it has the focus: the pointer's, or the keyboard's.
+    pub focused: bool,
+}
+
+/// The workspace a screen shows.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Shown {
+    /// Its id: 1 to 9 for Super+1 to Super+9.
+    pub id: i32,
 }
 
 impl Monitor {

@@ -266,7 +266,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
     match s.area() {
         "appearance" if s.id == wallpaper::ID => Ok(wallpaper::get(env)),
         "appearance" => Ok(appearance::get(env, s)),
-        "displays" => Ok(displays::get(env)),
+        "displays" => Ok(displays::get(env, s)),
         "keyboard" if s.id == "keyboard.layout" => keyboard::get(env, s),
         "language" => language::get(env, s),
         "keyboard" | "touchpad" | "mouse" => input::get(env, s),
@@ -298,7 +298,7 @@ pub fn set(
     match s.area() {
         "appearance" if s.id == wallpaper::ID => wallpaper::set(env, s, value),
         "appearance" => appearance::set(env, s, value),
-        "displays" => none(displays::set(env, value)),
+        "displays" => displays::set(env, s, value),
         "keyboard" if s.id == "keyboard.layout" => keyboard::set(env, s, value, force),
         "language" => language::set(env, s, value),
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
