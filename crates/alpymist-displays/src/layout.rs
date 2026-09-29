@@ -169,6 +169,14 @@ pub struct Layouts {
     /// screen is on (Settings › Displays).
     #[serde(default = "on", rename = "lid-turns-panel-off")]
     pub lid_off: bool,
+    /// Whether each screen has its own workspaces 1 to 9 (Settings ›
+    /// Displays), or one set is shared by them all.
+    #[serde(default = "on", rename = "workspaces-per-screen")]
+    pub per_screen: bool,
+    /// Each screen's block of workspaces, by its name: see
+    /// [`crate::workspaces`].
+    #[serde(default, rename = "workspace-blocks")]
+    pub blocks: std::collections::BTreeMap<String, u32>,
     /// One a set of screens.
     #[serde(default, rename = "layout")]
     pub layouts: Vec<Layout>,
@@ -178,6 +186,8 @@ impl Default for Layouts {
     fn default() -> Self {
         Self {
             lid_off: true,
+            per_screen: true,
+            blocks: std::collections::BTreeMap::new(),
             layouts: Vec::new(),
         }
     }

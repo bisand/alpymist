@@ -46,6 +46,17 @@ pub enum Action {
     /// Forget the layout for the screens connected now: they are extended
     /// again, and that remembered.
     Forget,
+    /// Go to workspace N, 1 to 9, of the screen with the focus (Super+N):
+    /// each screen has its own, unless Settings › Displays says otherwise.
+    Workspace {
+        /// 1 to 9.
+        n: u32,
+    },
+    /// Take the focused window to workspace N of its screen (Super+Shift+N).
+    Move {
+        /// 1 to 9.
+        n: u32,
+    },
     /// Follow screens as they come and go. Hyprland runs this at login.
     #[command(hide = true)]
     Watch,
@@ -58,6 +69,8 @@ pub enum Action {
 pub fn run(action: &Action) -> Result<(), Box<dyn std::error::Error>> {
     match action {
         Action::Watch => Ok(watch::run()?),
+        Action::Workspace { n } => Ok(alpymist_displays::switch(*n, false)?),
+        Action::Move { n } => Ok(alpymist_displays::switch(*n, true)?),
         Action::Apply => {
             let plan = alpymist_displays::apply()?;
             if plan.new {

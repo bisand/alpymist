@@ -13,6 +13,8 @@
 //! - [`hypr`]: asking Hyprland, and telling it.
 //! - [`arrange`]: where a screen goes when it is moved by hand.
 //! - [`watch`]: following screens as they come and go.
+//! - [`lid`]: what the laptop's screen showed when the lid closed.
+//! - [`workspaces`]: each screen's own workspaces 1 to 9.
 //!
 //! The laptop's own panel is turned off while the lid is closed and another
 //! screen is on, and back on when the lid opens or the other screens go;
@@ -22,8 +24,10 @@
 pub mod arrange;
 pub mod hypr;
 pub mod layout;
+pub mod lid;
 pub mod screen;
 pub mod watch;
+pub mod workspaces;
 
 use layout::{Layout, Layouts, Output};
 use screen::Monitor;
@@ -46,6 +50,12 @@ pub struct Plan {
     pub lid_closed: bool,
     /// Hyprland's monitor rules, one a screen.
     pub rules: Vec<String>,
+    /// Hyprland's workspace rules.
+    pub workspace_rules: Vec<String>,
+    /// Each screen that is on, by connector, and its block of workspaces.
+    pub on: Vec<(String, u32)>,
+    /// Every screen's block, those seen before included.
+    pub blocks: std::collections::BTreeMap<String, u32>,
 }
 
 /// Decide what to do for `monitors`, from the account's `layouts`, with the
@@ -73,24 +83,32 @@ pub fn plan(monitors: &[Monitor], layouts: &Layouts, lid_closed: bool) -> Plan {
         .zip(&names)
         .any(|(m, name)| !m.internal() && output(name, m).enabled);
     let lid_off = lid_closed && others && layouts.lid_off;
-    let rules = monitors
-        .iter()
-        .zip(&names)
-        .map(|(m, name)| {
-            let target = screen::target(name, m);
-            if lid_off && m.internal() {
-                format!("{target}, disable")
-            } else {
-                output(name, m).rule(&target)
-            }
-        })
-        .collect();
+    let (given, blocks) = workspaces::blocks(monitors, &names, &layouts.blocks);
+    let mut rules = Vec::new();
+    let mut targets = Vec::new();
+    let mut on = Vec::new();
+    for ((m, name), block) in monitors.iter().zip(&names).zip(given) {
+        let target = screen::target(name, m);
+        let lit = !(lid_off && m.internal()) && output(name, m).enabled;
+        rules.push(if lid_off && m.internal() {
+            format!("{target}, disable")
+        } else {
+            output(name, m).rule(&target)
+        });
+        if lit {
+            targets.push((target, block));
+            on.push((m.name.clone(), block));
+        }
+    }
     Plan {
         key,
         layout,
         new,
         lid_closed: lid_off,
         rules,
+        workspace_rules: workspaces::rules(layouts.per_screen, &targets),
+        on,
+        blocks,
     }
 }
 
@@ -107,6 +125,9 @@ pub fn conf(plan: &Plan) -> String {
     }
     for rule in &plan.rules {
         let _ = writeln!(text, "monitor = {rule}");
+    }
+    for rule in &plan.workspace_rules {
+        let _ = writeln!(text, "workspace = {rule}");
     }
     text
 }
@@ -148,16 +169,96 @@ pub fn apply() -> Result<Plan, String> {
     let path = layout::path();
     let mut layouts = Layouts::load(&path);
     let plan = plan(&monitors, &layouts, lid_closed(Path::new(LID)));
-    if plan.new {
-        layouts.put(plan.layout.clone());
+    if plan.new || plan.blocks != layouts.blocks {
+        if plan.new {
+            layouts.put(plan.layout.clone());
+        }
+        layouts.blocks.clone_from(&plan.blocks);
         // Unremembered is still applied: the screens work this time.
         if let Err(e) = layouts.save(&path) {
             eprintln!("alpymist displays: {e}");
         }
     }
-    write(&conf_path(), &conf(&plan))?;
+    // The lid closing or opening, as far as the panel goes: on and to go
+    // off, or off and to come on. The rules are in the screens' order.
+    let panel = monitors.iter().position(Monitor::internal);
+    let to_go_off = |i: usize| plan.rules.get(i).is_some_and(|r| r.ends_with(", disable"));
+    let closing = panel
+        .filter(|&i| !monitors[i].disabled && to_go_off(i))
+        .map(|i| lid::keep(&monitors[i], &hypr::workspaces().unwrap_or_default()));
+    let opening = panel.is_some_and(|i| monitors[i].disabled && !to_go_off(i));
+    // Workspace rules cannot be taken back one at a time: when they change,
+    // Hyprland reads them all again from the file.
+    let text = conf(&plan);
+    let old = std::fs::read_to_string(conf_path()).unwrap_or_default();
+    let workspace_lines = |t: &str| {
+        t.lines()
+            .filter(|l| l.starts_with("workspace ="))
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    let reload = workspace_lines(&old) != workspace_lines(&text);
+    write(&conf_path(), &text)?;
     hypr::apply(&plan.rules)?;
+    if reload {
+        hypr::reload()?;
+    }
+    // Each screen's workspaces back on it, when it is on: after a dock, an
+    // undock, or the lid opening. With one set for every screen, only what
+    // the laptop had when the lid closed goes back to it.
+    if layouts.per_screen {
+        let spaces = hypr::workspaces().unwrap_or_default();
+        hypr::dispatch(&workspaces::homes(&spaces, &plan.on))?;
+        let now = hypr::monitors().unwrap_or_default();
+        hypr::dispatch(&workspaces::show_own(&now, &plan.on))?;
+    } else if opening && let Some(kept) = lid::take() {
+        hypr::dispatch(&lid::opened(&kept))?;
+    }
+    if let Some(kept) = closing {
+        lid::save(&kept);
+        hypr::dispatch(&lid::closed(&kept))?;
+    }
     Ok(plan)
+}
+
+/// Super+`n`, or with Shift: go to workspace `n`, 1 to 9, of the screen that
+/// has the focus — or take the window there too. With one set for every
+/// screen, workspace `n`, wherever it is.
+///
+/// # Errors
+/// `n` is not 1 to 9, or Hyprland could not be asked or told.
+pub fn switch(n: u32, take_window: bool) -> Result<(), String> {
+    if !(1..=9).contains(&n) {
+        return Err("workspaces are 1 to 9".into());
+    }
+    let monitors = screen::parse(&hypr::request("j/monitors all")?)?;
+    let layouts = Layouts::load(&layout::path());
+    let id = focused_id(n, &monitors, &layouts);
+    let verb = if take_window {
+        "movetoworkspace"
+    } else {
+        "workspace"
+    };
+    hypr::request(&format!("dispatch {verb} {id}")).map(drop)
+}
+
+/// Workspace `n` of the screen with the focus, as Hyprland numbers it.
+#[must_use]
+pub fn focused_id(n: u32, monitors: &[Monitor], layouts: &Layouts) -> i32 {
+    let plain = i32::try_from(n).unwrap_or(1);
+    if !layouts.per_screen {
+        return plain;
+    }
+    let names = screen::names(monitors);
+    let Some(i) = monitors.iter().position(|m| m.focused) else {
+        return plain;
+    };
+    let block = layouts
+        .blocks
+        .get(&names[i])
+        .copied()
+        .or_else(|| monitors[i].internal().then_some(0));
+    block.map_or(plain, |b| workspaces::id(b, n))
 }
 
 /// What of `layout` the screens did not take, as Hyprland has them now: a
@@ -319,6 +420,22 @@ mod tests {
             super::missed(&asked, &now).is_empty(),
             "preferred is whatever it is"
         );
+    }
+
+    #[test]
+    fn super_and_a_number_is_that_workspace_of_the_screen_with_the_focus() {
+        let mut desk = [screen("eDP-1", "Panel"), screen("DP-3", "Samsung A")];
+        desk[1].focused = true;
+        let mut layouts = Layouts::default();
+        layouts.blocks.insert("Panel".into(), 0);
+        layouts.blocks.insert("Samsung A".into(), 1);
+        assert_eq!(super::focused_id(4, &desk, &layouts), 14);
+        desk[1].focused = false;
+        desk[0].focused = true;
+        assert_eq!(super::focused_id(4, &desk, &layouts), 4);
+        layouts.per_screen = false;
+        desk[1].focused = true;
+        assert_eq!(super::focused_id(4, &desk, &layouts), 4, "one set for all");
     }
 
     #[test]

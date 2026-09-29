@@ -279,7 +279,15 @@ impl Screens {
             return String::new();
         };
         if m.internal() {
-            format!("{} · {}", i + 1, m.short())
+            // On in the layout, off in fact: the lid is closed, and the
+            // layout keeps its place for when it opens.
+            let lid = m.disabled && self.draft.outputs.get(i).is_some_and(|o| o.enabled);
+            let off = if lid {
+                ", off while the lid is closed"
+            } else {
+                ""
+            };
+            format!("{} · {}{off}", i + 1, m.short())
         } else {
             format!("{} · {} ({})", i + 1, m.short(), m.name)
         }
@@ -1167,6 +1175,21 @@ mod tests {
             (200..=340).contains(&middle[1]),
             "a quarter of its height lower, not snapped back: {middle:?}"
         );
+    }
+
+    #[test]
+    fn the_laptop_screen_says_when_the_lid_has_it_off() {
+        // Remembered with the lid open; off now, for the lid.
+        let remembered = alpymist_displays::layout::Layout::extended(&desk());
+        let mut monitors = desk();
+        monitors[0].disabled = true;
+        let s = Screens::new(monitors, Some(&remembered));
+        assert!(
+            s.label(0).ends_with("off while the lid is closed"),
+            "{}",
+            s.label(0)
+        );
+        assert!(!s.label(1).contains("lid"));
     }
 
     #[test]

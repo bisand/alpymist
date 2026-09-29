@@ -101,3 +101,36 @@ edge it lands against, and is lined up only when it was dropped within 32
 layout pixels of lined up. Shift and the arrow keys slide the chosen screen
 along that edge ten pixels at a time. It still always touches another and
 never covers one.
+
+## Addendum — 2026-09-30: each screen its own workspaces
+
+Hyprland has one set of workspaces for every screen, and Super+4 goes to
+workspace 4 wherever it is, taking the pointer to another screen with it.
+On the X1's dock that made workspaces wander: closing the lid moved the
+laptop's workspaces to a Samsung but left it showing its own, and Super+4
+jumped the pointer across the desk. Hyprland's answer, workspace rules
+binding numbers to monitors, is known not to hold when monitors come back
+(hyprwm/Hyprland#9580, closed as not planned). Hyprland's users, and
+Omarchy's plugins, have settled on what macOS does: each screen its own set.
+
+So each screen has its own 1 to 9, on by default and a switch in Settings ›
+Displays. The laptop's own screen keeps Hyprland's workspaces 1 to 9, so a
+laptop on its own is unchanged; each other screen has a block of ten, 11 to
+19, 21 to 29, named 1 to 9 so the bar shows those, and the block belongs to
+the screen by make, model and serial, kept in `displays.toml`. Super+1 to
+Super+9 run `alpymist displays workspace N`, which asks Hyprland's socket
+which screen has the focus; Super+Shift takes the window. The first five of
+each screen are kept by workspace rules in `displays.conf`, so the bar,
+which now shows each screen's own, always has them.
+
+Nothing is remembered about where a workspace was: its number says whose it
+is. When a screen goes — unplugged, or the laptop's behind a closed lid —
+Hyprland moves its workspaces to the screens left, and the one the laptop
+showed is brought into view. When it comes back, each workspace is sent
+home, and a screen left showing one Hyprland made up shows its own first.
+
+Hyprland plugins stay denied, and the Lua packages that do the same need
+Hyprland 0.55, which Alpine does not have; this uses only Hyprland's own
+dispatchers and rules. An account made before has Hyprland's own Super+number
+binds; changing either Displays setting takes them over, keeping the file as
+it was beside it (ADR 0007).
