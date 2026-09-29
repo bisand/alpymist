@@ -17,7 +17,7 @@ use alpymist_displays::layout::{Layout, Output};
 use alpymist_displays::screen::{self, Monitor};
 use denise::painter::Pen;
 use denise::theme::Role;
-use denise::{ElementState, InputEvent, KeyCode, Point, Rect};
+use denise::{ElementState, InputEvent, KeyCode, Modifiers, Point, Rect};
 use denise_text::TextStyle;
 use denise_ui::NodeId;
 use denise_ui::widget::{Event, EventCtx, Handled, PaintCtx, Widget};
@@ -28,6 +28,9 @@ pub const AREA: &str = "displays";
 
 /// How long a new layout waits to be kept before it is undone.
 pub const KEEP_S: u64 = 15;
+
+/// How far Shift and an arrow slide a screen, in the layout's pixels.
+const SLIDE: i32 = 10;
 
 /// The height of the arrangement, in logical pixels.
 const ARRANGE_H: i32 = 220;
@@ -489,6 +492,7 @@ impl Widget<Msg> for Arrangement {
             Event::Input(InputEvent::Key {
                 code,
                 state: ElementState::Down,
+                modifiers,
                 ..
             }) => {
                 let way = match code {
@@ -502,7 +506,14 @@ impl Widget<Msg> for Arrangement {
                     return Handled::No;
                 };
                 let mut rooms = self.rooms.clone();
-                if arrange::nudge(&mut rooms, i, way) {
+                // With Shift, a little way along the edge it is against: for
+                // lining it up as it is on the desk.
+                let moved = if modifiers.contains(Modifiers::SHIFT) {
+                    arrange::slide(&mut rooms, i, way, SLIDE)
+                } else {
+                    arrange::nudge(&mut rooms, i, way)
+                };
+                if moved {
                     ctx.emit(Msg::Screen(self.arranged(&rooms)));
                     self.rooms = rooms;
                     ctx.invalidate();
@@ -764,15 +775,19 @@ impl View {
         };
         s.nodes.arrangement = arranged;
         y += (ARRANGE_H + GAP) * sc;
-        let hint = "Drag a screen, or choose it and use the arrow keys, to put it where it is on the desk.";
-        self.add_label(
-            parent,
-            hint,
-            dim,
-            Role::Secondary,
-            Rect::new(PAD * sc, y, width, 18 * sc),
-        );
-        y += (18 + GAP) * sc;
+        let hint = "Drag a screen to where it is on the desk. With the keyboard: the arrows move it \
+                    beside another, Shift and the arrows a little at a time.";
+        for line in super::wrap(&mut self.ui, dim, hint, width) {
+            self.add_label(
+                parent,
+                &line,
+                dim,
+                Role::Secondary,
+                Rect::new(PAD * sc, y, width, 18 * sc),
+            );
+            y += 18 * sc;
+        }
+        y += GAP * sc;
 
         // The chosen screen.
         let Some(s) = self.screens.as_ref() else {
@@ -1132,6 +1147,26 @@ mod tests {
         assert_eq!(back.outputs[2].position, [3840, 0]);
         assert_eq!(positions(&v), [[0, 0], [1920, 0], [3840, 0]]);
         assert!(v.screens.as_ref().unwrap().trial.is_none());
+    }
+
+    #[test]
+    fn a_screen_dragged_a_little_lower_stays_lower() {
+        let mut v = view();
+        let from = centre(&v, 1);
+        let node = v.screens.as_ref().unwrap().nodes.arrangement.unwrap();
+        let bounds = v.ui.bounds(node).unwrap();
+        let a = v.ui.widget::<Arrangement>(node).unwrap();
+        let quarter = a.on_screen(bounds, a.rooms[1]).height / 4;
+        drag(&mut v, from, Point::new(from.x, from.y + quarter));
+        let [laptop, middle, _] = positions(&v)[..] else {
+            panic!("three screens");
+        };
+        assert_eq!(laptop, [0, 0]);
+        assert_eq!(middle[0], 1920, "still beside the laptop");
+        assert!(
+            (200..=340).contains(&middle[1]),
+            "a quarter of its height lower, not snapped back: {middle:?}"
+        );
     }
 
     #[test]

@@ -90,3 +90,14 @@ not leave anyone without a picture to undo it with.
 What a closed lid does is a setting on that page, `displays.lid`, kept in the
 same file as the layouts (`lid-turns-panel-off`), and on by default: while
 another screen is on, closing the lid turns the laptop's panel off.
+
+## Addendum — 2026-09-29: screens stay where they are dropped
+
+The first Displays page lined a dropped screen up with its neighbour's edge
+whenever it could, which on the X1's desk made a grid of it: a screen that
+sits a little lower than the laptop, or off to one side, could not be shown
+that way. A dropped screen now keeps the place it was dropped in along the
+edge it lands against, and is lined up only when it was dropped within 32
+layout pixels of lined up. Shift and the arrow keys slide the chosen screen
+along that edge ten pixels at a time. It still always touches another and
+never covers one.
