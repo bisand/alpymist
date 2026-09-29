@@ -40,13 +40,22 @@ impl Room {
             && other.y < self.bottom()
     }
 
+    /// Whether the two share some length of an edge, side by side or one
+    /// above the other.
+    fn touches(self, other: Self) -> bool {
+        let across = self.y < other.bottom() && other.y < self.bottom();
+        let along = self.x < other.right() && other.x < self.right();
+        ((self.right() == other.x || other.right() == self.x) && across)
+            || ((self.bottom() == other.y || other.bottom() == self.y) && along)
+    }
+
     fn at(self, x: i32, y: i32) -> Self {
         Self { x, y, ..self }
     }
 }
 
 /// How close to lined up counts as lined up, in logical pixels.
-const ALIGN: i32 = 48;
+const ALIGN: i32 = 32;
 
 /// The size `output` takes in the layout: its mode, or the screen's own
 /// preferred mode, turned and scaled.
@@ -81,11 +90,11 @@ pub fn drop(rooms: &mut [Room], moved: usize, at: (i32, i32)) {
     if moved >= rooms.len() {
         return;
     }
-    if let Some(best) = places(rooms, moved)
-        .into_iter()
-        .min_by_key(|p| distance(*p, at))
-    {
-        rooms[moved] = rooms[moved].at(best.0, best.1);
+    // Lined-up places first, so one as near as a free one wins the tie.
+    let mut all = places(rooms, moved, at);
+    all.sort_by_key(|p| !p.lined);
+    if let Some(best) = all.into_iter().min_by_key(|p| distance(*p, at)) {
+        rooms[moved] = rooms[moved].at(best.x, best.y);
     }
     settle(rooms);
 }
@@ -99,30 +108,63 @@ pub fn nudge(rooms: &mut [Room], moved: usize, (dx, dy): (i32, i32)) -> bool {
     };
     // A real step that way, at least half its own size: not a pixel over
     // and a row down.
-    let ahead = |p: (i32, i32)| {
-        (p.0 - from.x) * dx >= from.w / 2 * dx.abs() && (p.1 - from.y) * dy >= from.h / 2 * dy.abs()
+    let ahead = |p: &Place| {
+        (p.x - from.x) * dx >= from.w / 2 * dx.abs() && (p.y - from.y) * dy >= from.h / 2 * dy.abs()
     };
-    let Some(best) = places(rooms, moved)
+    let Some(best) = places(rooms, moved, (from.x, from.y))
         .into_iter()
-        .filter(|p| ahead(*p))
+        .filter(ahead)
         // In line first, then nearest: Left moves along the row it is in.
         .min_by_key(|p| {
-            let along = (p.0 - from.x) * dx + (p.1 - from.y) * dy;
-            let across = (p.0 - from.x) * dy.abs() + (p.1 - from.y) * dx.abs();
+            let along = (p.x - from.x) * dx + (p.y - from.y) * dy;
+            let across = (p.x - from.x) * dy.abs() + (p.y - from.y) * dx.abs();
             (across.abs(), along.abs())
         })
     else {
         return false;
     };
-    rooms[moved] = from.at(best.0, best.1);
+    rooms[moved] = from.at(best.x, best.y);
+    settle(rooms);
+    true
+}
+
+/// A place a screen could go: against another, and whether lined up
+/// with it.
+#[derive(Debug, Clone, Copy)]
+struct Place {
+    x: i32,
+    y: i32,
+    /// Top, bottom, middle, left or right edges lined up with the one it
+    /// is against: what a screen dropped close by is drawn to.
+    lined: bool,
+}
+
+/// Slide the screen at `moved` a little way, `(0, 1)` being down by `step`,
+/// along the edge it shares with another: for lining screens up as they
+/// are on the desk from the keyboard. Not off the edge, and not over
+/// another. Whether it moved.
+pub fn slide(rooms: &mut [Room], moved: usize, (dx, dy): (i32, i32), step: i32) -> bool {
+    let Some(&from) = rooms.get(moved) else {
+        return false;
+    };
+    let to = from.at(from.x + dx * step, from.y + dy * step);
+    let others = rooms.iter().enumerate().filter(|(i, _)| *i != moved);
+    let clear = others.clone().all(|(_, o)| !to.overlaps(*o));
+    let touching = others.clone().any(|(_, o)| to.touches(*o));
+    if !clear || !touching {
+        return false;
+    }
+    rooms[moved] = to;
     settle(rooms);
     true
 }
 
 /// Everywhere the screen at `moved` could go against another without
-/// covering any: beside each one, top or bottom edges lined up or anywhere
-/// they still share an edge, and above or below each, likewise.
-fn places(rooms: &[Room], moved: usize) -> Vec<(i32, i32)> {
+/// covering any: beside each one, and above or below each. Along the edge,
+/// lined up with it — tops, bottoms or middles, lefts, rights or middles —
+/// and also exactly where `near` would put it, as long as the two still
+/// share some of the edge: screens on a desk are seldom lined up.
+fn places(rooms: &[Room], moved: usize, near: (i32, i32)) -> Vec<Place> {
     let me = rooms[moved];
     let others: Vec<Room> = rooms
         .iter()
@@ -133,34 +175,36 @@ fn places(rooms: &[Room], moved: usize) -> Vec<(i32, i32)> {
     let mut places = Vec::new();
     for o in &others {
         for x in [o.right(), o.x - me.w] {
-            for y in [
-                o.y,
-                o.bottom() - me.h,
-                me.y.clamp(o.y - me.h + 1, o.bottom() - 1),
-            ] {
-                places.push((x, y));
+            for y in [o.y, o.bottom() - me.h, o.y + (o.h - me.h) / 2] {
+                places.push(Place { x, y, lined: true });
             }
+            let y = near.1.clamp(o.y - me.h + 1, o.bottom() - 1);
+            places.push(Place { x, y, lined: false });
         }
         for y in [o.bottom(), o.y - me.h] {
-            for x in [
-                o.x,
-                o.right() - me.w,
-                me.x.clamp(o.x - me.w + 1, o.right() - 1),
-            ] {
-                places.push((x, y));
+            for x in [o.x, o.right() - me.w, o.x + (o.w - me.w) / 2] {
+                places.push(Place { x, y, lined: true });
             }
+            let x = near.0.clamp(o.x - me.w + 1, o.right() - 1);
+            places.push(Place { x, y, lined: false });
         }
     }
-    places.retain(|&(x, y)| !others.iter().any(|o| me.at(x, y).overlaps(*o)));
+    places.retain(|p| !others.iter().any(|o| me.at(p.x, p.y).overlaps(*o)));
     places
 }
 
-/// How far `p` is from `at`, with nearly lined up counting as lined up.
-fn distance(p: (i32, i32), at: (i32, i32)) -> i64 {
-    let dx = i64::from((p.0 - at.0).abs());
-    let dy = i64::from((p.1 - at.1).abs());
-    let near = |d: i64| if d <= i64::from(ALIGN) { 0 } else { d };
-    near(dx) * near(dx) + near(dy) * near(dy) + dx + dy
+/// How far `p` is from `at`, squared, with a lined-up place counting as
+/// nearer by [`ALIGN`]: dropped close to lined up is lined up, and dropped
+/// further off stays where it was dropped.
+fn distance(p: Place, at: (i32, i32)) -> i64 {
+    let dx = i64::from(p.x - at.0);
+    let dy = i64::from(p.y - at.1);
+    let d = dx * dx + dy * dy;
+    if p.lined {
+        (d - i64::from(ALIGN) * i64::from(ALIGN)).max(0)
+    } else {
+        d
+    }
 }
 
 /// Move everything so the layout's top left corner is at 0,0.
@@ -175,7 +219,7 @@ fn settle(rooms: &mut [Room]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{Room, drop, nudge, pixels};
+    use super::{Room, drop, nudge, pixels, slide};
 
     fn room(x: i32, y: i32, w: i32, h: i32) -> Room {
         Room { x, y, w, h }
@@ -193,6 +237,32 @@ mod tests {
         // Dropped well below the laptop's middle: under it, not beside it.
         drop(&mut rooms, 1, (1900, 1500));
         assert_eq!(rooms[1].y, rooms[0].y + 1200);
+    }
+
+    #[test]
+    fn a_screen_stays_where_it_is_dropped_unless_that_is_nearly_lined_up() {
+        let mut rooms = [room(0, 0, 1920, 1080), room(1920, 0, 1920, 1080)];
+        // Lower than the laptop by a hand's width: it stays lower.
+        drop(&mut rooms, 1, (1920, 240));
+        assert_eq!(rooms, [room(0, 0, 1920, 1080), room(1920, 240, 1920, 1080)]);
+        // A little to the side of dead under it: it stays to the side.
+        drop(&mut rooms, 1, (300, 1100));
+        assert_eq!(rooms[1], room(300, 1080, 1920, 1080));
+        // Nearly lined up: lined up.
+        drop(&mut rooms, 1, (1920, 20));
+        assert_eq!(rooms[1], room(1920, 0, 1920, 1080));
+    }
+
+    #[test]
+    fn shift_and_the_arrows_slide_a_screen_along_its_edge() {
+        let mut rooms = [room(0, 0, 1920, 1080), room(1920, 0, 1920, 1080)];
+        assert!(slide(&mut rooms, 1, (0, 1), 10));
+        assert_eq!(rooms[1], room(1920, 10, 1920, 1080));
+        // Not so far it no longer touches.
+        let mut far = [room(0, 0, 1920, 1080), room(1920, 1075, 1920, 1080)];
+        assert!(!slide(&mut far, 1, (0, 1), 10));
+        // Not away from the edge.
+        assert!(!slide(&mut rooms, 1, (1, 0), 10));
     }
 
     #[test]
