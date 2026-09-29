@@ -71,3 +71,22 @@ does not parse is treated as empty and never written over.
   revert; windows and workspaces following a screen as it goes and comes back;
   mirroring; and every Alpymist surface — the bar, the wallpaper, the lock and
   the screensaver, the greeter, the popups — checked on more than one screen.
+
+## Addendum — 2026-09-29: the Displays page
+
+Settings has a Displays page, the second part of #17. The screens are drawn
+to scale and dragged, or moved with the arrow keys, and are put against the
+nearest edge of another as they land (`alpymist_displays::arrange`), so a
+layout made there has no gaps and no overlaps. Each screen's resolution,
+scale, rotation and whether it is on are chosen below it, and Identify puts
+each screen's number on it, from a small window of Settings' own that takes
+no keyboard.
+
+Nothing changes until Apply. Then the layout is kept for the set of screens
+and put in place, and the page asks whether to keep it; with no answer in 15
+seconds it puts the one before back. A resolution a screen cannot show must
+not leave anyone without a picture to undo it with.
+
+What a closed lid does is a setting on that page, `displays.lid`, kept in the
+same file as the layouts (`lid-turns-panel-off`), and on by default: while
+another screen is on, closing the lid turns the laptop's panel off.

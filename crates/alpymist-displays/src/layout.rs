@@ -163,11 +163,24 @@ pub fn key(names: impl IntoIterator<Item = String>) -> Vec<String> {
 }
 
 /// Every layout the account has.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Layouts {
+    /// Whether closing the lid turns the laptop's panel off while another
+    /// screen is on (Settings › Displays).
+    #[serde(default = "on", rename = "lid-turns-panel-off")]
+    pub lid_off: bool,
     /// One a set of screens.
     #[serde(default, rename = "layout")]
     pub layouts: Vec<Layout>,
+}
+
+impl Default for Layouts {
+    fn default() -> Self {
+        Self {
+            lid_off: true,
+            layouts: Vec::new(),
+        }
+    }
 }
 
 impl Layouts {
@@ -234,6 +247,17 @@ impl Layouts {
         self.layouts.retain(|l| l.key() != key);
         self.layouts.len() != before
     }
+}
+
+/// Keep `layout` for its set of screens in the account's file.
+///
+/// # Errors
+/// The file could not be written, or is not one of layouts.
+pub fn keep(layout: Layout) -> Result<(), String> {
+    let path = path();
+    let mut all = Layouts::load(&path);
+    all.put(layout);
+    all.save(&path)
 }
 
 /// `$XDG_CONFIG_HOME/alpymist/displays.toml`.

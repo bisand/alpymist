@@ -5,6 +5,7 @@ pub mod bluetooth;
 pub mod clipboard;
 pub mod datetime;
 pub mod default_apps;
+pub mod displays;
 pub mod input;
 pub mod keyboard;
 pub mod language;
@@ -45,6 +46,26 @@ pub const AREAS: &[Area] = &[
             "dark mode",
             "wallpaper",
             "background",
+        ],
+    },
+    Area {
+        id: "displays",
+        title: "Displays",
+        description: "Where each screen is, and its resolution, scale and rotation",
+        icon: "\u{f0379}",
+        keywords: &[
+            "screen",
+            "screens",
+            "monitor",
+            "monitors",
+            "resolution",
+            "refresh",
+            "scale",
+            "rotation",
+            "arrange",
+            "dock",
+            "projector",
+            "external",
         ],
     },
     Area {
@@ -219,6 +240,7 @@ pub fn all() -> Vec<Setting> {
     [
         appearance::settings(),
         wallpaper::settings(),
+        displays::settings(),
         keyboard::settings(),
         language::settings(),
         input::settings(),
@@ -244,6 +266,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
     match s.area() {
         "appearance" if s.id == wallpaper::ID => Ok(wallpaper::get(env)),
         "appearance" => Ok(appearance::get(env, s)),
+        "displays" => Ok(displays::get(env)),
         "keyboard" if s.id == "keyboard.layout" => keyboard::get(env, s),
         "language" => language::get(env, s),
         "keyboard" | "touchpad" | "mouse" => input::get(env, s),
@@ -275,6 +298,7 @@ pub fn set(
     match s.area() {
         "appearance" if s.id == wallpaper::ID => wallpaper::set(env, s, value),
         "appearance" => appearance::set(env, s, value),
+        "displays" => none(displays::set(env, value)),
         "keyboard" if s.id == "keyboard.layout" => keyboard::set(env, s, value, force),
         "language" => language::set(env, s, value),
         "keyboard" | "touchpad" | "mouse" => none(input::set(env, s, value, force)),
@@ -303,6 +327,7 @@ pub fn live(env: &Env, s: &Setting, value: &Value) -> Result<(), String> {
             appearance::live(env, s);
             Ok(())
         }
+        "displays" => displays::live(env),
         "keyboard" if s.id == "keyboard.layout" => keyboard::live(env, value),
         "keyboard" | "touchpad" | "mouse" => input::live(env, s, value),
         "notifications" => notifications::live(env, s),

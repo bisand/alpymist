@@ -16,6 +16,8 @@ path = "src/main.rs"
 alpymist-about = { workspace = true }
 # Search that forgives punctuation and case, as the installer's lists do.
 alpymist-core = { workspace = true }
+# The screens, their layouts and arranging them, for the Displays page.
+alpymist-displays = { workspace = true }
 # Fonts parsed lazily, as the menu's are.
 alpymist-menu = { path = "../alpymist-menu" }
 alpymist-settings = { workspace = true }
@@ -25,6 +27,8 @@ alpymist-theme = { workspace = true }
 # The window.
 alpymist-widget = { workspace = true }
 denise = { workspace = true }
+# The Identify window, drawn on the CPU as the popups are.
+denise-render = { workspace = true }
 denise-text = { workspace = true }
 denise-ui = { workspace = true }
 

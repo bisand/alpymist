@@ -21,6 +21,8 @@ pub struct Monitor {
     pub name: String,
     /// Make, model and serial: `Samsung Electric Company S24E650 H4ZK500123`.
     pub description: String,
+    /// The model alone: `S24E650`.
+    pub model: String,
     /// Width in pixels, in the mode it is in.
     pub width: i32,
     /// Height in pixels.
@@ -42,6 +44,19 @@ pub struct Monitor {
 }
 
 impl Monitor {
+    /// What it is called in a list: the laptop's own screen, or its model,
+    /// or its connector when it gives no model.
+    #[must_use]
+    pub fn short(&self) -> String {
+        if self.internal() {
+            "Built-in screen".to_owned()
+        } else if self.model.trim().is_empty() {
+            self.name.clone()
+        } else {
+            self.model.trim().to_owned()
+        }
+    }
+
     /// Whether this is the machine's own panel.
     #[must_use]
     pub fn internal(&self) -> bool {

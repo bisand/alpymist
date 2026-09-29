@@ -7,8 +7,9 @@
 //! SymbolsNerdFontMono-Regular.ttf to paint with the real faces.
 
 use alpymist_about::info::About;
+use alpymist_displays::screen::Monitor;
 use alpymist_settings::{Settings, Value};
-use alpymist_settings_app::view::{Fonts, View};
+use alpymist_settings_app::view::{Fonts, Screens, View};
 use alpymist_theme::{Scheme, ThemeFile};
 use denise::{BufferAge, Frame, InputEvent, PixelFormat, Size};
 use denise_text::{GlyphSource, TrueTypeSource};
@@ -46,6 +47,47 @@ fn values(settings: &Settings) -> BTreeMap<&'static str, Result<Value, String>> 
     v
 }
 
+/// A laptop on a dock with two screens, as the dev machine is.
+fn desk() -> Vec<Monitor> {
+    let screen = |name: &str, description: &str, x: i32, width: i32, height: i32| Monitor {
+        name: name.into(),
+        description: description.into(),
+        model: description
+            .split_whitespace()
+            .nth(3)
+            .unwrap_or_default()
+            .into(),
+        width,
+        height,
+        refresh_rate: 60.0,
+        x,
+        scale: 1.0,
+        available_modes: vec![
+            format!("{width}x{height}@60.00Hz"),
+            "1680x1050@59.95Hz".into(),
+            "1280x720@60.00Hz".into(),
+        ],
+        ..Monitor::default()
+    };
+    vec![
+        screen("eDP-1", "Chimei Innolux Corporation 0x14C9", 0, 1920, 1080),
+        screen(
+            "DP-3",
+            "Samsung Electric Company S24E650 H4ZK500123",
+            1920,
+            1920,
+            1080,
+        ),
+        screen(
+            "DP-5",
+            "Samsung Electric Company S24C750 H4ZM400456",
+            3840,
+            1920,
+            1080,
+        ),
+    ]
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let dir = args.next().unwrap_or_else(|| ".".into());
@@ -56,7 +98,8 @@ fn main() {
     // A screensaver's own area opens the Screensaver page with that
     // screensaver's dialog over it, which is the only place it is drawn — so
     // point XDG_DATA_HOME at a directory of definition files to see one.
-    let scenes: [(&str, Scheme, &str, &str); 11] = [
+    let scenes: [(&str, Scheme, &str, &str); 12] = [
+        ("displays", Scheme::Dark, "displays", ""),
         ("touchpad", Scheme::Dark, "touchpad", ""),
         ("keyboard", Scheme::Dark, "keyboard.layout", ""),
         ("search", Scheme::Dark, "", "scroll"),
@@ -90,6 +133,7 @@ fn main() {
             values,
             About::sample(),
         );
+        view.screens(Screens::new(desk(), None));
         if !open.is_empty() {
             view.open(open);
         }
