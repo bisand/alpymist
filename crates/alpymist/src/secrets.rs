@@ -11,7 +11,7 @@
 //! as the compositor's parent: given a command, `ssh-agent` runs it and exits
 //! when it does, so the keys go with the session. ssh adds a key the first
 //! time it is used (`AddKeysToAgent`, from the package's `ssh_config.d`), asking
-//! for its passphrase through OpenSSH's own dialog, and the lock screen tells the
+//! for its passphrase in `alpymist-auth`'s dialog, and the lock screen tells the
 //! agent to forget them all.
 
 use std::io::Read as _;
@@ -23,9 +23,9 @@ use std::time::{Duration, Instant};
 const KEYRING: &str = "/usr/bin/gnome-keyring-daemon";
 /// OpenSSH's agent.
 const AGENT: &str = "/usr/bin/ssh-agent";
-/// OpenSSH's own passphrase dialog, from openssh-askpass. gcr's will not do:
-/// it is gcr's agent's helper, and refuses to be run as anything else.
-const ASKPASS: &str = "/usr/lib/ssh/gtk-ssh-askpass";
+/// The passphrase dialog: `alpymist-auth`, by the name that makes it ssh's
+/// askpass. The polkit prompt's own, so Ctrl+Alt+Delete vouches for it.
+const ASKPASS: &str = "/usr/libexec/alpymist-askpass";
 /// The agent's socket, in the session's runtime directory: only this account
 /// can reach it, and it is gone at the next boot.
 pub const AGENT_SOCKET: &str = "ssh-agent.socket";

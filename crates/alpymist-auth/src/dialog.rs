@@ -203,30 +203,9 @@ pub fn ask(request: Request) -> Result<bool, String> {
     std::thread::spawn(move || converse(&cookie, &received, &sender));
     let _ = orders.send(Order::Start(user));
 
-    // Under Hyprland, Ctrl+Alt+Delete checks the prompt and tells it so
-    // here. Anyone of the user's could connect and say so too; that makes a
-    // genuine prompt look checked, which gains them nothing.
     let mut prompt = Prompt::new(request, first);
-    let socket = std::env::var("XDG_CURRENT_DESKTOP")
-        .is_ok_and(|d| d.split(':').any(|d| d == "Hyprland"))
-        .then(|| attention::socket(std::process::id()))
-        .flatten();
-    if let Some(path) = &socket {
-        std::fs::remove_file(path).ok();
-        if let Ok(listener) = std::os::unix::net::UnixListener::bind(path) {
-            prompt.checkable = true;
-            let events = verified;
-            std::thread::spawn(move || {
-                for stream in listener.incoming().map_while(Result::ok) {
-                    let mut line = String::new();
-                    let _ = std::io::Read::take(stream, 64).read_to_string(&mut line);
-                    if line.trim() == "verified" && events.send(Event::Verified).is_err() {
-                        return;
-                    }
-                }
-            });
-        }
-    }
+    let socket = listen(verified, || Event::Verified);
+    prompt.checkable = socket.is_some();
 
     let authorised = std::rc::Rc::new(std::cell::Cell::new(false));
     let dialog = Dialog {
@@ -248,4 +227,32 @@ pub fn ask(request: Request) -> Result<bool, String> {
     }
     result?;
     Ok(authorised.get())
+}
+
+/// Under Hyprland, Ctrl+Alt+Delete checks the prompt and tells it so on a
+/// socket named for this process; `verified` is what the dialog is sent then.
+/// The socket, for removing afterwards, when there is one to listen on.
+///
+/// Anyone of the user's could connect and say so too; that makes a genuine
+/// prompt look checked, which gains them nothing.
+pub fn listen<E: Send + 'static>(
+    events: Sender<E>,
+    verified: fn() -> E,
+) -> Option<std::path::PathBuf> {
+    let path = std::env::var("XDG_CURRENT_DESKTOP")
+        .is_ok_and(|d| d.split(':').any(|d| d == "Hyprland"))
+        .then(|| attention::socket(std::process::id()))
+        .flatten()?;
+    std::fs::remove_file(&path).ok();
+    let listener = std::os::unix::net::UnixListener::bind(&path).ok()?;
+    std::thread::spawn(move || {
+        for stream in listener.incoming().map_while(Result::ok) {
+            let mut line = String::new();
+            let _ = std::io::Read::take(stream, 64).read_to_string(&mut line);
+            if line.trim() == "verified" && events.send(verified()).is_err() {
+                return;
+            }
+        }
+    });
+    Some(path)
 }

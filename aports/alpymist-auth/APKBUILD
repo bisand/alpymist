@@ -3,7 +3,7 @@
 pkgname=alpymist-auth
 pkgver=0.2.0
 pkgrel=0
-pkgdesc="Alpymist's password prompt: polkit authentication in a Denise dialog"
+pkgdesc="Alpymist's password prompt: polkit authentication and SSH passphrases in a Denise dialog"
 url="https://github.com/bisand/alpymist"
 arch="all"
 license="MIT OR Apache-2.0"
@@ -11,7 +11,9 @@ license="MIT OR Apache-2.0"
 # without elogind; the password is checked by polkit's own setuid helper, not
 # by anything here. polkitd is spoken to over the system bus, which needs
 # nothing linked. The dialog is a layer surface drawn by Denise on the CPU, so
-# it needs libxkbcommon and the menu's fonts.
+# it needs libxkbcommon and the menu's fonts. The same dialog is ssh's
+# SSH_ASKPASS, run by the name linked in /usr/libexec, since ssh gives the
+# program it runs nothing but the question.
 makedepends="cargo libxkbcommon-dev"
 depends="polkit font-fira-ttf font-nerd-fonts-symbols"
 options="!check"  # the test suite runs in CI, not in the package build
@@ -40,4 +42,6 @@ build() {
 package() {
 	install -Dm755 "$_release"/alpymist-auth \
 		"$pkgdir"/usr/bin/alpymist-auth
+	mkdir -p "$pkgdir"/usr/libexec
+	ln -s ../bin/alpymist-auth "$pkgdir"/usr/libexec/alpymist-askpass
 }

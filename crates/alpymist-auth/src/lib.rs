@@ -18,10 +18,17 @@
 //! - [`view`]: the dialog, laid out and painted.
 //! - [`agent`]: the polkit agent a program registers for itself.
 //! - [`secret`]: a password that wipes itself.
+//!
+//! The same dialog asks what ssh asks, as its `SSH_ASKPASS`: a key's
+//! passphrase, whether to let the agent use a key. [`askpass`] is that
+//! dialog's state and [`askpass_view`] its pixels; it hands what is typed to
+//! ssh, which asked, on standard output.
 
 #![forbid(unsafe_code)]
 
 pub mod agent;
+pub mod askpass;
+pub mod askpass_view;
 pub mod attention;
 pub mod helper;
 pub mod prompt;

@@ -20,12 +20,14 @@
 #![allow(clippy::many_single_char_names)]
 
 use crate::prompt::{Focus, Phase, Prompt, Target};
+use crate::secret::Secret;
 use alpymist_widget::Appearance;
 use alpymist_widget::draw::{self, Fonts, Ink, Metrics, Styles};
-use denise::Frame;
 use denise::geom::{Point, Rect, Size};
 use denise::painter::Pen;
+use denise::{Color, Frame};
 use denise_render::Canvas;
+use denise_text::TextEngine;
 
 /// A padlock.
 const LOCK: &str = "\u{f033e}";
@@ -280,47 +282,25 @@ pub fn paint(
     }
 
     // The field.
-    let f = layout.field;
-    let focused = prompt.focus == Focus::Field;
-    pen.fill_rounded_rect(f, m.px(8), ink.card);
-    let edge = if focused && prompt.phase == Phase::Asking {
-        ink.accent
-    } else {
-        ink.selection
+    let hint = match prompt.phase {
+        Phase::Starting => "Getting ready…",
+        Phase::Asking | Phase::Checking => prompt.label.as_str(),
     };
-    pen.stroke_rounded_rect(f, m.px(8), m.px(2), edge);
-    let inner = Rect::new(f.x + u * 3 / 4, f.y, f.width - u * 3 / 2, f.height);
-    let mut caret_x = inner.x;
-    if prompt.secret.is_empty() {
-        let hint = match prompt.phase {
-            Phase::Starting => "Getting ready…",
-            Phase::Asking | Phase::Checking => prompt.label.as_str(),
-        };
-        let at = Rect::new(inner.x + m.px(6), inner.y, inner.width, inner.height);
-        draw::label(&mut pen, engine, styles.text, at, hint, ink.dim);
-    } else if prompt.echo {
-        let text = String::from_utf8_lossy(prompt.secret.expose()).into_owned();
-        caret_x += draw::label(&mut pen, engine, styles.text, inner, &text, ink.text) + m.px(2);
-    } else {
-        // One dot a character, until the field is full; how long the
-        // password is shows no further than that.
-        let dot = u * 5 / 16;
-        let step = dot * 2 + u / 4;
-        let most = usize::try_from((inner.width - step) / step.max(1)).unwrap_or(0);
-        let cy = f.y + f.height / 2;
-        for i in 0..prompt.secret.chars().min(most) {
-            let cx = inner.x + dot + i32::try_from(i).unwrap_or(0) * step;
-            pen.fill_circle(Point::new(cx, cy), dot, ink.text);
-            caret_x = cx + dot + u / 4;
-        }
-    }
-    if prompt.phase == Phase::Asking && focused {
-        let h = u * 5 / 4;
-        pen.fill_rect(
-            Rect::new(caret_x, f.y + (f.height - h) / 2, m.px(2), h),
-            ink.accent,
-        );
-    }
+    field(
+        &mut pen,
+        engine,
+        &styles,
+        m,
+        &ink,
+        &Field {
+            rect: layout.field,
+            secret: &prompt.secret,
+            echo: prompt.echo,
+            hint,
+            taking: prompt.phase == Phase::Asking,
+            focused: prompt.focus == Focus::Field,
+        },
+    );
 
     // The line under it.
     let s = layout.status;
@@ -343,36 +323,14 @@ pub fn paint(
         } else {
             ink.dim
         };
-        let iw = draw::label(
-            &mut pen,
-            engine,
-            styles.icon_small,
-            Rect::new(s.x, s.y, u, s.height),
-            WARN,
-            colour,
-        );
-        draw::label(
-            &mut pen,
-            engine,
-            styles.small,
-            Rect::new(s.x + iw + u / 3, s.y, s.width, s.height),
-            text,
-            colour,
-        );
+        note(&mut pen, engine, &styles, s, WARN, text, colour);
     } else if prompt.caps_lock {
-        let iw = draw::label(
+        note(
             &mut pen,
             engine,
-            styles.icon_small,
-            Rect::new(s.x, s.y, u, s.height),
+            &styles,
+            s,
             WARN,
-            ink.warn,
-        );
-        draw::label(
-            &mut pen,
-            engine,
-            styles.small,
-            Rect::new(s.x + iw + u / 3, s.y, s.width, s.height),
             "Caps Lock is on",
             ink.warn,
         );
@@ -380,35 +338,7 @@ pub fn paint(
 
     // How to know this is Alpymist's, or that it was checked.
     if let Some(c) = layout.check {
-        pen.fill_rect(
-            Rect::new(c.x, c.y - u * 3 / 8, c.width, m.px(1)),
-            ink.selection,
-        );
-        let (glyph, text, colour) = if prompt.verified {
-            (SHIELD, "Checked with Ctrl+Alt+Delete", GOOD)
-        } else {
-            (
-                KEYS,
-                "Ctrl+Alt+Delete: the desktop says if this prompt is real",
-                ink.dim,
-            )
-        };
-        let iw = draw::label(
-            &mut pen,
-            engine,
-            styles.icon_small,
-            Rect::new(c.x, c.y, u, c.height),
-            glyph,
-            colour,
-        );
-        draw::label(
-            &mut pen,
-            engine,
-            styles.small,
-            Rect::new(c.x + iw + u / 3, c.y, c.width - iw - u / 3, c.height),
-            text,
-            colour,
-        );
+        check(&mut pen, engine, &styles, m, &ink, c, prompt.verified);
     }
 
     // Buttons.
@@ -445,4 +375,126 @@ pub fn paint(
             draw::focus_ring(&mut pen, rect, rect.height / 2, m, &ink);
         }
     }
+}
+
+/// A password field, as it is drawn.
+pub struct Field<'a> {
+    /// Where.
+    pub rect: Rect,
+    /// What has been typed.
+    pub secret: &'a Secret,
+    /// Whether it may be shown as typed.
+    pub echo: bool,
+    /// What is shown while it is empty.
+    pub hint: &'a str,
+    /// Whether it takes typing now.
+    pub taking: bool,
+    /// Whether it has the keyboard.
+    pub focused: bool,
+}
+
+/// Paint a password field: a dot a character, or the text where it may be
+/// shown, and a caret while it takes typing.
+pub fn field(
+    pen: &mut Pen<'_>,
+    engine: &mut TextEngine,
+    styles: &Styles,
+    m: &Metrics,
+    ink: &Ink,
+    field: &Field<'_>,
+) {
+    let u = m.unit;
+    let f = field.rect;
+    pen.fill_rounded_rect(f, m.px(8), ink.card);
+    let edge = if field.focused && field.taking {
+        ink.accent
+    } else {
+        ink.selection
+    };
+    pen.stroke_rounded_rect(f, m.px(8), m.px(2), edge);
+    let inner = Rect::new(f.x + u * 3 / 4, f.y, f.width - u * 3 / 2, f.height);
+    let mut caret_x = inner.x;
+    if field.secret.is_empty() {
+        let at = Rect::new(inner.x + m.px(6), inner.y, inner.width, inner.height);
+        draw::label(pen, engine, styles.text, at, field.hint, ink.dim);
+    } else if field.echo {
+        let text = String::from_utf8_lossy(field.secret.expose()).into_owned();
+        caret_x += draw::label(pen, engine, styles.text, inner, &text, ink.text) + m.px(2);
+    } else {
+        // One dot a character, until the field is full; how long the
+        // password is shows no further than that.
+        let dot = u * 5 / 16;
+        let step = dot * 2 + u / 4;
+        let most = usize::try_from((inner.width - step) / step.max(1)).unwrap_or(0);
+        let cy = f.y + f.height / 2;
+        for i in 0..field.secret.chars().min(most) {
+            let cx = inner.x + dot + i32::try_from(i).unwrap_or(0) * step;
+            pen.fill_circle(Point::new(cx, cy), dot, ink.text);
+            caret_x = cx + dot + u / 4;
+        }
+    }
+    if field.taking && field.focused {
+        let h = u * 5 / 4;
+        pen.fill_rect(
+            Rect::new(caret_x, f.y + (f.height - h) / 2, m.px(2), h),
+            ink.accent,
+        );
+    }
+}
+
+/// A line of small text after an icon: a warning, Caps Lock.
+pub fn note(
+    pen: &mut Pen<'_>,
+    engine: &mut TextEngine,
+    styles: &Styles,
+    r: Rect,
+    glyph: &str,
+    text: &str,
+    colour: Color,
+) {
+    let u = r.height * 2 / 3;
+    let iw = draw::label(
+        pen,
+        engine,
+        styles.icon_small,
+        Rect::new(r.x, r.y, u, r.height),
+        glyph,
+        colour,
+    );
+    draw::label(
+        pen,
+        engine,
+        styles.small,
+        Rect::new(r.x + iw + u / 3, r.y, r.width - iw - u / 3, r.height),
+        text,
+        colour,
+    );
+}
+
+/// The foot of a prompt: how to know it is Alpymist's, or that it was
+/// checked.
+pub fn check(
+    pen: &mut Pen<'_>,
+    engine: &mut TextEngine,
+    styles: &Styles,
+    m: &Metrics,
+    ink: &Ink,
+    c: Rect,
+    verified: bool,
+) {
+    let u = m.unit;
+    pen.fill_rect(
+        Rect::new(c.x, c.y - u * 3 / 8, c.width, m.px(1)),
+        ink.selection,
+    );
+    let (glyph, text, colour) = if verified {
+        (SHIELD, "Checked with Ctrl+Alt+Delete", GOOD)
+    } else {
+        (
+            KEYS,
+            "Ctrl+Alt+Delete: the desktop says if this prompt is real",
+            ink.dim,
+        )
+    };
+    note(pen, engine, styles, c, glyph, text, colour);
 }
