@@ -61,4 +61,21 @@ if [ -f "$conf" ] && grep -q '^cfgfile=.*alpymist\.toml' "$conf" &&
 	! grep -q '^rc_need=' "$conf"; then
 	printf '# The desktop opens its screen and keyboard through seatd.\nrc_need="seatd"\n' >>"$conf"
 fi
+
+# The clock set from the network, on by default now (#65): a hardware clock
+# that lost its time otherwise stays wrong, and every certificate is then not
+# yet valid, so nothing updates. Turned on once, for systems installed before;
+# the mark keeps a later upgrade from turning it on again after Settings ›
+# Date & time turned it off.
+mark=/var/lib/alpymist/network-time
+if [ ! -e "$mark" ]; then
+	if [ ! -e /etc/runlevels/default/ntpd ] &&
+		rc-update add ntpd default >/dev/null 2>&1; then
+		rc-service ntpd start >/dev/null 2>&1 || true
+		echo "  * The clock is now set from the network (ntpd)."
+		echo "    Settings > Date & time turns it off."
+	fi
+	mkdir -p /var/lib/alpymist
+	: >"$mark"
+fi
 exit 0

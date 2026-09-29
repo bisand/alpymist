@@ -19,4 +19,11 @@ if command -v alpymist >/dev/null 2>&1; then
 		su -s /bin/sh "$owner" -c "alpymist session prepare" >/dev/null 2>&1 || true
 	done
 fi
+# The clock set from the network, as the installer also does: busybox's ntpd, a
+# client only. Not started here, where apk may be installing into a disk being
+# set up and the running system is someone else's. The mark says it has been
+# turned on once, so no upgrade turns it on again after Settings turned it off.
+rc-update add ntpd default >/dev/null 2>&1 || true
+mkdir -p /var/lib/alpymist
+: >/var/lib/alpymist/network-time
 exit 0

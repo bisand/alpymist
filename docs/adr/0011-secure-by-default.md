@@ -83,3 +83,24 @@ that CI holds the stable signing key.
 - Reviews have a concrete question to ask of any change to the installer, the
   packages or the skeleton files: does this make the machine less safe for
   someone who never opens Settings?
+
+## Addendum — 2026-09-29: the clock is set from the network by default
+
+Network time was off until someone turned it on in Settings › Date & time, and
+nothing said so. The Asus test machine's hardware clock lost its time, came up
+in 2012, and stayed there: every certificate was then not yet valid, and apk,
+the store, Flatpak and the browser all failed with nothing on screen to say
+why (#65).
+
+It is on by default now: the installer adds busybox's `ntpd` to the default
+runlevel, and `alpymist-desktop` does the same for systems installed before,
+once, leaving a mark in `/var/lib/alpymist` so a later upgrade does not undo
+turning it off.
+
+This is not a weaker default, so it is an addendum rather than a reversal.
+§1's "nothing listening on the network" is about answering others, and `ntpd`
+here is a client: `/etc/conf.d/ntpd` gives it `-p pool.ntp.org` and not `-l`,
+so it asks the pool and answers nobody. What it does reveal is that the
+machine asks pool.ntp.org the time, which every phone and laptop does too. A
+right clock is itself a security property: certificates, signatures and
+expiring tokens are all judged against it.

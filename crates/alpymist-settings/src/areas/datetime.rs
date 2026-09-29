@@ -9,7 +9,9 @@
 //! it. A zone copied before is left where it is.
 //!
 //! Network time is busybox's `ntpd`, which every system already has, as a
-//! client only: in the default runlevel and running, or neither.
+//! client only: in the default runlevel and running, or neither. It is on
+//! unless turned off here: the installer and the desktop package turn it on,
+//! the package once only, so an upgrade never undoes turning it off.
 //!
 //! The 24-hour clock is the system's, since the login screen shows a clock
 //! before anyone has logged in: in `/etc/alpymist/settings.toml`, which the
