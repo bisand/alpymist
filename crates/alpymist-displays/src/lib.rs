@@ -160,6 +160,52 @@ pub fn apply() -> Result<Plan, String> {
     Ok(plan)
 }
 
+/// What of `layout` the screens did not take, as Hyprland has them now: a
+/// mode a screen refused, which Hyprland answers by keeping the one it had,
+/// or a scale it would not use. Said for a person, one sentence a screen.
+#[must_use]
+pub fn missed(layout: &Layout, monitors: &[Monitor]) -> Vec<String> {
+    let names = screen::names(monitors);
+    let mut missed = Vec::new();
+    for (m, name) in monitors.iter().zip(&names) {
+        let Some(o) = layout.outputs.iter().find(|o| &o.screen == name) else {
+            continue;
+        };
+        if o.enabled == m.disabled {
+            missed.push(format!(
+                "{} did not turn {}.",
+                m.name,
+                if o.enabled { "on" } else { "off" }
+            ));
+            continue;
+        }
+        if !o.enabled {
+            continue;
+        }
+        if let (Some((w, h)), Some(rate)) = (
+            arrange::pixels(&o.mode),
+            o.mode
+                .split_once('@')
+                .and_then(|(_, r)| r.parse::<f64>().ok()),
+        ) && (w != m.width || h != m.height || (rate - m.refresh_rate).abs() > 1.0)
+        {
+            missed.push(format!(
+                "{} would not show {w} × {h} at {rate:.0} Hz, and stayed at {} × {} at {:.0} Hz.",
+                m.name, m.width, m.height, m.refresh_rate
+            ));
+        }
+        if (o.scale - m.scale).abs() > 0.01 {
+            missed.push(format!(
+                "{} would not take a scale of {:.0} %, and is at {:.0} %.",
+                m.name,
+                o.scale * 100.0,
+                m.scale * 100.0
+            ));
+        }
+    }
+    missed
+}
+
 fn write(path: &Path, text: &str) -> Result<(), String> {
     if std::fs::read_to_string(path).is_ok_and(|old| old == text) {
         return Ok(());
@@ -255,6 +301,24 @@ mod tests {
             "not when Settings says to leave it on"
         );
         assert_eq!(alone.rules[0], "desc:Panel, 1920x1080@60.00, 0x0, 1");
+    }
+
+    #[test]
+    fn a_mode_the_screen_would_not_show_is_noticed() {
+        let now = [screen("Virtual-1", "QEMU")];
+        let mut asked = crate::layout::Layout::current(&now);
+        assert!(super::missed(&asked, &now).is_empty(), "as it is");
+        asked.outputs[0].mode = "3840x2160@60.00".into();
+        asked.outputs[0].scale = 1.25;
+        let missed = super::missed(&asked, &now);
+        assert_eq!(missed.len(), 2, "{missed:?}");
+        assert!(missed[0].contains("stayed at 1920 × 1080"), "{missed:?}");
+        asked.outputs[0].mode = "preferred".into();
+        asked.outputs[0].scale = 1.0;
+        assert!(
+            super::missed(&asked, &now).is_empty(),
+            "preferred is whatever it is"
+        );
     }
 
     #[test]

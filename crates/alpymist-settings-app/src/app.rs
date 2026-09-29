@@ -185,6 +185,29 @@ fn spawn(argv: &[&str]) {
     }
 }
 
+/// Put `layout` in place and remember it, and see that the screens took
+/// it: Hyprland keeps a screen's old mode when it refuses a new one, and
+/// says nothing. When they did not, `before` goes back.
+fn lay(
+    layout: &alpymist_displays::layout::Layout,
+    before: Option<alpymist_displays::layout::Layout>,
+) -> Result<(), String> {
+    let put = |layout: alpymist_displays::layout::Layout| {
+        alpymist_displays::layout::keep(layout).and_then(|()| alpymist_displays::apply().map(drop))
+    };
+    put(layout.clone())?;
+    let Some(before) = before else {
+        return Ok(());
+    };
+    let now = alpymist_displays::hypr::monitors()?;
+    let missed = alpymist_displays::missed(layout, &now);
+    if missed.is_empty() {
+        return Ok(());
+    }
+    put(before)?;
+    Err(format!("{} The layout before is back.", missed.join(" ")))
+}
+
 /// The screens Hyprland has, with the layout remembered for them.
 fn screens() -> Screens {
     match alpymist_displays::hypr::monitors() {
@@ -307,14 +330,12 @@ impl SettingsApp {
                 }
                 Effect::Action(Action::CheckUpdates) => spawn(&["alpymist-store", "updates"]),
                 Effect::Action(Action::Identify) => identify(),
-                Effect::Layout(layout) => {
+                Effect::Layout { layout, before } => {
                     // hyprctl answers at once, but a screen changing mode
                     // takes a moment, and the window keeps drawing meanwhile.
                     let sender = self.sender.clone();
                     std::thread::spawn(move || {
-                        let laid = alpymist_displays::layout::keep(layout)
-                            .and_then(|()| alpymist_displays::apply().map(drop));
-                        let _ = sender.send(Event::Laid(laid));
+                        let _ = sender.send(Event::Laid(lay(&layout, before)));
                     });
                 }
                 Effect::Action(Action::CopyAbout) => {
@@ -543,6 +564,7 @@ impl App for SettingsApp {
             Event::Thumbnail { path, pixels, size } => view.thumbnail(path, pixels, size),
             Event::Laid(result) => {
                 if let Err(e) = result {
+                    view.layout_refused();
                     view.toast(&e, true);
                 }
                 view.screens(screens());

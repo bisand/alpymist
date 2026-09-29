@@ -542,6 +542,14 @@ impl View {
         }
     }
 
+    /// The screens did not take the layout just applied, and the one before
+    /// is back: there is nothing left to keep.
+    pub fn layout_refused(&mut self) {
+        if let Some(s) = self.screens.as_mut() {
+            s.trial = None;
+        }
+    }
+
     /// Whether the Displays page is up.
     pub(super) fn on_displays(&self) -> bool {
         matches!(self.page, Page::Area(i) if self.settings.pages().get(i).is_some_and(|a| a.id == AREA))
@@ -665,15 +673,22 @@ impl View {
                     before: s.applied.clone(),
                     deadline_ms: s.now_ms + KEEP_S * 1000,
                 });
+                let before = s.applied.clone();
                 s.applied = s.draft.clone();
-                effects.push(Effect::Layout(s.draft.clone()));
+                effects.push(Effect::Layout {
+                    layout: s.draft.clone(),
+                    before: Some(before),
+                });
             }
             ScreenMsg::Keep => s.trial = None,
             ScreenMsg::Revert => {
                 if let Some(t) = s.trial.take() {
                     s.applied = t.before.clone();
                     s.draft = t.before.clone();
-                    effects.push(Effect::Layout(t.before));
+                    effects.push(Effect::Layout {
+                        layout: t.before,
+                        before: None,
+                    });
                 }
             }
             ScreenMsg::Reset => s.draft = s.applied.clone(),
@@ -871,25 +886,22 @@ impl View {
         let left = s.left_s();
         let button_w = 150 * sc;
         let control_h = CONTROL_H * sc;
-        self.ui.add(
-            parent,
-            Button::new("Identify", Msg::Screen(ScreenMsg::Identify))
-                .with_role(Role::Neutral)
-                .with_style(text),
-            Rect::new(PAD * sc, y, button_w, control_h),
-        );
         if let Some(left) = left {
+            // The question on a line of its own, above the answers.
             let countdown_node = self.add_label(
                 parent,
                 &countdown(left),
                 text,
                 Role::BaseContent,
-                Rect::new(
-                    PAD * sc + button_w + GAP * sc,
-                    y + 8 * sc,
-                    width - 3 * button_w,
-                    22 * sc,
-                ),
+                Rect::new(PAD * sc, y, width, 22 * sc),
+            );
+            y += (22 + GAP) * sc;
+            self.ui.add(
+                parent,
+                Button::new("Identify", Msg::Screen(ScreenMsg::Identify))
+                    .with_role(Role::Neutral)
+                    .with_style(text),
+                Rect::new(PAD * sc, y, button_w, control_h),
             );
             self.ui.add(
                 parent,
@@ -917,6 +929,13 @@ impl View {
                 self.ui.focus(Some(keep));
             }
         } else {
+            self.ui.add(
+                parent,
+                Button::new("Identify", Msg::Screen(ScreenMsg::Identify))
+                    .with_role(Role::Neutral)
+                    .with_style(text),
+                Rect::new(PAD * sc, y, button_w, control_h),
+            );
             let reset = self.ui.add(
                 parent,
                 Button::new("Undo changes", Msg::Screen(ScreenMsg::Reset))
@@ -1088,14 +1107,26 @@ mod tests {
 
         let mut effects = Vec::new();
         v.displays_message(ScreenMsg::Apply, &mut effects);
-        let [Effect::Layout(applied)] = effects.as_slice() else {
+        let [
+            Effect::Layout {
+                layout: applied,
+                before: Some(_),
+            },
+        ] = effects.as_slice()
+        else {
             panic!("Apply puts the layout in place: {effects:?}");
         };
         assert_eq!(applied.outputs[2].position, [0, 0]);
 
         // Nobody answers the question: it goes back on its own.
         let later = v.handle(&[], 100 + super::KEEP_S * 1000 + 1);
-        let [Effect::Layout(back)] = later.as_slice() else {
+        let [
+            Effect::Layout {
+                layout: back,
+                before: None,
+            },
+        ] = later.as_slice()
+        else {
             panic!("the layout before comes back: {later:?}");
         };
         assert_eq!(back.outputs[2].position, [3840, 0]);
