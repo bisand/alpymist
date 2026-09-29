@@ -4,6 +4,7 @@
 //! alpymist-auth run -- COMMAND [ARGS…]   run COMMAND through pkexec, asking here
 //! alpymist-auth prompt                   the dialog, started by an agent
 //! alpymist-auth attention                check the prompt on screen is Alpymist's
+//! alpymist-auth askpass QUESTION         ask what ssh asks, as its SSH_ASKPASS
 //! ```
 //!
 //! `run` is for a menu entry or a script: it registers an agent for itself
@@ -15,9 +16,16 @@
 //! `prompt` reads polkitd's description of the request as JSON on standard
 //! input, asks, and exits 0 only when polkit's helper said the password was
 //! right.
+//!
+//! `askpass` is what ssh, ssh-add and git run to ask for a passphrase. They
+//! run `SSH_ASKPASS` with the question as its only argument, so the package
+//! links `/usr/libexec/alpymist-askpass` here, and run by that name this is
+//! `askpass` with whatever it was given.
 
 #![forbid(unsafe_code)]
 
+#[cfg(target_os = "linux")]
+mod askpass_dialog;
 #[cfg(target_os = "linux")]
 mod dialog;
 
@@ -25,13 +33,26 @@ use std::process::ExitCode;
 
 const USAGE: &str = "\
 usage: alpymist-auth run -- COMMAND [ARGS...]
+       alpymist-auth askpass QUESTION
 
-Runs COMMAND as root through pkexec, asking for the password in Alpymist's
-dialog rather than on a terminal. polkit decides who may, and checks the
-password; this only asks for it.";
+run: runs COMMAND as root through pkexec, asking for the password in
+Alpymist's dialog rather than on a terminal. polkit decides who may, and checks
+the password; this only asks for it.
+
+askpass: asks QUESTION the way ssh's SSH_ASKPASS does, and prints the answer.
+SSH_ASKPASS_PROMPT=confirm asks yes or no, and =none only shows it; the exit
+status is 0 for an answer or a yes.";
+
+/// The name the package links this under, for `SSH_ASKPASS`.
+const ASKPASS: &str = "alpymist-askpass";
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args = std::env::args();
+    let called = args.next().unwrap_or_default();
+    let args: Vec<String> = args.collect();
+    if std::path::Path::new(&called).file_name() == Some(ASKPASS.as_ref()) {
+        return askpass(&args);
+    }
     match args.first().map(String::as_str) {
         Some("run") => {
             let command = match args.get(1).map(String::as_str) {
@@ -42,6 +63,7 @@ fn main() -> ExitCode {
         }
         Some("prompt") => prompt(),
         Some("attention") => attention(),
+        Some("askpass") => askpass(&args[1..]),
         Some("-h" | "--help") => {
             println!("{USAGE}");
             ExitCode::SUCCESS
@@ -174,6 +196,42 @@ fn prompt() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Ask what ssh asks. The answer goes to standard output, where ssh reads
+/// it, and nowhere else.
+#[cfg(target_os = "linux")]
+fn askpass(args: &[String]) -> ExitCode {
+    use alpymist_auth::askpass::{Answer, Kind};
+    use std::io::Write as _;
+    let question = args.join(" ");
+    let kind = Kind::named(std::env::var("SSH_ASKPASS_PROMPT").ok().as_deref());
+    match askpass_dialog::ask(kind, &question) {
+        Ok(Some(Answer::Typed(secret))) => {
+            let mut out = std::io::stdout().lock();
+            let written = out
+                .write_all(secret.expose())
+                .and_then(|()| out.write_all(b"\n"))
+                .and_then(|()| out.flush());
+            if written.is_ok() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            }
+        }
+        Ok(Some(Answer::Yes)) => ExitCode::SUCCESS,
+        Ok(Some(Answer::No) | None) => ExitCode::FAILURE,
+        Err(e) => {
+            eprintln!("alpymist-auth: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn askpass(_: &[String]) -> ExitCode {
+    eprintln!("alpymist-auth: the prompt needs Wayland");
+    ExitCode::FAILURE
 }
 
 #[cfg(not(target_os = "linux"))]

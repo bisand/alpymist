@@ -39,7 +39,7 @@ license="MIT OR Apache-2.0"
 # password (Alpine's base PAM stack already calls pam_gnome_keyring where it
 # is installed), and shadow's passwd, which goes through that stack, so the
 # keyring's password changes with the login's; busybox's does not. SSH keys
-# are OpenSSH's agent's, asked for through openssh-askpass's dialog, and git
+# are OpenSSH's agent's, asked for in alpymist-auth's dialog, and git
 # keeps HTTPS credentials in the keyring through git-credential-libsecret. The
 # login screen has a PAM service of its own, which starts no keyring
 # (ADR 0013).
@@ -64,6 +64,7 @@ depends="
 	adwaita-icon-theme
 	alpymist
 	alpymist-about
+	alpymist-auth
 	alpymist-greeter
 	alpymist-keys
 	alpymist-lock
@@ -104,7 +105,6 @@ depends="
 	mako
 	mesa-dri-gallium
 	musl-locales
-	openssh-askpass
 	pam-rundir
 	pavucontrol
 	pipewire

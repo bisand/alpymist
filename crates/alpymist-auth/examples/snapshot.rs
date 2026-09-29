@@ -7,6 +7,8 @@
 
 #![allow(clippy::many_single_char_names)]
 
+use alpymist_auth::askpass::{Askpass, Kind};
+use alpymist_auth::askpass_view;
 use alpymist_auth::helper::Step;
 use alpymist_auth::prompt::{Focus, Prompt, Target};
 use alpymist_auth::request::{Identity, Request};
@@ -124,18 +126,88 @@ fn main() {
             .expect("frame");
             view::paint(&mut frame, &layout, &appearance, &mut fonts, prompt);
         }
-        let file = std::fs::File::create(format!("{dir}/{name}.png")).expect("png");
-        let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), size.width, size.height);
-        encoder.set_color(png::ColorType::Rgba);
-        encoder.set_depth(png::BitDepth::Eight);
-        let mut writer = encoder.write_header().expect("header");
-        let data: Vec<u8> = pixels
-            .iter()
-            .flat_map(|p| {
-                let [a, r, g, b] = p.to_be_bytes();
-                [r, g, b, a]
-            })
-            .collect();
-        writer.write_image_data(&data).expect("data");
+        save(&format!("{dir}/{name}.png"), size, &pixels);
     }
+
+    askpass(&dir, scale, &appearance, &mut fonts);
+}
+
+/// ssh's questions, in the askpass dialog.
+fn askpass(dir: &str, scale: u32, appearance: &Appearance, fonts: &mut Fonts) {
+    let home = Some("/home/andre");
+    let mut asks: Vec<(&str, Askpass)> = Vec::new();
+    let mut a = Askpass::new(
+        Kind::Answer,
+        "Enter passphrase for key '/home/andre/.ssh/id_ed25519': ",
+        home,
+    );
+    a.checkable = true;
+    for ch in "correct horse".chars() {
+        a.text(ch);
+    }
+    a.caps_lock = true;
+    asks.push(("askpass-key", a));
+    let mut a = Askpass::new(
+        Kind::Answer,
+        "The authenticity of host 'vm (192.168.64.8)' can't be established.\n\
+         ED25519 key fingerprint is SHA256:Lq2bX9o0a8Qm3Ck4z1vJmYlS6nQpE0sT7wHcRf2uD5g.\n\
+         This key is not known by any other names.\n\
+         Are you sure you want to continue connecting (yes/no/[fingerprint])? ",
+        home,
+    );
+    a.checkable = true;
+    for ch in "yes".chars() {
+        a.text(ch);
+    }
+    asks.push(("askpass-host", a));
+    let mut a = Askpass::new(
+        Kind::Confirm,
+        "Allow use of key /home/andre/.ssh/id_ed25519?\n\
+         Key fingerprint SHA256:Lq2bX9o0a8Qm3Ck4z1vJmYlS6nQpE0sT7wHcRf2uD5g.",
+        home,
+    );
+    a.checkable = true;
+    let _ = a.verify();
+    asks.push(("askpass-confirm", a));
+    asks.push((
+        "askpass-touch",
+        Askpass::new(
+            Kind::Notice,
+            "Confirm user presence for key ED25519-SK SHA256:Lq2bX9o0a8Qm3Ck4z1vJmYlS6nQpE0sT7wHcRf2uD5g",
+            home,
+        ),
+    ));
+    for (name, ask) in &asks {
+        let layout = askpass_view::Layout::new(appearance, fonts, ask, scale);
+        let size = layout.size;
+        let mut pixels = vec![0u32; (size.width * size.height) as usize];
+        {
+            let mut frame = Frame::new(
+                &mut pixels,
+                size,
+                size.width,
+                PixelFormat::Argb8888,
+                BufferAge::Undefined,
+            )
+            .expect("frame");
+            askpass_view::paint(&mut frame, &layout, appearance, fonts, ask);
+        }
+        save(&format!("{dir}/{name}.png"), size, &pixels);
+    }
+}
+
+fn save(path: &str, size: denise::geom::Size, pixels: &[u32]) {
+    let file = std::fs::File::create(path).expect("png");
+    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), size.width, size.height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().expect("header");
+    let data: Vec<u8> = pixels
+        .iter()
+        .flat_map(|p| {
+            let [a, r, g, b] = p.to_be_bytes();
+            [r, g, b, a]
+        })
+        .collect();
+    writer.write_image_data(&data).expect("data");
 }

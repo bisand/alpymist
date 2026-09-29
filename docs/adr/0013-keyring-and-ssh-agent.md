@@ -104,3 +104,26 @@ password. So:
   for whoever wants that.
 - gnome-keyring's own autostart entries are GNOME's only (`OnlyShowIn`), so
   `alpymist autostart` leaves them alone and nothing starts it twice.
+
+## Addendum — 2026-09-29: the passphrase is asked in Alpymist's own dialog
+
+`openssh-askpass`'s GTK dialog is gone. `alpymist-auth` asks instead, linked
+as `/usr/libexec/alpymist-askpass` and set as `SSH_ASKPASS`. ssh runs the
+program it names with the question as its only argument, so the link's name is
+what tells `alpymist-auth` it is being run as an askpass; `alpymist-auth askpass
+QUESTION` is the same thing by hand.
+
+It is the polkit prompt's layer, backdrop and exclusive keyboard, drawn under
+the same name by the same binary, so Ctrl+Alt+Delete vouches for a passphrase
+prompt as it does for a password one. A lookalike asking for a key's
+passphrase is now told apart, which with the GTK dialog it could not be.
+
+What ssh asks is shown in ssh's words. `SSH_ASKPASS_PROMPT=confirm` (`ssh-add
+-c`, `AddKeysToAgent confirm`) is Allow or Deny, with Deny focused, since the
+dialog takes the keyboard and a keystroke meant for somewhere else must not
+allow a key. `SSH_ASKPASS_PROMPT=none` only shows its message. A username, or
+the yes-or-no of a host key never seen before, is shown as it is typed; a
+passphrase, a PIN or a password is dots.
+
+The passphrase goes to ssh on standard output and nowhere else. It is held in
+the prompt's self-wiping buffer until then.
