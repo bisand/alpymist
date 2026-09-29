@@ -135,8 +135,14 @@ pub enum Effect {
     },
     /// Do an [`Action`].
     Action(Action),
-    /// Put this layout in place for the screens connected, and remember it.
-    Layout(alpymist_displays::layout::Layout),
+    /// Put `layout` in place for the screens connected, and remember it; if
+    /// the screens do not take it, put `before` back, when there is one.
+    Layout {
+        /// The layout.
+        layout: alpymist_displays::layout::Layout,
+        /// The one to go back to.
+        before: Option<alpymist_displays::layout::Layout>,
+    },
     /// Close the window.
     Close,
 }
@@ -623,6 +629,7 @@ impl View {
         if size == self.size && s == self.scale {
             return;
         }
+        let rescaled = s != self.scale;
         self.size = size;
         self.scale = s;
         self.ui.handle(&[InputEvent::SurfaceResized {
@@ -630,8 +637,35 @@ impl View {
             #[allow(clippy::cast_precision_loss)]
             scale_factor: s as f32,
         }]);
+        if rescaled {
+            self.restyle_sidebar();
+        }
         self.place_sidebar();
         self.build();
+    }
+
+    /// The search field and the areas at a new scale. Their text and row
+    /// sizes were given in pixels when they were made, so the list is made
+    /// again at the new ones: a list keeps its row height.
+    fn restyle_sidebar(&mut self) {
+        let style = self.style(self.text, 15);
+        if let Some(field) = self.ui.widget_mut::<TextInput<Msg>>(self.search) {
+            field.set_style(style);
+        }
+        let focused = self.ui.focused() == Some(self.areas);
+        let list = List::new(area_items(&self.settings, &self.shown), Msg::Area)
+            .on_activate(Msg::Area)
+            .activate_on_click()
+            .with_row_height(LIST_ROW * self.scale)
+            .with_style(style);
+        self.ui.remove(self.areas);
+        if let Some(areas) = self.ui.add(self.viewport, list, Rect::ZERO) {
+            self.areas = areas;
+        }
+        self.refresh_areas(&self.page.clone());
+        if focused {
+            self.ui.focus(Some(self.areas));
+        }
     }
 
     /// Handle input, `now_ms` since some start, and say what to do.
@@ -1947,6 +1981,21 @@ mod tests {
         assert_eq!(Some(v.page.clone()), touchpad.map(Page::Area));
         assert_eq!(v.shown.len(), everything, "every area is back");
         assert!(v.query.is_empty());
+    }
+
+    #[test]
+    fn the_side_list_grows_with_the_scale() {
+        let mut v = view();
+        let row = |v: &View| {
+            v.ui.widget::<super::List<super::Msg>>(v.areas)
+                .unwrap()
+                .row_height(v.ui.theme())
+        };
+        let before = row(&v);
+        v.resize(Size::new(1840, 1320), 2);
+        assert_eq!(row(&v), before * 2);
+        v.open("about");
+        assert_eq!(v.page, Page::About, "the list still works after");
     }
 
     #[test]
