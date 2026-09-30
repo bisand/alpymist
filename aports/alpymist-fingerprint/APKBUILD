@@ -1,0 +1,52 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-fingerprint
+pkgver=0.2.0
+pkgrel=0
+pkgdesc="Alpymist's fingerprint window: enrol a finger, test it, remove them"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+# The window is an xdg toplevel over wl_shm, drawn by Denise on the CPU like
+# the store, which needs libxkbcommon and the menu's fonts. It talks to the
+# fingerprint daemon over the system bus: fprintd, or validity-fprintd in its
+# place, which is why neither is a dependency here. Adding or removing a
+# fingerprint asks polkit, which asks for the password in alpymist-auth's
+# dialog. Installed only where there is a reader, with its daemon, so its menu
+# entry is only there where it can do something (#58).
+makedepends="cargo libxkbcommon-dev"
+depends="alpymist-auth font-fira-ttf font-nerd-fonts-symbols polkit"
+options="!check"  # the test suite runs in CI, not in the package build
+source=""
+builddir="$srcdir"
+
+# Where cargo leaves what it builds. build-packages.sh points every package at
+# one directory, so a dependency compiled for one is not compiled again for the
+# next; each still builds only its own crates with their own features.
+_release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
+
+prepare() {
+	# Same as alpymist: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	cargo build --release --locked -p alpymist-fingerprint
+}
+
+package() {
+	install -Dm755 "$_release"/alpymist-fingerprint \
+		"$pkgdir"/usr/bin/alpymist-fingerprint
+	install -Dm644 "$builddir"/desktop/fingerprint/alpymist-fingerprint.desktop \
+		"$pkgdir"/usr/share/applications/alpymist-fingerprint.desktop
+	install -Dm644 "$builddir"/desktop/fingerprint/fingerprint.toml \
+		"$pkgdir"/usr/share/alpymist/menu.d/fingerprint.toml
+}
+
+# Filled in by `abuild checksum` at build time; see alpymist-install.
+sha512sums=""

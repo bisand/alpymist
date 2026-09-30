@@ -7,6 +7,7 @@ members = [
     "crates/alpymist-clipboard",
     "crates/alpymist-core",
     "crates/alpymist-displays",
+    "crates/alpymist-fingerprint",
     "crates/alpymist-greeter",
     "crates/alpymist-glesprobe",
     "crates/alpymist-install",

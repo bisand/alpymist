@@ -107,6 +107,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpymist-fingerprint"
+version = "0.2.0"
+dependencies = [
+ "alpymist-auth",
+ "alpymist-widget",
+ "denise",
+ "denise-render",
+ "denise-text",
+ "png",
+ "zbus",
+]
+
+[[package]]
 name = "alpymist-glesprobe"
 version = "0.2.0"
 dependencies = [
