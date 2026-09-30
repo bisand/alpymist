@@ -13,6 +13,7 @@ default = ["saver"]
 # the crate is the definitions, the values and the idle watch's argument list —
 # what alpymist-settings needs, with no Wayland and no Denise behind it.
 saver = [
+    "dep:alpymist-displays",
     "dep:alpymist-ui",
     "dep:alpymist-widget",
     "dep:denise",
@@ -29,6 +30,8 @@ required-features = ["saver"]
 alpymist-ui = { workspace = true, features = ["render"], optional = true }
 # The layer surface, its one-at-a-time socket, and the input that dismisses it.
 alpymist-widget = { workspace = true, optional = true }
+# Hyprland's event socket, for a screen plugged in while the picture is up.
+alpymist-displays = { workspace = true, optional = true }
 denise = { workspace = true, optional = true }
 denise-render = { workspace = true, optional = true }
 serde = { workspace = true }

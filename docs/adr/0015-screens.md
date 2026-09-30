@@ -153,3 +153,21 @@ connected — which a closed lid still is. On a dock with the lid shut the
 login box was behind the lid and the dock's screens were dark. They now
 prefer a connected external screen while the lid is closed
 (`alpymist_ui::lid`).
+
+## Addendum — 2026-09-30: the screensaver and the lock screen when screens come and go
+
+The screensaver on every screen started one copy per screen it found at the
+start, and took them all away when any one ended: unplugging a screen, or
+closing the lid, ended the screensaver everywhere, and a screen plugged in
+while it was up showed the desktop. The widget host now says when the
+compositor took its surface away with its output (`host::LOST`); a copy
+whose screen went ends quietly and the others carry on, and the launcher
+follows Hyprland's event socket and starts a copy for each screen plugged in
+while it is up. On one screen, the picture moves to the screen that is then
+the main one when its own goes, the covers on the others already dark.
+
+The lock screen draws the same screen on every output from one shared state
+sized for one output. Outputs of different sizes composed the scenery again
+for each on every keystroke, and a click was tested against the layout of
+whichever was drawn last. Sceneries are kept for each size now, and a click
+is tested with the layout of the screen it was on.
