@@ -198,6 +198,8 @@ struct Host<W: Widget> {
     ticking: bool,
     exit: bool,
     dismissed: bool,
+    /// The compositor closed the widget's surface: its output went away.
+    lost: bool,
 }
 
 /// Open `widget` and run it until it closes. Returns whether it was
@@ -208,7 +210,8 @@ struct Host<W: Widget> {
 /// it closes the popup.
 ///
 /// # Errors
-/// No Wayland session, or a compositor without the layer shell.
+/// No Wayland session, or a compositor without the layer shell; or
+/// [`LOST`], when the compositor took the surface away.
 #[allow(clippy::too_many_lines)] // setting up two surfaces, in order
 pub fn run<W: Widget>(
     mut widget: W,
@@ -356,6 +359,7 @@ pub fn run<W: Widget>(
         ticking: false,
         exit: false,
         dismissed: false,
+        lost: false,
     };
 
     while !host.exit {
@@ -364,12 +368,21 @@ pub fn run<W: Widget>(
             .map_err(|e| format!("Wayland: {e}"))?;
     }
     let dismissed = host.dismissed;
+    let lost = host.lost;
     drop(host.probe.take());
     host.covers.clear();
     drop(host.layer);
     conn.flush().ok();
+    if lost {
+        return Err(LOST.to_owned());
+    }
     Ok(dismissed)
 }
+
+/// What [`run`] says when the compositor took the widget's surface away,
+/// which it does when the output it was on is unplugged or turned off: not a
+/// failure, and for a screensaver a reason to go to another screen.
+pub const LOST: &str = "its screen went away";
 
 impl<W: Widget> Host<W> {
     /// Put a black surface on every output the widget is not on, once it is
@@ -794,6 +807,8 @@ impl<W: Widget> LayerShellHandler for Host<W> {
             return;
         }
         // Either other surface: the popup means nothing without the other.
+        // The compositor closes one when its output goes away.
+        self.lost = true;
         self.exit = true;
     }
 

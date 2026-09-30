@@ -173,25 +173,63 @@ pub fn start(compose: impl FnMut(Size) -> Box<dyn Painting> + 'static) -> Result
     };
 
     let name = copy.as_deref().map_or_else(|| NAME.to_owned(), name_on);
+    // Shared, since the picture may be put up again on another screen.
+    let compose = std::rc::Rc::new(std::cell::RefCell::new(compose));
     alpymist_widget::instance::toggle(&name, |listener| {
-        let mut options = host::Options::new(NAME);
-        options.placement = host::Placement::FullScreen;
-        // Under the first frame, and under the edges of a screen the blocks do
-        // not quite divide.
-        options.backdrop = crate::saver::backdrop();
-        // One copy of several has a screen of its own; the main one darkens
-        // the rest.
-        options.cover_others = copy.is_none();
-        options.output = output;
-        let (_sender, events) = host::events::<()>();
-        host::run(
-            crate::saver::Saver::new(Box::new(compose)),
-            &options,
-            events,
-            listener,
-        )
+        let mut output = output;
+        loop {
+            let mut options = host::Options::new(NAME);
+            options.placement = host::Placement::FullScreen;
+            // Under the first frame, and under the edges of a screen the
+            // blocks do not quite divide.
+            options.backdrop = crate::saver::backdrop();
+            // One copy of several has a screen of its own; the main one
+            // darkens the rest.
+            options.cover_others = copy.is_none();
+            options.output.clone_from(&output);
+            let (_sender, events) = host::events::<()>();
+            // Kept, so a picture that has to move to another screen can still
+            // be told to stop.
+            let listening = listener.as_ref().and_then(|l| l.try_clone().ok());
+            match host::run(
+                crate::saver::Saver::new(Box::new({
+                    let compose = std::rc::Rc::clone(&compose);
+                    move |size| (compose.borrow_mut())(size)
+                })),
+                &options,
+                events,
+                listening,
+            ) {
+                // Its screen was unplugged, or turned off with the lid. A copy
+                // of several just goes, and says so to the one that started
+                // it; the one picture moves to the screen that is now the
+                // main one, which the covers on the others already dark.
+                Err(e) if e == host::LOST => {
+                    if copy.is_some() {
+                        std::process::exit(GONE);
+                    }
+                    let config = crate::config::Config::load().unwrap_or_default();
+                    // Not the screen just lost, which the list can still name
+                    // for a moment after it went.
+                    let all: Vec<_> = screens()
+                        .into_iter()
+                        .filter(|s| Some(&s.name) != output.as_ref())
+                        .collect();
+                    let Some(next) = crate::screens::main_screen(&config.main_screen, &all) else {
+                        return Ok(false);
+                    };
+                    output = Some(next.name.clone());
+                }
+                other => return other,
+            }
+        }
     })
 }
+
+/// How a copy on one screen of several says its screen went away, rather
+/// than that someone woke the machine: the others carry on.
+#[cfg(target_os = "linux")]
+const GONE: i32 = 3;
 
 /// Run a copy of this program on each of `screens`, and take them all away
 /// when one of them goes or `listener` hears from [`stop`].
@@ -199,6 +237,15 @@ pub fn start(compose: impl FnMut(Size) -> Box<dyn Painting> + 'static) -> Result
 /// Blocked, not polling: a thread waits on each copy and one on the socket,
 /// and the first to finish says so. A screensaver's whole job is to let the
 /// machine idle.
+/// Why [`everywhere`] is woken: a copy ended, its screen gone or not; a
+/// screen was plugged in; or it was asked to stop.
+#[cfg(target_os = "linux")]
+enum Woke {
+    Ended { gone: bool },
+    Plugged(String),
+    Stop,
+}
+
 #[cfg(target_os = "linux")]
 fn everywhere(screens: &[String], listener: Option<std::os::unix::net::UnixListener>) {
     use std::sync::mpsc;
@@ -206,24 +253,65 @@ fn everywhere(screens: &[String], listener: Option<std::os::unix::net::UnixListe
     let Ok(me) = std::env::current_exe() else {
         return;
     };
-    let (done, finished) = mpsc::channel::<()>();
-    for screen in screens {
+    let (done, woke) = mpsc::channel::<Woke>();
+    let run = |screen: &str, done: &mpsc::Sender<Woke>| -> bool {
         let Ok(mut copy) = std::process::Command::new(&me).env(OUTPUT, screen).spawn() else {
-            continue;
+            return false;
         };
         let done = done.clone();
         std::thread::spawn(move || {
-            copy.wait().ok();
-            done.send(()).ok();
+            let gone = copy.wait().is_ok_and(|s| s.code() == Some(GONE));
+            done.send(Woke::Ended { gone }).ok();
         });
-    }
+        true
+    };
+    let mut running = screens.iter().filter(|s| run(s, &done)).count();
     if let Some(listener) = listener {
+        let done = done.clone();
         std::thread::spawn(move || {
             listener.accept().ok();
-            done.send(()).ok();
+            done.send(Woke::Stop).ok();
         });
     }
-    finished.recv().ok();
+    // A screen plugged in, or a laptop opened, while the screensaver is up
+    // would otherwise show the desktop: Hyprland says when, and it gets a
+    // copy of its own.
+    if let Some(path) = alpymist_displays::watch::socket() {
+        let done = done.clone();
+        std::thread::spawn(move || {
+            use std::io::BufRead as _;
+            let Ok(stream) = std::os::unix::net::UnixStream::connect(path) else {
+                return;
+            };
+            for line in std::io::BufReader::new(stream)
+                .lines()
+                .map_while(Result::ok)
+            {
+                if let Some(name) = line.strip_prefix("monitoradded>>")
+                    && done.send(Woke::Plugged(name.to_owned())).is_err()
+                {
+                    return;
+                }
+            }
+        });
+    }
+    while let Ok(woke) = woke.recv() {
+        match woke {
+            // One screen fewer; the rest carry on while any are left.
+            Woke::Ended { gone: true } => {
+                running = running.saturating_sub(1);
+                if running == 0 {
+                    break;
+                }
+            }
+            Woke::Plugged(screen) => {
+                if run(&screen, &done) {
+                    running += 1;
+                }
+            }
+            Woke::Ended { gone: false } | Woke::Stop => break,
+        }
+    }
     stop_copies();
 }
 

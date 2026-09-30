@@ -374,13 +374,21 @@ impl Lock {
     /// See [`IMPATIENCE`]. One timer at a time per screen: it is armed when a
     /// frame is owed and disarmed by the callback that makes it unnecessary.
     fn wait_for_it(&mut self, index: usize) {
-        match self.screens.get_mut(index) {
-            Some(screen) if !screen.impatient => screen.impatient = true,
+        let surface = match self.screens.get_mut(index) {
+            Some(screen) if !screen.impatient => {
+                screen.impatient = true;
+                screen.surface.wl_surface().clone()
+            }
             _ => return,
-        }
+        };
         let armed = self.loop_handle.insert_source(
             Timer::from_duration(IMPATIENCE),
             move |_, (), host: &mut Lock| {
+                // By surface, not by place in the list: a screen unplugged
+                // meanwhile moves the ones after it up.
+                let Some(index) = host.screen_of(&surface) else {
+                    return TimeoutAction::Drop;
+                };
                 let Some(screen) = host.screens.get_mut(index) else {
                     return TimeoutAction::Drop;
                 };
@@ -870,6 +878,12 @@ impl PointerHandler for Lock {
                 }
                 PointerEventKind::Press { button, .. } if button == BTN_LEFT => {
                     let at = self.physical(index, event.position);
+                    // Where the card is depends on the screen's size: ask
+                    // with the layout of the screen that was clicked.
+                    let screen = &self.screens[index];
+                    let scale = screen.scale.max(1);
+                    self.app
+                        .resize(screen.size.0 * scale, screen.size.1 * scale);
                     self.act(Action::ClickAt(at.0, at.1));
                 }
                 _ => {}

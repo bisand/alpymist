@@ -280,6 +280,9 @@ pub enum Status {
     Problem(String),
 }
 
+/// How many sceneries of other sizes are kept.
+const SPARE: usize = 3;
+
 /// The login screen.
 pub struct App {
     users: Vec<User>,
@@ -309,6 +312,10 @@ pub struct App {
     /// What is shown instead of the mountains, when there is one.
     picture: Option<Picture>,
     scenery: Scenery,
+    /// Sceneries composed for other sizes: the lock screen draws the same
+    /// screen on every output, and outputs of different sizes would
+    /// otherwise compose it again for each, every time anything changed.
+    spare: Vec<((u32, u32), Scenery)>,
     layout: Layout,
     size: (u32, u32),
     /// Fira Mono, or the built-in bitmap without it.
@@ -352,6 +359,7 @@ impl App {
             power: None,
             picture: None,
             scenery: Scenery::compose(width, height, &palette, SCENE_SEED),
+            spare: Vec::new(),
             layout: Layout::for_screen(width, height),
             palette,
             size: (width, height),
@@ -377,6 +385,7 @@ impl App {
     pub fn show_picture(&mut self, picture: Picture) {
         self.picture = Some(picture);
         self.scenery = self.compose(self.size.0, self.size.1);
+        self.spare.clear();
         self.recomposed = true;
     }
 
@@ -588,14 +597,30 @@ impl App {
         true
     }
 
-    /// Recompose for a new screen size.
+    /// Recompose for a new screen size, or take the scenery made for that
+    /// size before. Also where the layout for a click on a screen of that
+    /// size comes from.
     pub fn resize(&mut self, width: u32, height: u32) {
-        if self.size != (width, height) {
-            self.scenery = self.compose(width, height);
-            self.layout = Layout::for_screen(width, height);
-            self.size = (width, height);
-            self.recomposed = true;
+        if self.size == (width, height) {
+            return;
         }
+        let scenery = match self
+            .spare
+            .iter()
+            .position(|(size, _)| *size == (width, height))
+        {
+            Some(i) => self.spare.swap_remove(i).1,
+            None => self.compose(width, height),
+        };
+        let old = std::mem::replace(&mut self.scenery, scenery);
+        self.spare.push((self.size, old));
+        // A few sizes are a desk; more than that is sizes long gone.
+        if self.spare.len() > SPARE {
+            self.spare.remove(0);
+        }
+        self.layout = Layout::for_screen(width, height);
+        self.size = (width, height);
+        self.recomposed = true;
     }
 
     /// Draw the whole screen, and say what part of it may differ from the
@@ -919,6 +944,28 @@ mod tests {
             App::new(users(names), checker(Arc::clone(&asked)), 1280, 800),
             asked,
         )
+    }
+
+    #[test]
+    fn screens_of_two_sizes_keep_a_scenery_each() {
+        let (mut a, _) = app(&["andre"]);
+        a.resize(1920, 1080);
+        a.resize(1280, 800);
+        a.resize(1920, 1080);
+        assert_eq!(a.size, (1920, 1080));
+        assert_eq!(
+            a.spare.iter().map(|(size, _)| *size).collect::<Vec<_>>(),
+            [(1280, 800)],
+            "one kept for the other size, none composed twice"
+        );
+        for size in [(800, 600), (1024, 768), (2560, 1440), (3840, 2160)] {
+            a.resize(size.0, size.1);
+        }
+        assert_eq!(
+            a.spare.len(),
+            super::SPARE,
+            "a few sizes, not every one ever seen"
+        );
     }
 
     fn type_text(app: &mut App, text: &str) {

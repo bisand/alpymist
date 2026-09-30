@@ -232,6 +232,7 @@ dependencies = [
 name = "alpymist-screensaver"
 version = "0.2.0"
 dependencies = [
+ "alpymist-displays",
  "alpymist-ui",
  "alpymist-widget",
  "denise",
