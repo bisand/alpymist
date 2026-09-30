@@ -5,6 +5,13 @@
 //! helper; while PAM thinks — a wrong password makes it wait a couple of
 //! seconds on purpose — the dialog says so and takes no more typing. A wrong
 //! password clears the field and asks again, up to [`ATTEMPTS`] times.
+//!
+//! When the administrator has let a fingerprint do (Settings › System), PAM
+//! waits for a finger before it asks for anything: `pam_fprintd`, first in
+//! polkit's stack, says so and holds the reader. The field takes typing all
+//! the same, and Enter checks the password with a second helper beside the
+//! first — whose `pam_fprintd` finds the reader held and hands straight over to
+//! the password. Whichever says yes first closes the dialog.
 
 use crate::helper::Step;
 use crate::request::Request;
@@ -21,6 +28,9 @@ pub enum Phase {
     Starting,
     /// The helper asked; the field takes typing.
     Asking,
+    /// The helper waits for a finger on the reader; the field takes typing,
+    /// and Enter checks the password beside it.
+    Touching,
     /// An answer is with PAM.
     Checking,
 }
@@ -57,6 +67,9 @@ pub enum Outcome {
     Redraw,
     /// Hand this answer to the helper.
     Answer(Secret),
+    /// Check this password with a second helper, beside the one waiting for
+    /// a finger.
+    Beside(Secret),
     /// Start a helper for the account at this index: the first time, after
     /// a failure, or when the account was changed.
     Start(usize),
@@ -100,6 +113,23 @@ pub struct Prompt {
     pub checkable: bool,
     /// Whether Ctrl+Alt+Delete checked it since it opened.
     pub verified: bool,
+    /// Whether the password being checked went to a helper beside the one
+    /// waiting for a finger.
+    pub beside: bool,
+}
+
+/// What the dialog says while PAM waits for a finger, whatever `pam_fprintd`'s
+/// own words were: those name the reader, not the password next to it.
+pub const TOUCH: &str = "Touch the fingerprint reader, or type the password.";
+/// What it says when that finger was not one enrolled.
+pub const NOT_THAT_FINGER: &str =
+    "That finger was not recognised. Try again, or type the password.";
+
+/// Whether PAM said something about the fingerprint reader. polkit's helper
+/// runs without a locale, so `pam_fprintd` speaks English: "Place your finger on
+/// the fingerprint reader", "Failed to match fingerprint".
+fn about_a_finger(text: &str) -> bool {
+    text.to_ascii_lowercase().contains("finger")
 }
 
 impl Prompt {
@@ -122,6 +152,7 @@ impl Prompt {
             frame: 0,
             checkable: false,
             verified: false,
+            beside: false,
         }
     }
 
@@ -136,14 +167,32 @@ impl Prompt {
                     text.to_owned()
                 };
                 self.echo = echo;
+                match self.phase {
+                    // A password being checked beside it: the finger timed
+                    // out meanwhile, and this is the same question.
+                    Phase::Checking if self.beside => return Outcome::Redraw,
+                    // Typed while the finger was awaited, and still wanted.
+                    Phase::Touching => self.info = None,
+                    _ => self.secret.clear(),
+                }
                 self.phase = Phase::Asking;
-                self.secret.clear();
                 self.focus = Focus::Field;
+            }
+            Step::Info(text) if about_a_finger(&text) => {
+                if self.phase == Phase::Starting {
+                    self.phase = Phase::Touching;
+                    self.focus = Focus::Field;
+                }
+                self.info = Some(TOUCH.into());
+            }
+            Step::Error(text) if about_a_finger(&text) => {
+                self.error = Some(NOT_THAT_FINGER.into());
             }
             Step::Error(text) => self.error = Some(text),
             Step::Info(text) => self.info = Some(text),
             Step::Done(true) => return Outcome::Close(true),
             Step::Done(false) => {
+                self.beside = false;
                 self.secret.clear();
                 self.failures += 1;
                 if self.failures >= ATTEMPTS {
@@ -184,15 +233,27 @@ impl Prompt {
         self.phase == Phase::Checking
     }
 
+    /// Whether the field takes typing.
+    #[must_use]
+    pub fn taking(&self) -> bool {
+        matches!(self.phase, Phase::Asking | Phase::Touching)
+    }
+
     fn submit(&mut self) -> Outcome {
-        if self.phase != Phase::Asking || self.secret.is_empty() {
+        if !self.taking() || self.secret.is_empty() {
             return Outcome::Unchanged;
         }
+        let touching = self.phase == Phase::Touching;
         self.phase = Phase::Checking;
+        self.beside = touching;
         self.error = None;
         self.info = None;
         let answer = std::mem::take(&mut self.secret);
-        Outcome::Answer(answer)
+        if touching {
+            Outcome::Beside(answer)
+        } else {
+            Outcome::Answer(answer)
+        }
     }
 
     fn switch_identity(&mut self, by: i32) -> Outcome {
@@ -205,7 +266,9 @@ impl Prompt {
         self.identity = usize::try_from((at + by).rem_euclid(n)).unwrap_or(0);
         self.secret.clear();
         self.error = None;
+        self.info = None;
         self.failures = 0;
+        self.beside = false;
         self.phase = Phase::Starting;
         Outcome::Start(self.identity)
     }
@@ -225,12 +288,12 @@ impl Prompt {
             Key::BackTab | Key::Up => self.move_focus(-1),
             Key::Left => self.switch_identity(-1),
             Key::Right => self.switch_identity(1),
-            Key::Backspace if self.phase == Phase::Asking => {
+            Key::Backspace if self.taking() => {
                 self.secret.pop();
                 self.focus = Focus::Field;
                 Outcome::Redraw
             }
-            Key::Clear if self.phase == Phase::Asking => {
+            Key::Clear if self.taking() => {
                 self.secret.clear();
                 self.focus = Focus::Field;
                 Outcome::Redraw
@@ -249,7 +312,7 @@ impl Prompt {
 
     /// A character was typed: into the field, wherever the focus was.
     pub fn text(&mut self, ch: char) -> Outcome {
-        if self.phase != Phase::Asking || ch.is_control() {
+        if !self.taking() || ch.is_control() {
             return Outcome::Unchanged;
         }
         self.focus = Focus::Field;
@@ -379,6 +442,43 @@ mod tests {
         p.key(Key::Tab);
         assert_eq!(p.focus, Focus::Cancel);
         assert!(matches!(p.key(Key::Enter), Outcome::Close(false)));
+    }
+
+    #[test]
+    fn a_password_typed_while_a_finger_is_awaited_is_checked_beside_it() {
+        let mut p = prompt();
+        p.step(Step::Info(
+            "Place your finger on the fingerprint reader".into(),
+        ));
+        assert_eq!(p.phase, Phase::Touching);
+        assert_eq!(p.info.as_deref(), Some(super::TOUCH));
+        p.step(Step::Error("Failed to match fingerprint".into()));
+        assert_eq!(p.error.as_deref(), Some(super::NOT_THAT_FINGER));
+        p.text('o');
+        p.text('k');
+        let Outcome::Beside(secret) = p.key(Key::Enter) else {
+            panic!("checked by a second helper, not the one waiting");
+        };
+        assert_eq!(secret.expose(), b"ok");
+        assert_eq!(p.phase, Phase::Checking);
+        // The finger times out meanwhile, and PAM asks the same question.
+        asked(&mut p);
+        assert_eq!(p.phase, Phase::Checking, "still checking the one typed");
+        assert!(matches!(p.step(Step::Done(true)), Outcome::Close(true)));
+    }
+
+    #[test]
+    fn what_was_typed_waiting_for_a_finger_is_kept_when_pam_asks() {
+        let mut p = prompt();
+        p.step(Step::Info(
+            "Place your finger on the fingerprint reader".into(),
+        ));
+        p.text('o');
+        asked(&mut p);
+        assert_eq!(p.phase, Phase::Asking);
+        assert_eq!(p.secret.expose(), b"o");
+        p.text('k');
+        assert!(matches!(p.key(Key::Enter), Outcome::Answer(_)));
     }
 
     #[test]

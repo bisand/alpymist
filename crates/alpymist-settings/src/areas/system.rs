@@ -14,6 +14,13 @@
 //! ask. The switch is for the account asking, which as root is the one pkexec
 //! or doas names. The last administrator is never taken out: root's password
 //! is locked, so nobody could look after the computer again.
+//!
+//! Unlocking with a fingerprint is off until it is turned on here (ADR 0016).
+//! On, it is two PAM changes and nothing else: the lock screen's own
+//! fingerprint service, [`LOCK_FINGERPRINT`], whose being there is the switch,
+//! and one `pam_fprintd` line in polkit's, so administrator prompts take an
+//! enrolled finger too. The password still works everywhere, and the login
+//! screen never takes a finger: it is what unlocks the keyring.
 
 use crate::env::Env;
 use crate::model::{Applies, Kind, Scope, Setting, TextRule, Value};
@@ -32,6 +39,33 @@ pub const PASSWORD_ID: &str = "system.password";
 pub const ADMINISTRATOR_ID: &str = "system.administrator";
 /// The groups, `wheel` among them.
 pub const GROUP: &str = "etc/group";
+/// Unlocking with a fingerprint's id.
+pub const FINGERPRINT_ID: &str = "system.fingerprint";
+/// The lock screen's fingerprint service, as `alpymist-lock` names it.
+pub const LOCK_FINGERPRINT: &str = "etc/pam.d/alpymist-lock-fingerprint";
+/// polkit's PAM service, which administrator prompts are checked with.
+pub const POLKIT: &str = "etc/pam.d/polkit-1";
+/// Where linux-pam finds a distribution's own when `/etc` has none.
+const POLKIT_VENDOR: &str = "usr/lib/pam.d/polkit-1";
+/// `pam_fprintd`, from fprintd-pam, which alpymist-fingerprint brings.
+pub const PAM_FPRINTD: &str = "usr/lib/security/pam_fprintd.so";
+
+/// The lock screen's service: a finger, checked by the fingerprint daemon,
+/// and nothing that could take a password.
+const LOCK_SERVICE: &str = "\
+# Written by Settings › System › Unlock with a fingerprint, and removed when
+# it is turned off. The lock screen asks this beside the password: an
+# enrolled finger on the reader, checked by the fingerprint daemon.
+auth\t\trequired\tpam_fprintd.so
+";
+/// What goes before the line in polkit's service, so it can be found again.
+const POLKIT_NOTE: &str =
+    "# Settings › System › Unlock with a fingerprint: an enrolled finger, or the password";
+/// The line itself. `sufficient`: a finger lets the prompt through, and
+/// anything else — no reader, no finger enrolled, the reader held by the lock
+/// screen, a finger not recognised — goes on to the password. The dash keeps
+/// polkit working should fprintd-pam be removed while this is on.
+const POLKIT_LINE: &str = "-auth\t\tsufficient\tpam_fprintd.so";
 
 /// The settings.
 pub fn settings() -> Vec<Setting> {
@@ -74,6 +108,25 @@ pub fn settings() -> Vec<Setting> {
             scope: Scope::System,
             applies: Applies::NextLogin,
         },
+        Setting {
+            id: FINGERPRINT_ID,
+            title: "Unlock with a fingerprint",
+            description: "Let an enrolled finger unlock the screen and answer administrator \
+                          prompts, beside the password. Logging in still takes the password. \
+                          Fingers are added in Fingerprints.",
+            keywords: &[
+                "fingerprint",
+                "finger",
+                "reader",
+                "biometric",
+                "fprintd",
+                "touch",
+            ],
+            kind: Kind::Switch,
+            default: Value::Bool(false),
+            scope: Scope::System,
+            applies: Applies::Now,
+        },
     ]
 }
 
@@ -82,6 +135,7 @@ pub fn get(env: &Env, setting: &Setting) -> Result<Value, String> {
     match setting.id {
         // Nothing to read: it is a thing to do, not a thing to be.
         PASSWORD_ID => Ok(Value::Text(String::new())),
+        FINGERPRINT_ID => Ok(Value::Bool(env.system(LOCK_FINGERPRINT).exists())),
         ADMINISTRATOR_ID => {
             let user = user(env)?;
             Ok(Value::Bool(wheel(env)?.iter().any(|m| m == user)))
@@ -94,6 +148,7 @@ pub fn get(env: &Env, setting: &Setting) -> Result<Value, String> {
 pub fn set(env: &Env, setting: &Setting, value: Option<&Value>) -> Result<(), String> {
     match setting.id {
         PASSWORD_ID => change_password(),
+        FINGERPRINT_ID => fingerprint(env, value.and_then(Value::as_bool).unwrap_or(false)),
         ADMINISTRATOR_ID => administrator(env, value.and_then(Value::as_bool).unwrap_or(false)),
         _ => name(env, setting, value),
     }
@@ -149,6 +204,95 @@ fn administrator(env: &Env, on: bool) -> Result<(), String> {
         return env.run(&["delgroup", user, "wheel"]).map(drop);
     }
     Ok(())
+}
+
+/// Let a finger unlock the screen and answer administrator prompts, or stop
+/// it, as root. polkit's service goes first: a lock screen that takes a
+/// finger while prompts do not is the smaller surprise, should the second
+/// write fail.
+fn fingerprint(env: &Env, on: bool) -> Result<(), String> {
+    let lock = env.system(LOCK_FINGERPRINT);
+    if !on {
+        polkit(env, false)?;
+        return match std::fs::remove_file(&lock) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(crate::io_error(&lock, &e)),
+            _ => Ok(()),
+        };
+    }
+    if !env.system(PAM_FPRINTD).exists() {
+        return Err(
+            "Fingerprint support is not installed: add the alpymist-fingerprint \
+                    package, then enrol a finger in Fingerprints."
+                .into(),
+        );
+    }
+    polkit(env, true)?;
+    crate::generated::replace(&lock, LOCK_SERVICE)
+}
+
+/// Put the `pam_fprintd` line in polkit's service, or take it out. Only that
+/// line and its note are touched, and a service already as asked is not
+/// written at all.
+fn polkit(env: &Env, on: bool) -> Result<(), String> {
+    let path = env.system(POLKIT);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        // The distribution's own, which /etc overrides from here on.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && on => {
+            let vendor = env.system(POLKIT_VENDOR);
+            std::fs::read_to_string(&vendor).map_err(|e| crate::io_error(&vendor, &e))?
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(crate::io_error(&path, &e)),
+    };
+    let changed = if on {
+        with_finger(&text)
+    } else {
+        without_finger(&text)
+    };
+    match changed {
+        Some(text) => crate::generated::replace(&path, &text),
+        None if on && !text.lines().any(|l| l == POLKIT_LINE) => Err(format!(
+            "{} has no password line to put a fingerprint before; add \"{POLKIT_LINE}\" \
+             above it by hand",
+            path.display()
+        )),
+        None => Ok(()),
+    }
+}
+
+/// polkit's service with the fingerprint first among the ways in: before the
+/// first `auth` line that checks something — `pam_unix`, or a stack it
+/// includes — and after those that only set things up. `None` when it is
+/// there already, or there is nowhere to put it.
+fn with_finger(service: &str) -> Option<String> {
+    if service.lines().any(|l| l == POLKIT_LINE) {
+        return None;
+    }
+    let lines: Vec<&str> = service.lines().collect();
+    let at = lines.iter().position(|line| {
+        let mut words = line.split_whitespace();
+        let (Some(kind), Some(control), Some(module)) = (words.next(), words.next(), words.next())
+        else {
+            return false;
+        };
+        kind.trim_start_matches('-') == "auth"
+            && (matches!(control, "include" | "substack") || module.starts_with("pam_unix"))
+    })?;
+    let mut out: Vec<&str> = lines[..at].to_vec();
+    out.extend([POLKIT_NOTE, POLKIT_LINE]);
+    out.extend(&lines[at..]);
+    Some(out.join("\n") + "\n")
+}
+
+/// polkit's service without the line and its note; `None` when it has
+/// neither.
+fn without_finger(service: &str) -> Option<String> {
+    let kept: Vec<&str> = service
+        .lines()
+        .filter(|l| *l != POLKIT_LINE && *l != POLKIT_NOTE)
+        .collect();
+    (kept.len() != service.lines().count()).then(|| kept.join("\n") + "\n")
 }
 
 /// Open a terminal for `passwd`, and leave it: it asks, and it says whether
@@ -237,7 +381,10 @@ fn rename(interfaces: &str, old: &str, new: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ADMINISTRATOR_ID, GROUP, HOSTNAME, HOSTNAME_ID, INTERFACES, members, rename};
+    use super::{
+        ADMINISTRATOR_ID, FINGERPRINT_ID, GROUP, HOSTNAME, HOSTNAME_ID, INTERFACES,
+        LOCK_FINGERPRINT, PAM_FPRINTD, POLKIT, members, rename,
+    };
     use crate::env::Env;
     use crate::{Error, Settings, Value};
     use std::sync::Mutex;
@@ -264,6 +411,72 @@ mod tests {
             ),
             None
         );
+    }
+
+    /// polkit's service as Alpine ships it.
+    const POLKIT_1: &str = "auth            requisite       pam_nologin.so\n\
+                            auth            required        pam_env.so\n\
+                            auth            required        pam_unix.so\n\
+                            account         required        pam_unix.so\n\
+                            session         required        pam_unix.so\n";
+
+    #[test]
+    fn a_finger_goes_before_the_password_and_comes_out_again_leaving_the_rest() {
+        let with = super::with_finger(POLKIT_1).unwrap();
+        let lines: Vec<&str> = with.lines().collect();
+        assert!(lines[1].contains("pam_env"), "setting up comes first");
+        assert_eq!(lines[3], super::POLKIT_LINE);
+        assert!(lines[4].contains("pam_unix"), "then the password");
+        assert_eq!(super::with_finger(&with), None, "once is enough");
+        assert_eq!(super::without_finger(&with).as_deref(), Some(POLKIT_1));
+        assert_eq!(super::without_finger(POLKIT_1), None);
+        // A stack that includes another is put before the include.
+        let included = super::with_finger("auth include base-auth\n").unwrap();
+        assert!(included.ends_with(&format!("{}\nauth include base-auth\n", super::POLKIT_LINE)));
+        assert_eq!(super::with_finger("account required pam_unix.so\n"), None);
+    }
+
+    #[test]
+    fn a_fingerprint_is_off_until_turned_on_and_needs_fprintd_pam() {
+        static RAN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+        let d = std::env::temp_dir().join(format!("alpymist-finger-{}", std::process::id()));
+        std::fs::remove_dir_all(&d).ok();
+        let env = Env::test(&d, true, &RAN);
+        let settings = Settings::new();
+        std::fs::create_dir_all(env.system("etc/pam.d")).unwrap();
+        std::fs::write(env.system(POLKIT), POLKIT_1).unwrap();
+        assert_eq!(settings.get(&env, FINGERPRINT_ID), Ok(Value::Bool(false)));
+
+        let refused = settings.set(&env, FINGERPRINT_ID, "on", false);
+        assert!(
+            matches!(refused, Err(Error::Failed(ref m)) if m.contains("alpymist-fingerprint")),
+            "{refused:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(env.system(POLKIT)).unwrap(),
+            POLKIT_1
+        );
+
+        std::fs::create_dir_all(env.system("usr/lib/security")).unwrap();
+        std::fs::write(env.system(PAM_FPRINTD), "").unwrap();
+        settings.set(&env, FINGERPRINT_ID, "on", false).unwrap();
+        assert_eq!(settings.get(&env, FINGERPRINT_ID), Ok(Value::Bool(true)));
+        let lock = std::fs::read_to_string(env.system(LOCK_FINGERPRINT)).unwrap();
+        assert!(lock.contains("pam_fprintd.so") && !lock.contains("pam_unix"));
+        assert!(
+            std::fs::read_to_string(env.system(POLKIT))
+                .unwrap()
+                .contains(super::POLKIT_LINE)
+        );
+
+        settings.reset(&env, FINGERPRINT_ID, false).unwrap();
+        assert_eq!(settings.get(&env, FINGERPRINT_ID), Ok(Value::Bool(false)));
+        assert!(!env.system(LOCK_FINGERPRINT).exists());
+        assert_eq!(
+            std::fs::read_to_string(env.system(POLKIT)).unwrap(),
+            POLKIT_1
+        );
+        std::fs::remove_dir_all(&d).ok();
     }
 
     #[test]

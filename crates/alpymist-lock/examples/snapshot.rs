@@ -72,6 +72,12 @@ fn main() {
         wrong.tick();
     }
     save(&mut wrong, &format!("{dir}/3-wrong.png"), width, height);
+
+    // With a finger allowed: what the lock says while the reader waits. The
+    // words are alpymist_lock::finger's, which is Linux only.
+    let mut finger = screen(width, height, Duration::ZERO);
+    finger.set_hint(Some("Or touch the fingerprint reader".into()));
+    save(&mut finger, &format!("{dir}/4-finger.png"), width, height);
     std::process::exit(0);
 }
 

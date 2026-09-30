@@ -20,11 +20,13 @@
 //! screen behind this is the greeter's and it draws a pointer of Denise's.
 //! Two cursors chasing each other is worse than either.
 
+use crate::finger::{self, Heard};
 use alpymist_greeter::app::{Action, App, Status};
 use alpymist_greeter::clock;
 use denise::geom::Size;
 use denise::{BufferAge, Frame, PixelFormat};
 use denise_render::Canvas;
+use smithay_client_toolkit::reexports::calloop::channel::{self, Channel};
 use smithay_client_toolkit::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay_client_toolkit::reexports::calloop::{EventLoop, LoopHandle};
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
@@ -162,11 +164,18 @@ struct Lock {
 /// `covered` is called once the compositor has granted the lock: from there on
 /// the session is hidden, and a caller waiting to suspend may let go.
 ///
+/// `fingers` is what the fingerprint reader says, when a finger may unlock
+/// the screen too ([`finger`]).
+///
 /// # Errors
 /// No Wayland session, or a compositor that does not speak
 /// `ext-session-lock-v1`. Neither has locked anything, which is the point of
 /// finding out here rather than afterwards.
-pub fn run(app: App, covered: Box<dyn FnOnce()>) -> Result<Ending, String> {
+pub fn run(
+    app: App,
+    covered: Box<dyn FnOnce()>,
+    fingers: Option<Channel<Heard>>,
+) -> Result<Ending, String> {
     let conn = Connection::connect_to_env().map_err(|e| format!("no Wayland session: {e}"))?;
     let (globals, event_queue) =
         registry_queue_init::<Lock>(&conn).map_err(|e| format!("Wayland registry: {e}"))?;
@@ -215,6 +224,16 @@ pub fn run(app: App, covered: Box<dyn FnOnce()>) -> Result<Ending, String> {
         exit: false,
     };
     host.follow_the_clock();
+    if let Some(fingers) = fingers {
+        event_loop
+            .handle()
+            .insert_source(fingers, |event, (), host: &mut Lock| {
+                if let channel::Event::Msg(heard) = event {
+                    host.heard(heard);
+                }
+            })
+            .map_err(|e| format!("event loop: {e}"))?;
+    }
 
     while !host.exit {
         event_loop
@@ -437,6 +456,28 @@ impl Lock {
         if changed {
             self.redraw();
         }
+    }
+
+    /// The fingerprint reader said something.
+    fn heard(&mut self, heard: Heard) {
+        let hint = match heard {
+            Heard::Matched => {
+                self.app.let_in();
+                self.settle(true);
+                return;
+            }
+            // A finger that was not recognised stays said until another does
+            // or does not: pam_fprintd asks for the next straight away.
+            Heard::Waiting if self.app.hint.as_deref() == Some(finger::NOT_THAT_FINGER) => {
+                return;
+            }
+            Heard::Waiting => Some(finger::WAITING.to_owned()),
+            Heard::Idle => None,
+            Heard::NotThatFinger => Some(finger::NOT_THAT_FINGER.to_owned()),
+            Heard::GaveUp(why) => Some(why),
+        };
+        let changed = self.app.set_hint(hint);
+        self.settle(changed);
     }
 
     /// Ask after a password being checked until there is an answer.

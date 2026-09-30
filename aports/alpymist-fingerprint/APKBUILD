@@ -13,9 +13,11 @@ license="MIT OR Apache-2.0"
 # place, which is why neither is a dependency here. Adding or removing a
 # fingerprint asks polkit, which asks for the password in alpymist-auth's
 # dialog. Installed only where there is a reader, with its daemon, so its menu
-# entry is only there where it can do something (#58).
+# entry is only there where it can do something (#58). fprintd-pam is
+# pam_fprintd alone, without fprintd: what Settings › System › Unlock with a
+# fingerprint turns on for the lock screen and polkit (ADR 0016).
 makedepends="cargo libxkbcommon-dev"
-depends="alpymist-auth font-fira-ttf font-nerd-fonts-symbols polkit"
+depends="alpymist-auth font-fira-ttf font-nerd-fonts-symbols fprintd-pam polkit"
 options="!check"  # the test suite runs in CI, not in the package build
 source=""
 builddir="$srcdir"

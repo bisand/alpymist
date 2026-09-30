@@ -292,6 +292,9 @@ pub struct App {
     caret: usize,
     /// What the line under the field says.
     pub status: Status,
+    /// What that line says when there is nothing else to: how else to get in,
+    /// such as the fingerprint reader.
+    pub hint: Option<String>,
     /// This machine's name, for the footer.
     pub hostname: String,
     /// The keyboard layout keys are read with, for the footer.
@@ -347,6 +350,7 @@ impl App {
             password: String::new(),
             caret: 0,
             status,
+            hint: None,
             hostname: String::new(),
             keyboard: String::new(),
             footer_hint: None,
@@ -563,6 +567,21 @@ impl App {
         });
         self.pending = Some(rx);
         self.status = Status::Checking;
+    }
+
+    /// Somebody got in without the password — an enrolled finger on the
+    /// reader, as the lock screen asked it — and this is done.
+    pub fn let_in(&mut self) {
+        self.started = true;
+        self.status = Status::Idle;
+    }
+
+    /// Say `hint` under the field when nothing else is said there. Returns
+    /// whether that changed anything.
+    pub fn set_hint(&mut self, hint: Option<String>) -> bool {
+        let changed = hint != self.hint;
+        self.hint = hint;
+        changed
     }
 
     /// Collect the result of a login in progress. Returns whether anything
@@ -806,7 +825,7 @@ impl App {
         }
 
         let (message, ink) = match &self.status {
-            Status::Idle => (String::new(), p.ink_dim),
+            Status::Idle => (self.hint.clone().unwrap_or_default(), p.ink_dim),
             Status::Checking => ("Checking".to_string(), p.ink_dim),
             Status::Notice(text) => (text.clone(), p.ink_dim),
             Status::Problem(text) => (text.clone(), p.accent),
