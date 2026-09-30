@@ -24,9 +24,10 @@ Five workflows:
   that has not concluded, and a job cannot wait for its own run.
 - **Site** (`.github/workflows/site.yml`): alpymist.org.
 
-squint is built from a pinned upstream release. It is kept in the Actions cache
-under a key of its aport and the builder, and built again only when one of
-those changes, or at least once a month so it follows Alpine's libraries.
+squint and validity-fprintd are built from pinned upstream releases. Each is
+kept in the Actions cache under a key of its aport and the builder, and built
+again only when one of those changes, or at least once a month so it follows
+Alpine's libraries.
 
 The first-party packages build one after another, each from its own copy of
 the workspace, but into one cargo target directory, so a dependency is
@@ -35,7 +36,7 @@ each package. Each package still builds only its own crates, with
 `cargo build -p` and its own features. That is deliberate: a crate that only
 compiles with a feature some other crate turns on in the workspace build fails
 here, as Settings did when it used the screensaver's `paint` without `saver`.
-squint builds in its own tree, as upstream wrote it.
+squint and validity-fprintd build in their own trees, as upstream wrote them.
 The ISO jobs build no packages at all: they index and sign the ones the
 package jobs made. What is left of an image's time is mostly squashing the
 kernel's firmware.
@@ -192,9 +193,10 @@ cargo xtask version 0.0.5                 # write it everywhere, pkgrel back to 
 cargo update --workspace                  # and into Cargo.lock
 ```
 
-squint and `alpymist-keys` keep versions of their own: they are built from a
-pinned upstream release and from a key file, not from this workspace. Moving to
-a new squint is its `pkgver` and `sha512sums` in `aports/squint/APKBUILD`.
+squint, validity-fprintd and `alpymist-keys` keep versions of their own: they
+are built from pinned upstream releases and from a key file, not from this
+workspace. Moving to a new squint or validity-fprintd is its `pkgver` and
+`sha512sums` in its `APKBUILD`.
 
 ### Cutting a release
 

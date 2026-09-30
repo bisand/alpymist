@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 /// directory in `aports/` carries the workspace version, so a new aport is
 /// covered the day it is added — and `ci/build-packages.sh` leaves exactly
 /// these two unstamped.
-const INDEPENDENT: [&str; 2] = ["alpymist-keys", "squint"];
+const INDEPENDENT: [&str; 3] = ["alpymist-keys", "squint", "validity-fprintd"];
 
 /// Set every version to `set`, or, without one, check that they already agree.
 ///

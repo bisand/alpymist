@@ -22,10 +22,11 @@
 #                  below 0.0.5, so dev stays ahead of the release it follows
 #                  and meets the next one when it arrives (ADR 0006). Needs the
 #                  git history at /src.
-#   PACKAGE_CACHE  a directory kept between builds. squint is built from a
-#                  pinned upstream release, so what it builds to depends only on
-#                  its aport and the builder: it is kept there and not built
-#                  again until one of those changes.
+#   PACKAGE_CACHE  a directory kept between builds. squint and
+#                  validity-fprintd are built from pinned upstream releases, so
+#                  what they build to depends only on their aports and the
+#                  builder: they are kept there and not built again until one of
+#                  those changes.
 #   PREBUILT       a directory of this architecture's packages, already built
 #                  by an earlier job, with the public keys they were signed
 #                  with in keys/. Nothing is built: the keys are trusted and
@@ -42,13 +43,15 @@ ARCH="$(apk --print-arch)"
 REPO=~/packages/ap/"$ARCH"
 KEYS=~/packages/keys
 CACHE="${PACKAGE_CACHE:-}"
-CACHED=" squint "
+CACHED=" squint validity-fprintd "
 CHANNEL="${CHANNEL:-stable}"
 BUILD="${BUILD:-}"
 # Built from a pinned upstream release or a key file, not from this workspace:
 # versioned by hand, on every channel, and given neither the dev stamp nor the
 # build number. xtask's version command holds the same list.
-INDEPENDENT=" squint alpymist-keys "
+INDEPENDENT=" squint validity-fprintd alpymist-keys "
+# Fetched from upstream, their committed sha512sums the pin.
+FETCHED=" squint validity-fprintd "
 
 export CARGO_HOME=/tmp/cargo
 # Where the first-party packages build, one directory for all of them. Each
@@ -117,7 +120,7 @@ if [ -n "${PREBUILT:-}" ]; then
 	cp "$PREBUILT"/*.apk "$REPO"/
 	reindex
 else
-	for pkg in alpymist-keys alpymist alpymist-install alpymist-menu alpymist-about alpymist-wifi alpymist-auth alpymist-splash alpymist-lock alpymist-power alpymist-thunderbolt alpymist-settings alpymist-screensaver alpymist-saver-mountains alpymist-saver-starfield alpymist-store alpymist-greeter squint alpymist-desktop; do
+	for pkg in alpymist-keys alpymist alpymist-install alpymist-menu alpymist-about alpymist-wifi alpymist-auth alpymist-splash alpymist-lock alpymist-power alpymist-thunderbolt alpymist-settings alpymist-screensaver alpymist-saver-mountains alpymist-saver-starfield alpymist-store alpymist-greeter squint validity-fprintd alpymist-desktop; do
 		mkdir -p ~/ap/"$pkg"
 		cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
 		if [[ "$INDEPENDENT" != *" $pkg "* ]]; then
@@ -153,14 +156,15 @@ else
 		echo "    $pkg"
 		# Our own packages build from the workspace copied in above, so their
 		# checksums describe files that were just written and are computed here
-		# rather than committed. squint is fetched from upstream, and its
-		# committed sha512 is the pin: `abuild checksum` would delete that block
-		# and write whatever was downloaded, so it is not run over it. abuild
-		# checks the sums itself while fetching, and stops if they disagree.
+		# rather than committed. squint and validity-fprintd are fetched from
+		# upstream, and their committed sha512s are the pins: `abuild checksum`
+		# would delete that block and write whatever was downloaded, so it is not
+		# run over them. abuild checks the sums itself while fetching, and stops
+		# if they disagree.
 		shared=()
 		[[ "$INDEPENDENT" == *" $pkg "* ]] || shared=(env CARGO_TARGET_DIR="$TARGET")
 		( cd ~/ap/"$pkg" \
-			&& { [ "$pkg" = squint ] || abuild checksum >/dev/null; } \
+			&& { [[ "$FETCHED" == *" $pkg "* ]] || abuild checksum >/dev/null; } \
 			&& "${shared[@]}" abuild -r >/dev/null )
 		if [ -n "$key" ]; then
 			# Whoever restored the cache may not be who builds here.

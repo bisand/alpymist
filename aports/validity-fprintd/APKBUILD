@@ -1,0 +1,83 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+#
+# validity-fprintd, the fingerprint driver for Synaptics/Validity match-on-chip
+# sensors that libfprint has none for — the X1 Carbon's 06cb:009a among them —
+# and a daemon in fprintd's place, serving the same D-Bus interface, so
+# pam_fprintd and Alpymist's fingerprint app work with it unchanged (#58).
+# Pinned to a release of
+#   https://github.com/bisand/validity-fprintd
+pkgname=validity-fprintd
+# Its own version, from the release this is built from. It keeps its numbering
+# here (ADR 0008): nothing in this workspace decides it, so neither the release
+# version nor the build number is stamped onto it. Moving to a new release is
+# this line and its sha512 below.
+pkgver=0.1.2
+pkgrel=0
+pkgdesc="Fingerprint driver and fprintd-compatible daemon for Synaptics/Validity match-on-chip sensors"
+url="https://github.com/bisand/validity-fprintd"
+arch="x86_64 aarch64"
+license="MIT"
+# libusb comes in as so:libusb-1.0.so.0; zbus speaks D-Bus itself, so the bus
+# daemon is all it needs of D-Bus. polkit is asked before a fingerprint is added
+# or removed. Not beside fprintd: both own net.reactivated.Fprint, and this
+# ships the D-Bus policy and polkit actions fprintd otherwise does. pam_fprintd
+# is fprintd-pam, which does not need fprintd.
+depends="dbus polkit !fprintd"
+makedepends="cargo libusb-dev"
+subpackages="$pkgname-doc $pkgname-openrc"
+# !check: the test suite runs in validity-fprintd's own CI
+# net: cargo fetches the crates
+options="!check net"
+source="$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+
+_bins="validity-fprintd validity-probe validity-session validity-db
+	validity-sensor validity-verify validity-baseline validity-firmware
+	validity-provision"
+
+prepare() {
+	default_prepare
+	cargo fetch --target="$CTARGET" --locked
+}
+
+build() {
+	# Not --features vendored: the system libusb, so its security updates
+	# apply here too.
+	cargo build --release --frozen
+}
+
+package() {
+	local b
+	for b in $_bins; do
+		install -Dm755 "target/release/$b" "$pkgdir/usr/bin/$b"
+	done
+	install -Dm644 udev/70-validity-fprintd.rules \
+		"$pkgdir"/usr/lib/udev/rules.d/70-validity-fprintd.rules
+	# What lets root own the bus name, and the polkit actions the daemon asks
+	# about: fprintd's to ship where it is installed, which it is not here.
+	install -Dm644 packaging/net.reactivated.Fprint.conf \
+		"$pkgdir"/usr/share/dbus-1/system.d/net.reactivated.Fprint.conf
+	install -Dm644 packaging/alpine/net.reactivated.fprint.device.policy \
+		"$pkgdir"/usr/share/polkit-1/actions/net.reactivated.fprint.device.policy
+	install -Dm644 LICENSE "$pkgdir"/usr/share/licenses/$pkgname/LICENSE
+	install -Dm644 README.md "$pkgdir"/usr/share/doc/$pkgname/README.md
+}
+
+openrc() {
+	default_openrc
+	# The shipped script points at /usr/local/bin, where upstream's install
+	# script puts a source build; a package installs to /usr/bin.
+	sed 's|/usr/local/bin/|/usr/bin/|' "$builddir"/packaging/openrc/validity-fprintd \
+		> "$srcdir"/initd
+	grep -q '^command="/usr/bin/validity-fprintd"$' "$srcdir"/initd \
+		|| die "the init script does not run /usr/bin/validity-fprintd"
+	install -Dm755 "$srcdir"/initd "$subpkgdir"/etc/init.d/$pkgname
+}
+
+# The pin. build-packages.sh leaves this alone rather than running
+# `abuild checksum` over it, so a tarball that is not the one this was
+# written against fails the build.
+sha512sums="
+e4722b9c46395ea37c069aec8ca9c8bac87f9b534c69c746aee17b4f890faf8ecc16a4ace9109eaa1aae8b34311ed009f2737a628a1bda25e22fd8bbb417be4c  validity-fprintd-0.1.2.tar.gz
+"
