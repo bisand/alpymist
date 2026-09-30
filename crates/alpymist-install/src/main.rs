@@ -124,7 +124,6 @@ mod drm_run {
     use alpymist_install::app::{App, action_for};
     use alpymist_install::typing;
     use denise::{InputEvent, InputSource};
-    use denise_drm::SurfaceConfig;
     use denise_evdev::{Console, InputBackend};
     use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
     use std::sync::Arc;
@@ -196,7 +195,7 @@ mod drm_run {
         // memory and copies the result over, which is about four times faster
         // than rasterising into the scanout mapping. See its documentation.
         let mut screen = alpymist_ui::display::Screen::open_patiently(
-            SurfaceConfig::default(),
+            alpymist_ui::display::config(),
             alpymist_ui::display::PATIENCE,
         )?;
         let size = screen.size();

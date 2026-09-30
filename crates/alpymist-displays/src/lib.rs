@@ -85,7 +85,6 @@ pub fn plan(monitors: &[Monitor], layouts: &Layouts, lid_closed: bool) -> Plan {
     let lid_off = lid_closed && others && layouts.lid_off;
     let (given, blocks) = workspaces::blocks(monitors, &names, &layouts.blocks);
     let mut rules = Vec::new();
-    let mut targets = Vec::new();
     let mut on = Vec::new();
     for ((m, name), block) in monitors.iter().zip(&names).zip(given) {
         let target = screen::target(name, m);
@@ -96,7 +95,6 @@ pub fn plan(monitors: &[Monitor], layouts: &Layouts, lid_closed: bool) -> Plan {
             output(name, m).rule(&target)
         });
         if lit {
-            targets.push((target, block));
             on.push((m.name.clone(), block));
         }
     }
@@ -106,7 +104,11 @@ pub fn plan(monitors: &[Monitor], layouts: &Layouts, lid_closed: bool) -> Plan {
         new,
         lid_closed: lid_off,
         rules,
-        workspace_rules: workspaces::rules(layouts.per_screen, &targets),
+        // By connector, not by make and model as the monitor rules are: the
+        // bar puts a workspace on the screen its rule names, and knows
+        // screens only by connector. The file is written again whenever the
+        // screens change, so a screen on another port is followed anyway.
+        workspace_rules: workspaces::rules(layouts.per_screen, &on),
         on,
         blocks,
     }
@@ -208,6 +210,7 @@ pub fn apply() -> Result<Plan, String> {
     // the laptop had when the lid closed goes back to it.
     if layouts.per_screen {
         let spaces = hypr::workspaces().unwrap_or_default();
+        hypr::dispatch(&workspaces::unnamed(&spaces))?;
         hypr::dispatch(&workspaces::homes(&spaces, &plan.on))?;
         let now = hypr::monitors().unwrap_or_default();
         hypr::dispatch(&workspaces::show_own(&now, &plan.on))?;

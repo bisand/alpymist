@@ -18,6 +18,7 @@ pub mod chrome;
 pub mod convert;
 #[cfg(feature = "drm")]
 pub mod display;
+pub mod lid;
 pub mod logo;
 pub mod palette;
 #[cfg(feature = "picture")]

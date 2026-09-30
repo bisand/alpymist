@@ -80,6 +80,8 @@ pub fn request(command: &str) -> Result<Vec<u8>, String> {
 pub struct Workspace {
     /// Its id: 1 to 9 for Super+1 to Super+9, below 0 for special ones.
     pub id: i32,
+    /// Its name: its id, unless something named it.
+    pub name: String,
     /// The connector of the screen it is on.
     pub monitor: String,
 }

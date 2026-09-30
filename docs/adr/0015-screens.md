@@ -134,3 +134,22 @@ Hyprland 0.55, which Alpine does not have; this uses only Hyprland's own
 dispatchers and rules. An account made before has Hyprland's own Super+number
 binds; changing either Displays setting takes them over, keeping the file as
 it was beside it (ADR 0007).
+
+## Addendum — 2026-09-30: workspaces keep their numbers; the login screen follows the lid
+
+Naming every screen's workspaces 1 to 9 was a mistake: the bar tells
+workspaces apart by name, and on the X1 each Samsung's bar showed both
+Samsungs' five, 1234512345, with the highlight on every "2" at once. The
+workspaces keep their numbers as names now, 11 to 15 and 21 to 25, and the
+bar shows them by their last digit; each bar marks the workspace its own
+screen shows, and underlines the one with the focus. Workspace rules name
+screens by connector, which is how the bar knows them, and are written again
+whenever the screens change. A session that has the earlier names gets the
+numbers back the next time the layout is applied.
+
+The splash, the installer and the login screen draw straight to the display,
+before Hyprland, and chose the laptop's own screen whenever one was
+connected — which a closed lid still is. On a dock with the lid shut the
+login box was behind the lid and the dock's screens were dark. They now
+prefer a connected external screen while the lid is closed
+(`alpymist_ui::lid`).

@@ -21,13 +21,28 @@
     "on-click": "alpymist-menu"
   },
 
-  // Each bar shows its own screen's workspaces, by the names Alpymist gives
-  // them, 1 to 9; the first five of each screen are kept by Hyprland's
-  // workspace rules (alpymist displays), so they are there even when empty.
+  // Each bar shows its own screen's workspaces. Each screen has its own 1 to
+  // 9 (Settings › Displays), which Hyprland numbers 1 to 9 on the laptop's own
+  // screen, 11 to 19 on the next, 21 to 29 on the one after (alpymist
+  // displays); they are shown here by the last digit. Their names stay the
+  // numbers, because the bar tells workspaces apart by name, and two called
+  // "1" would be taken for one. The first five of each screen are kept by
+  // Hyprland's workspace rules, so they are there even when empty.
   "hyprland/workspaces": {
-    "format": "{name}",
+    "format": "{icon}",
     "on-click": "activate",
-    "all-outputs": false
+    "all-outputs": false,
+    "format-icons": {
+      "11": "1", "12": "2", "13": "3", "14": "4", "15": "5", "16": "6", "17": "7", "18": "8", "19": "9",
+      "21": "1", "22": "2", "23": "3", "24": "4", "25": "5", "26": "6", "27": "7", "28": "8", "29": "9",
+      "31": "1", "32": "2", "33": "3", "34": "4", "35": "5", "36": "6", "37": "7", "38": "8", "39": "9",
+      "41": "1", "42": "2", "43": "3", "44": "4", "45": "5", "46": "6", "47": "7", "48": "8", "49": "9",
+      "51": "1", "52": "2", "53": "3", "54": "4", "55": "5", "56": "6", "57": "7", "58": "8", "59": "9",
+      "61": "1", "62": "2", "63": "3", "64": "4", "65": "5", "66": "6", "67": "7", "68": "8", "69": "9",
+      "71": "1", "72": "2", "73": "3", "74": "4", "75": "5", "76": "6", "77": "7", "78": "8", "79": "9",
+      "81": "1", "82": "2", "83": "3", "84": "4", "85": "5", "86": "6", "87": "7", "88": "8", "89": "9",
+      "91": "1", "92": "2", "93": "3", "94": "4", "95": "5", "96": "6", "97": "7", "98": "8", "99": "9"
+    }
   },
 
   "custom/session": {
