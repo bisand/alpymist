@@ -43,7 +43,7 @@ and stays `0`. See [ADR 0008](docs/adr/0008-versions-and-build-numbers.md).
 
 **Two lists of independent packages must agree.** `INDEPENDENT` in
 `ci/build-packages.sh` and `INDEPENDENT` in `xtask/src/version.rs` both hold
-`squint` and `alpymist-keys`. They are not built from this workspace, so
+`squint`, `validity-fprintd` and `alpymist-keys`. They are not built from this workspace, so
 neither the dev stamp nor the build number touches them. Adding a package like
 that means editing both.
 
@@ -63,11 +63,12 @@ any screensaver, and adding a name to either is the wrong fix for anything.
 reads it drifting apart. See [ADR 0009](docs/adr/0009-screensaver-and-idle.md)
 and its addendum.
 
-**squint's `sha512sums` is a real pin.** It is the one aport fetched from
-upstream. `ci/build-packages.sh` deliberately does *not* run `abuild checksum`
-over it — that subcommand deletes the block and regenerates it from whatever
-was downloaded, which verifies nothing. If another aport ever gains a remote
-source, extend that exclusion or its pin is decorative.
+**squint's and validity-fprintd's `sha512sums` are real pins.** They are the
+aports fetched from upstream, named in `FETCHED` in `ci/build-packages.sh`,
+which deliberately does *not* run `abuild checksum` over them — that
+subcommand deletes the block and regenerates it from whatever was downloaded,
+which verifies nothing. If another aport ever gains a remote source, add it to
+`FETCHED` or its pin is decorative.
 
 **`-rN` is not optional.** apk's version grammar is
 `digit{.digit}…{letter}{_suf{#}}…{~hash}{-r#}` and abuild dies with "Missing
