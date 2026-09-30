@@ -38,6 +38,10 @@ pub enum Action {
         /// Show things on it, or not.
         #[arg(long)]
         on: Option<bool>,
+        /// Show the same as another screen, named as for SCREEN, or `none`
+        /// for a picture of its own: a projector showing the laptop's.
+        #[arg(long)]
+        mirror: Option<String>,
     },
     /// Remember the screens as they are now as the layout for this set.
     Save,
@@ -66,6 +70,7 @@ pub enum Action {
 ///
 /// # Errors
 /// Hyprland could not be asked or told, or the layouts not kept.
+#[allow(clippy::too_many_lines)] // one arm a subcommand
 pub fn run(action: &Action) -> Result<(), Box<dyn std::error::Error>> {
     match action {
         Action::Watch => Ok(watch::run()?),
@@ -112,6 +117,7 @@ pub fn run(action: &Action) -> Result<(), Box<dyn std::error::Error>> {
             rotate,
             flip,
             on,
+            mirror,
         } => {
             let monitors = hypr::monitors()?;
             let names = screen::names(&monitors);
@@ -121,9 +127,23 @@ pub fn run(action: &Action) -> Result<(), Box<dyn std::error::Error>> {
                 .find(&key)
                 .cloned()
                 .unwrap_or_else(|| Layout::extended(&monitors));
+            let source = match mirror.as_deref() {
+                None => None,
+                Some("none") => Some(None),
+                Some(other) => {
+                    let j = find(&monitors, &names, other)?;
+                    if j == index {
+                        return Err("a screen cannot show the same as itself".into());
+                    }
+                    Some(Some(names[j].clone()))
+                }
+            };
             let output = current
                 .output_mut(&names[index])
                 .ok_or("that screen is not in the layout")?;
+            if let Some(source) = source {
+                output.mirror = source;
+            }
             if let Some(mode) = mode {
                 output.mode = mode_rule(mode, &monitors[index])?;
             }

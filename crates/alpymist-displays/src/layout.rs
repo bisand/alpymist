@@ -40,6 +40,10 @@ pub struct Output {
     /// Rotation and flip, as `wl_output` numbers them: 0 to 7.
     #[serde(default)]
     pub transform: u8,
+    /// The screen it shows the same as, by name, rather than a place of its
+    /// own in the layout: a projector showing the laptop's screen.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mirror: Option<String>,
 }
 
 fn on() -> bool {
@@ -66,13 +70,22 @@ impl Output {
             position: [m.x, m.y],
             scale: if m.scale > 0.0 { m.scale } else { 1.0 },
             transform: m.transform,
+            mirror: None,
         }
     }
 
-    /// The monitor rule that puts it there, for the screen matched by
-    /// `target`.
+    /// Whether it has a place of its own in the layout: on, and not showing
+    /// the same as another.
     #[must_use]
-    pub fn rule(&self, target: &str) -> String {
+    pub fn placed(&self) -> bool {
+        self.enabled && self.mirror.is_none()
+    }
+
+    /// The monitor rule that puts it there, for the screen matched by
+    /// `target`; showing the same as the screen on connector `mirror`, when
+    /// it mirrors one that is there.
+    #[must_use]
+    pub fn rule(&self, target: &str, mirror: Option<&str>) -> String {
         if !self.enabled {
             return format!("{target}, disable");
         }
@@ -85,6 +98,9 @@ impl Output {
         );
         if self.transform != 0 {
             let _ = write!(rule, ", transform, {}", self.transform);
+        }
+        if let Some(source) = mirror {
+            let _ = write!(rule, ", mirror, {source}");
         }
         rule
     }
@@ -148,7 +164,13 @@ impl Layout {
             outputs: monitors
                 .iter()
                 .zip(&names)
-                .map(|(m, name)| Output::of(name, m))
+                .map(|(m, name)| Output {
+                    mirror: monitors
+                        .iter()
+                        .position(|o| m.mirrors(o))
+                        .map(|i| names[i].clone()),
+                    ..Output::of(name, m)
+                })
                 .collect(),
         }
     }
@@ -330,17 +352,22 @@ mod tests {
         o.position = [1920, -200];
         o.scale = 1.25;
         assert_eq!(
-            o.rule("desc:Panel"),
+            o.rule("desc:Panel", None),
             "desc:Panel, 1920x1080@60.00, 1920x-200, 1.25"
         );
         o.transform = 1;
         o.scale = 1.0;
         assert_eq!(
-            o.rule("eDP-1"),
+            o.rule("eDP-1", None),
             "eDP-1, 1920x1080@60.00, 1920x-200, 1, transform, 1"
         );
+        o.transform = 0;
+        assert_eq!(
+            o.rule("DP-3", Some("eDP-1")),
+            "DP-3, 1920x1080@60.00, 1920x-200, 1, mirror, eDP-1"
+        );
         o.enabled = false;
-        assert_eq!(o.rule("eDP-1"), "eDP-1, disable");
+        assert_eq!(o.rule("eDP-1", None), "eDP-1, disable");
     }
 
     #[test]

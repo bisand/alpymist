@@ -57,6 +57,8 @@ pub enum Field {
     Scale,
     /// Its rotation.
     Rotation,
+    /// A picture of its own, or the same as another screen's.
+    Mirror,
 }
 
 /// A control on the page that can have focus.
@@ -188,7 +190,8 @@ impl Screens {
         let mut rooms = Vec::new();
         let mut index = Vec::new();
         for (i, (o, m)) in self.draft.outputs.iter().zip(&self.monitors).enumerate() {
-            if !o.enabled {
+            // A screen showing the same as another has no place of its own.
+            if !o.placed() {
                 continue;
             }
             let (w, h) = arrange::size(o, m);
@@ -261,6 +264,18 @@ impl Screens {
             modes.insert(0, (current.clone(), label));
         }
         modes
+    }
+
+    /// What the chosen screen can show: its own picture, or the same as
+    /// each other screen that has one of its own.
+    fn mirrors(&self) -> Vec<Option<usize>> {
+        let mut choices = vec![None];
+        choices.extend(
+            (0..self.monitors.len())
+                .filter(|&j| j != self.selected && self.draft.outputs[j].placed())
+                .map(Some),
+        );
+        choices
     }
 
     /// The scales offered to the chosen screen.
@@ -657,6 +672,12 @@ impl View {
                             s.settle();
                         }
                     }
+                    Field::Mirror => {
+                        if let Some(&choice) = s.mirrors().get(choice) {
+                            s.draft.outputs[i].mirror = choice.map(|j| s.names[j].clone());
+                            s.settle();
+                        }
+                    }
                     Field::Rotation => {
                         let flip = s.draft.outputs[i].transform & 4;
                         s.draft.outputs[i].transform = u8::try_from(choice % 4).unwrap_or(0) | flip;
@@ -808,9 +829,23 @@ impl View {
         let mode_at = modes.iter().position(|(rule, _)| *rule == o.mode);
         let scales = s.scales();
         let scale_at = scales.iter().position(|v| (v - o.scale).abs() < 0.001);
-        let rows: [(&str, Choices); 5] = [
+        let mirrors = s.mirrors();
+        let mirror_at = mirrors
+            .iter()
+            .position(|m| m.map(|j| &s.names[j]) == o.mirror.as_ref());
+        let mirror_labels = mirrors
+            .iter()
+            .map(|m| {
+                m.map_or_else(
+                    || "Its own".to_owned(),
+                    |j| format!("The same as {}", s.label(j)),
+                )
+            })
+            .collect();
+        let rows: [(&str, Choices); 6] = [
             ("Screen", Some((Field::Screen, screen_labels, Some(i)))),
             ("Show things on it", None),
+            ("Picture", Some((Field::Mirror, mirror_labels, mirror_at))),
             (
                 "Resolution",
                 Some((
@@ -843,7 +878,7 @@ impl View {
         let Some(card) = self.ui.add(
             parent,
             Panel::default(),
-            Rect::new(PAD * sc, y, width, row_h * 5),
+            Rect::new(PAD * sc, y, width, row_h * 6),
         ) else {
             return y;
         };
@@ -898,7 +933,7 @@ impl View {
                 }
             }
         }
-        y += row_h * 5 + GAP * sc;
+        y += row_h * 6 + GAP * sc;
 
         // Identify, and Apply or the question after it.
         let Some(s) = self.screens.as_mut() else {
@@ -1190,6 +1225,23 @@ mod tests {
             s.label(0)
         );
         assert!(!s.label(1).contains("lid"));
+    }
+
+    #[test]
+    fn a_screen_can_show_the_same_as_another_and_leaves_the_arrangement() {
+        let mut v = view();
+        let mut effects = Vec::new();
+        v.displays_message(ScreenMsg::Pick(2), &mut effects);
+        let s = v.screens.as_ref().unwrap();
+        assert_eq!(s.mirrors(), [None, Some(0), Some(1)]);
+        v.screens.as_mut().unwrap().open = Some(super::Field::Mirror);
+        v.displays_message(ScreenMsg::Chose(1), &mut effects);
+        let s = v.screens.as_ref().unwrap();
+        assert_eq!(s.draft.outputs[2].mirror.as_deref(), Some("Maker eDP-1"));
+        assert_eq!(s.rooms().1, [0, 1], "a mirror has no place of its own");
+        // Another screen cannot then mirror the mirror.
+        v.displays_message(ScreenMsg::Pick(1), &mut effects);
+        assert_eq!(v.screens.as_ref().unwrap().mirrors(), [None, Some(0)]);
     }
 
     #[test]

@@ -171,3 +171,15 @@ sized for one output. Outputs of different sizes composed the scenery again
 for each on every keystroke, and a click was tested against the layout of
 whichever was drawn last. Sceneries are kept for each size now, and a click
 is tested with the layout of the screen it was on.
+
+## Addendum — 2026-09-30: mirroring
+
+A screen can show the same as another instead of a place of its own — a
+projector showing the laptop's screen. It is part of the layout for that set
+of screens: `mirror` names the screen it shows, by make, model and serial,
+and the rule says `mirror, <connector>`. A mirror has no place in the
+arrangement and no workspaces of its own. Mirroring a screen that is off —
+the laptop's, behind a closed lid — or one that is itself a mirror, it shows
+a picture of its own instead, so a screen is never left showing nothing.
+Hyprland reports what a screen mirrors by the other's monitor number, not
+its connector, and the check that a layout took reads it that way.
