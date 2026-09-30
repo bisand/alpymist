@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Fingerprints
+Comment=Add, test and remove the fingerprints that can unlock this computer
+Exec=alpymist-fingerprint
+Icon=fingerprint
+Terminal=false
+Categories=System;Settings;
+Keywords=fingerprint;fprint;finger;enrol;enroll;reader;biometric;
+StartupWMClass=alpymist-fingerprint

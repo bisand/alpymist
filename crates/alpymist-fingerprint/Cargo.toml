@@ -1,0 +1,46 @@
+[package]
+name = "alpymist-fingerprint"
+description = "Alpymist's fingerprint window: enrol a finger, test it and remove them, through the fprintd interface that fprintd and validity-fprintd both serve."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["window"]
+# The window and its drawing. Without it the crate is the enrol state and the
+# daemon client, with no Wayland or fonts behind them.
+window = [
+    "dep:alpymist-auth",
+    "dep:alpymist-widget",
+    "dep:denise",
+    "dep:denise-render",
+    "dep:denise-text",
+]
+
+[[example]]
+name = "snapshot"
+required-features = ["window"]
+
+[[bin]]
+name = "alpymist-fingerprint"
+path = "src/main.rs"
+required-features = ["window"]
+
+[dependencies]
+# The fingerprint daemon, over the system bus, which needs nothing linked.
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
+# Enrolling asks polkit, and polkit asks for the password in Alpymist's dialog
+# through an agent the window registers for itself.
+alpymist-auth = { workspace = true, optional = true }
+alpymist-widget = { workspace = true, optional = true }
+denise = { workspace = true, optional = true }
+denise-render = { workspace = true, optional = true }
+denise-text = { workspace = true, optional = true }
+
+[dev-dependencies]
+png = "0.17"
+
+[lints]
+workspace = true

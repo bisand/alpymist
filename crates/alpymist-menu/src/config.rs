@@ -383,6 +383,18 @@ mod tests {
     use super::{Colour, Config, DEFAULT, load_from, load_with};
 
     #[test]
+    fn the_fingerprint_window_adds_itself_to_the_system_menu() {
+        let text = include_str!("../../../desktop/fingerprint/fingerprint.toml");
+        let fragment: super::Fragment = toml::from_str(text).unwrap();
+        let mut config = super::Config::default();
+        let before = config.menu.get("system").map_or(0, |m| m.items.len());
+        config.merge(fragment);
+        let system = &config.menu["system"];
+        assert_eq!(system.items.len(), before + 1);
+        assert!(system.items.iter().any(|i| i.name == "Fingerprints"));
+    }
+
+    #[test]
     fn fragments_add_menus_and_entries_without_replacing_any() {
         let dir = std::env::temp_dir().join(format!("alpymist-menu-d-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();

@@ -1,0 +1,7 @@
+# The fingerprint window, in the System menu. From alpymist-fingerprint, which
+# is only installed where there is a fingerprint reader, so the entry is only
+# there where it can do something.
+[menu.system]
+items = [
+    { name = "Fingerprints", icon = "󰈷", exec = "alpymist-fingerprint", keywords = ["fingerprint", "finger", "enrol", "reader", "unlock"] },
+]
