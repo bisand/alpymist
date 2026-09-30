@@ -108,6 +108,7 @@ mod tests {
         let on = |id, monitor: &str| Workspace {
             id,
             monitor: monitor.into(),
+            ..Workspace::default()
         };
         let kept = keep(
             &panel,

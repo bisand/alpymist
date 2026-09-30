@@ -182,7 +182,6 @@ mod console {
     use alpymist_greeter::login::{self, Outcome, Stream};
     use alpymist_greeter::{stopped, vt};
     use denise::{InputEvent, InputSource};
-    use denise_drm::SurfaceConfig;
     use denise_evdev::{Console, InputBackend};
     use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
     use std::os::unix::net::UnixStream;
@@ -293,7 +292,7 @@ mod console {
     /// rasterising into the scanout mapping. See its documentation.
     fn open_screen() -> Result<alpymist_ui::display::Screen, denise_drm::DrmError> {
         alpymist_ui::display::Screen::open_patiently(
-            SurfaceConfig::default(),
+            alpymist_ui::display::config(),
             alpymist_ui::display::PATIENCE,
         )
     }

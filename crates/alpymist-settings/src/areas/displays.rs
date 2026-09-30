@@ -24,6 +24,10 @@ pub const WORKSPACES: &str = "displays.workspaces";
 const HYPRLAND: &str = "hypr/hyprland.conf";
 /// Where it is kept as it was before the workspace keys were taken over.
 pub const KEPT: &str = ".bak-workspaces";
+/// Super+L as accounts made before Alpymist's own lock have it.
+const OLD_LOCK: &str = "bind = SUPER, L, exec, swaylock -f -c 0b121e";
+/// Super+L as it is now.
+const NEW_LOCK: &str = "bind = SUPER, L, exec, alpymist-lock";
 
 /// The settings.
 pub fn settings() -> Vec<Setting> {
@@ -108,32 +112,39 @@ fn take_over(env: &Env) -> Vec<String> {
         let _ = env.run(&["hyprctl", "reload"]);
     }
     vec![format!(
-        "Super+1 to Super+9 now follow the screen the pointer is on ({} as it was).",
+        "Super+1 to Super+9 now follow the screen the pointer is on, and Super+L \
+         locks with Alpymist's lock ({} as it was).",
         kept.display()
     )]
 }
 
 /// `hyprland.conf` with each of the Super+number lines every account started
-/// with going through `alpymist displays`; `None` when there are none left,
-/// as there are not once they have been taken over or changed by hand.
+/// with going through `alpymist displays`, and Super+L locking with
+/// Alpymist's lock where it still runs swaylock, which is no longer
+/// installed; `None` when there are none of those left, as there are not once
+/// they have been taken over or changed by hand.
 fn with_keys(conf: &str) -> Option<String> {
     let mut out = String::with_capacity(conf.len() + 400);
     let mut changed = false;
     for line in conf.lines() {
         let trimmed = line.trim();
-        let new = (1..=9).find_map(|n| {
-            if trimmed == format!("bind = SUPER, {n}, workspace, {n}") {
-                Some(format!(
-                    "bind = SUPER, {n}, exec, alpymist displays workspace {n}"
-                ))
-            } else if trimmed == format!("bind = SUPER SHIFT, {n}, movetoworkspace, {n}") {
-                Some(format!(
-                    "bind = SUPER SHIFT, {n}, exec, alpymist displays move {n}"
-                ))
-            } else {
-                None
-            }
-        });
+        let new = (trimmed == OLD_LOCK)
+            .then(|| NEW_LOCK.to_owned())
+            .or_else(|| {
+                (1..=9).find_map(|n| {
+                    if trimmed == format!("bind = SUPER, {n}, workspace, {n}") {
+                        Some(format!(
+                            "bind = SUPER, {n}, exec, alpymist displays workspace {n}"
+                        ))
+                    } else if trimmed == format!("bind = SUPER SHIFT, {n}, movetoworkspace, {n}") {
+                        Some(format!(
+                            "bind = SUPER SHIFT, {n}, exec, alpymist displays move {n}"
+                        ))
+                    } else {
+                        None
+                    }
+                })
+            });
         changed |= new.is_some();
         let _ = writeln!(out, "{}", new.as_deref().unwrap_or(line));
     }
@@ -183,5 +194,10 @@ mod tests {
              bind = SUPER, 2, workspace, 7\nbind = SUPER, Q, killactive\n"
         );
         assert_eq!(with_keys(&new), None, "once is enough");
+        assert_eq!(
+            with_keys("bind = SUPER, L, exec, swaylock -f -c 0b121e\n").as_deref(),
+            Some("bind = SUPER, L, exec, alpymist-lock\n"),
+            "swaylock is gone"
+        );
     }
 }

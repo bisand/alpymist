@@ -104,7 +104,6 @@ mod console {
     use crate::handover::{self, Reason};
     use crate::scene::PICTURE;
     use alpymist_ui::display::Screen;
-    use denise_drm::SurfaceConfig;
     use denise_evdev::Console;
     use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
     use std::io::Write as _;
@@ -144,7 +143,7 @@ mod console {
         // one paint costs about four times as much straight into the scanout
         // mapping as it does into memory that is then copied over, and this
         // runs while the machine is still booting.
-        let mut screen = Screen::open(SurfaceConfig::default()).ok()?;
+        let mut screen = Screen::open(alpymist_ui::display::config()).ok()?;
         let size = screen.size();
         let node = screen.device_path().and_then(|path: &Path| {
             std::fs::metadata(path)

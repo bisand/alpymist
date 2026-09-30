@@ -8,10 +8,29 @@
 use denise::geom::{Rect, Size};
 use denise::pixels::PixelView;
 use denise::surface::{PixelFormat, Surface, SurfaceError, required_words};
-use denise_drm::{DrmError, DrmSurface, SurfaceConfig};
+use denise_drm::{ConnectorKind, DrmError, DrmSurface, OutputPreference, SurfaceConfig};
 use denise_render::Canvas;
 use std::path::Path;
 use std::time::{Duration, Instant};
+
+/// How to open the display: on the screen Denise would choose — the
+/// laptop's own first — unless the lid is closed and another screen is
+/// connected (see [`crate::lid`]).
+#[must_use]
+pub fn config() -> SurfaceConfig {
+    use crate::lid::Prefer;
+    let output = match crate::lid::prefer() {
+        Prefer::Any => OutputPreference::Auto,
+        Prefer::DisplayPort => OutputPreference::Kind(ConnectorKind::DisplayPort),
+        Prefer::Hdmi => OutputPreference::Kind(ConnectorKind::Hdmi),
+        Prefer::Dvi => OutputPreference::Kind(ConnectorKind::Dvi),
+        Prefer::Vga => OutputPreference::Kind(ConnectorKind::Vga),
+    };
+    SurfaceConfig {
+        output,
+        ..SurfaceConfig::default()
+    }
+}
 
 /// How long to wait for the display to be free.
 ///

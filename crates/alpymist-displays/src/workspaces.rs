@@ -3,9 +3,11 @@
 //! Hyprland has one set of workspaces for every screen, and Super+4 goes to
 //! workspace 4 wherever it happens to be, the pointer with it. So each
 //! screen is given a block of Hyprland's workspaces instead — the laptop's
-//! own screen 1 to 9, the next screen 11 to 19, the one after 21 to 29 — named
-//! 1 to 9 in the bar, and Super+1 to Super+9 go to the one with that name on
-//! the screen the pointer is on. A laptop on its own is exactly as before.
+//! own screen 1 to 9, the next screen 11 to 19, the one after 21 to 29 — shown
+//! by their last digit in the bar, and Super+1 to Super+9 go to the one with
+//! that digit on the screen the pointer is on. They keep their numbers as
+//! names: the bar tells workspaces apart by name. A laptop on its own is
+//! exactly as before.
 //!
 //! Which block is a screen's is kept with the layouts, by the screen's make,
 //! model and serial, so a screen has the same one whatever port it is on and
@@ -81,7 +83,7 @@ pub fn blocks(
 }
 
 /// The workspace rules for the screens that are on: each one's block on it,
-/// named 1 to 9, the first [`KEPT`] kept. With one set for every screen,
+/// by connector, the first [`KEPT`] kept. With one set for every screen,
 /// only that the first [`KEPT`] are kept.
 #[must_use]
 pub fn rules(per_screen: bool, on: &[(String, u32)]) -> Vec<String> {
@@ -94,10 +96,7 @@ pub fn rules(per_screen: bool, on: &[(String, u32)]) -> Vec<String> {
     for (target, block) in on {
         for n in 1..=9 {
             let kept = if n <= KEPT { ", persistent:true" } else { "" };
-            rules.push(format!(
-                "{}, monitor:{target}, defaultName:{n}{kept}",
-                id(*block, n)
-            ));
+            rules.push(format!("{}, monitor:{target}{kept}", id(*block, n)));
         }
     }
     rules
@@ -114,6 +113,19 @@ pub fn homes(workspaces: &[Workspace], on: &[(String, u32)]) -> Vec<String> {
             let (home, _) = on.iter().find(|(_, b)| *b == block)?;
             (w.monitor != *home).then(|| format!("moveworkspacetomonitor {} {home}", w.id))
         })
+        .collect()
+}
+
+/// Each screen's workspaces with a name other than their number, named by
+/// it again: an earlier Alpymist named them 1 to 9 on every screen, which
+/// the bar took for the same workspaces, and Hyprland keeps a name as long as
+/// it keeps the workspace.
+#[must_use]
+pub fn unnamed(workspaces: &[Workspace]) -> Vec<String> {
+    workspaces
+        .iter()
+        .filter(|w| block_of(w.id).is_some() && w.name != w.id.to_string())
+        .map(|w| format!("renameworkspace {} {}", w.id, w.id))
         .collect()
 }
 
@@ -142,7 +154,7 @@ pub fn show_own(monitors: &[Monitor], on: &[(String, u32)]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{block_of, blocks, homes, id, rules, show_own};
+    use super::{block_of, blocks, homes, id, rules, show_own, unnamed};
     use crate::hypr::Workspace;
     use crate::screen::Monitor;
     use std::collections::BTreeMap;
@@ -187,16 +199,13 @@ mod tests {
     }
 
     #[test]
-    fn each_screen_that_is_on_gets_its_workspaces_named_1_to_9() {
-        let on = [("desc:Panel".to_owned(), 0), ("DP-5".to_owned(), 2)];
+    fn each_screen_that_is_on_gets_its_own_workspaces() {
+        let on = [("eDP-1".to_owned(), 0), ("DP-5".to_owned(), 2)];
         let r = rules(true, &on);
         assert_eq!(r.len(), 18);
-        assert_eq!(
-            r[0],
-            "1, monitor:desc:Panel, defaultName:1, persistent:true"
-        );
-        assert_eq!(r[9], "21, monitor:DP-5, defaultName:1, persistent:true");
-        assert_eq!(r[17], "29, monitor:DP-5, defaultName:9");
+        assert_eq!(r[0], "1, monitor:eDP-1, persistent:true");
+        assert_eq!(r[9], "21, monitor:DP-5, persistent:true");
+        assert_eq!(r[17], "29, monitor:DP-5");
         assert_eq!(rules(false, &on)[0], "1, persistent:true");
     }
 
@@ -225,10 +234,29 @@ mod tests {
     }
 
     #[test]
+    fn workspaces_named_by_an_earlier_alpymist_get_their_numbers_back() {
+        let w = |id, name: &str| Workspace {
+            id,
+            name: name.into(),
+            monitor: "DP-3".into(),
+        };
+        assert_eq!(
+            unnamed(&[
+                w(1, "1"),
+                w(11, "1"),
+                w(12, "12"),
+                w(-98, "special:scratch")
+            ]),
+            ["renameworkspace 11 11"]
+        );
+    }
+
+    #[test]
     fn workspaces_go_home_when_their_screen_is_on() {
         let w = |id, monitor: &str| Workspace {
             id,
             monitor: monitor.into(),
+            ..Workspace::default()
         };
         // Undocked, everything went to the laptop; docked again.
         let spaces = [
