@@ -17,6 +17,8 @@ const INTERNAL: [&str; 3] = ["eDP", "LVDS", "DSI"];
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Monitor {
+    /// Hyprland's number for it, which `mirrorOf` names it by.
+    pub id: i64,
     /// The connector: `eDP-1`, `DP-3`.
     pub name: String,
     /// Make, model and serial: `Samsung Electric Company S24E650 H4ZK500123`.
@@ -45,6 +47,8 @@ pub struct Monitor {
     pub active_workspace: Shown,
     /// Whether it has the focus: the pointer's, or the keyboard's.
     pub focused: bool,
+    /// The screen it shows the same as, by Hyprland's number, or `none`.
+    pub mirror_of: String,
 }
 
 /// The workspace a screen shows.
@@ -67,6 +71,13 @@ impl Monitor {
         } else {
             self.model.trim().to_owned()
         }
+    }
+
+    /// Whether it shows the same as `other`. Hyprland says so by the other's
+    /// number; a connector name is taken as well.
+    #[must_use]
+    pub fn mirrors(&self, other: &Self) -> bool {
+        self.mirror_of == other.id.to_string() || self.mirror_of == other.name
     }
 
     /// Whether this is the machine's own panel.

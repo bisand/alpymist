@@ -86,15 +86,29 @@ pub fn plan(monitors: &[Monitor], layouts: &Layouts, lid_closed: bool) -> Plan {
     let (given, blocks) = workspaces::blocks(monitors, &names, &layouts.blocks);
     let mut rules = Vec::new();
     let mut on = Vec::new();
-    for ((m, name), block) in monitors.iter().zip(&names).zip(given) {
+    // A screen that shows anything at all: on, and not the laptop's behind
+    // a closed lid.
+    let shows =
+        |i: usize| !(lid_off && monitors[i].internal()) && output(&names[i], &monitors[i]).enabled;
+    // The connector of the screen `i` mirrors, if it mirrors one that is
+    // here and showing a picture of its own. Mirroring one that is off, or
+    // one that mirrors another, it shows its own.
+    let mirrored = |i: usize| {
+        let wanted = output(&names[i], &monitors[i]).mirror?;
+        let j = names.iter().position(|n| *n == wanted)?;
+        let source = output(&names[j], &monitors[j]);
+        (j != i && shows(j) && source.mirror.is_none()).then(|| monitors[j].name.clone())
+    };
+    for (i, ((m, name), block)) in monitors.iter().zip(&names).zip(given).enumerate() {
         let target = screen::target(name, m);
-        let lit = !(lid_off && m.internal()) && output(name, m).enabled;
+        let mirror = mirrored(i);
         rules.push(if lid_off && m.internal() {
             format!("{target}, disable")
         } else {
-            output(name, m).rule(&target)
+            output(name, m).rule(&target, mirror.as_deref())
         });
-        if lit {
+        // A mirror has no workspaces: it shows another screen's.
+        if shows(i) && mirror.is_none() {
             on.push((m.name.clone(), block));
         }
     }
@@ -286,6 +300,20 @@ pub fn missed(layout: &Layout, monitors: &[Monitor]) -> Vec<String> {
         if !o.enabled {
             continue;
         }
+        if let Some(wanted) = &o.mirror
+            && let Some(source) = monitors
+                .iter()
+                .zip(screen::names(monitors))
+                .find(|(_, n)| n == wanted)
+                .map(|(s, _)| s)
+            && !source.disabled
+            && !m.mirrors(source)
+        {
+            missed.push(format!(
+                "{} would not show the same as {}.",
+                m.name, source.name
+            ));
+        }
         if let (Some((w, h)), Some(rate)) = (
             arrange::pixels(&o.mode),
             o.mode
@@ -423,6 +451,43 @@ mod tests {
             super::missed(&asked, &now).is_empty(),
             "preferred is whatever it is"
         );
+    }
+
+    #[test]
+    fn a_projector_shows_the_same_as_the_laptop_and_has_no_workspaces_of_its_own() {
+        let room = [screen("eDP-1", "Panel"), screen("HDMI-A-1", "Projector")];
+        let mut layout = Layout::extended(&room);
+        layout.outputs[1].mirror = Some("Panel".into());
+        let mut layouts = Layouts::default();
+        layouts.put(layout);
+        let p = plan(&room, &layouts, false);
+        assert_eq!(
+            p.rules[1],
+            "desc:Projector, 1920x1080@60.00, 1920x0, 1, mirror, eDP-1"
+        );
+        assert_eq!(p.on, [("eDP-1".to_owned(), 0)]);
+        // With the laptop's screen off for the lid, there is nothing to
+        // mirror: the projector shows its own.
+        // Hyprland names the screen mirrored by its number.
+        let mut now = room.clone();
+        now[0].id = 0;
+        now[1].id = 1;
+        now[1].mirror_of = "0".into();
+        let asked = layouts.find(&p.key).unwrap();
+        assert!(
+            super::missed(asked, &now).is_empty(),
+            "{:?}",
+            super::missed(asked, &now)
+        );
+        now[1].mirror_of = "none".into();
+        assert_eq!(super::missed(asked, &now).len(), 1);
+        let closed = plan(&room, &layouts, true);
+        assert_eq!(
+            closed.rules[1],
+            "desc:Projector, 1920x1080@60.00, 1920x0, 1"
+        );
+        assert_eq!(closed.on.len(), 1);
+        assert_eq!(closed.on[0].0, "HDMI-A-1");
     }
 
     #[test]
