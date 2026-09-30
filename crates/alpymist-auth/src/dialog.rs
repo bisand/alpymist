@@ -9,7 +9,7 @@
 //! wait behind a window for a password nobody is typing.
 
 use alpymist_auth::attention;
-use alpymist_auth::helper::{self, Attempt, Step};
+use alpymist_auth::helper::{self, Running, Step};
 use alpymist_auth::prompt::{Outcome, Prompt};
 use alpymist_auth::request::{Request, own_uid};
 use alpymist_auth::secret::Secret;
@@ -22,12 +22,19 @@ use denise::geom::{Point, Size};
 use std::io::Read;
 use std::sync::mpsc;
 
-/// What the dialog tells the conversation.
+/// What the conversation is told: by the dialog, and by the helpers it runs.
 enum Order {
     /// Start an attempt for this account.
     Start(String),
     /// Answer the helper's prompt.
     Answer(Secret),
+    /// Check this password with a second helper, beside the one waiting for
+    /// a finger.
+    Beside(Secret),
+    /// Helper number so-and-so said this.
+    Heard(u64, Step),
+    /// The dialog is gone: end every helper.
+    Quit,
 }
 
 /// What the conversation tells the dialog.
@@ -54,6 +61,10 @@ impl Dialog {
             Outcome::Redraw => AnyOutcome::Redraw,
             Outcome::Answer(secret) => {
                 let _ = self.orders.send(Order::Answer(secret));
+                AnyOutcome::Redraw
+            }
+            Outcome::Beside(secret) => {
+                let _ = self.orders.send(Order::Beside(secret));
                 AnyOutcome::Redraw
             }
             Outcome::Start(index) => {
@@ -140,48 +151,123 @@ impl Widget for Dialog {
     }
 }
 
-/// The conversation: one helper at a time, each step posted to the dialog.
-fn converse(cookie: &str, orders: &mpsc::Receiver<Order>, events: &Sender<Event>) {
+/// A helper the conversation runs, and its number, which is how what it says
+/// is told from what an earlier one said.
+struct Helper {
+    number: u64,
+    running: Running,
+}
+
+/// The conversation: the helper the dialog is answering, and at times one
+/// beside it checking a password typed while the first waits for a finger.
+/// Every helper's lines come back as [`Order::Heard`], so none waits on
+/// another.
+fn converse(
+    cookie: &str,
+    orders: &mpsc::Receiver<Order>,
+    back: &mpsc::Sender<Order>,
+    events: &Sender<Event>,
+) {
     let Some(path) = helper::find() else {
         let _ = events.send(Event::Broken("polkit's helper is not installed".into()));
         return;
     };
-    let mut attempt: Option<Attempt> = None;
+    let mut numbers = 0u64;
+    let mut start = |user: &str| -> Result<Helper, String> {
+        numbers += 1;
+        let number = numbers;
+        let back = back.clone();
+        Running::start(&path, user, cookie, move |step| {
+            back.send(Order::Heard(number, step)).is_ok()
+        })
+        .map(|running| Helper { number, running })
+        .map_err(|e| format!("polkit's helper: {e}"))
+    };
+    let mut user = String::new();
+    let mut main: Option<Helper> = None;
+    // The helper beside, and the password it is to be given when it asks.
+    let mut beside: Option<(Helper, Option<Secret>)> = None;
+    let is = |h: &Option<Helper>, n: u64| h.as_ref().is_some_and(|h| h.number == n);
+
     for order in orders {
-        match order {
-            Order::Start(user) => {
-                attempt = None;
-                match Attempt::start(&path, &user, cookie) {
-                    Ok(a) => attempt = Some(a),
-                    Err(e) => {
-                        let _ = events.send(Event::Broken(format!("polkit's helper: {e}")));
-                        continue;
+        let tell = match order {
+            Order::Quit => return,
+            Order::Start(who) => {
+                beside = None;
+                main = None;
+                user = who;
+                match start(&user) {
+                    Ok(h) => main = Some(h),
+                    Err(why) => {
+                        let _ = events.send(Event::Broken(why));
                     }
                 }
+                None
             }
             Order::Answer(mut secret) => {
-                let Some(a) = attempt.as_mut() else { continue };
-                if a.answer(&mut secret).is_err() {
-                    let _ = events.send(Event::Step(Step::Done(false)));
-                    attempt = None;
-                    continue;
+                let failed = main
+                    .as_mut()
+                    .is_some_and(|h| h.running.answer(&mut secret).is_err());
+                if failed {
+                    main = None;
+                }
+                failed.then_some(Step::Done(false))
+            }
+            Order::Beside(secret) => match start(&user) {
+                Ok(h) => {
+                    beside = Some((h, Some(secret)));
+                    None
+                }
+                Err(_) => Some(Step::Done(false)),
+            },
+            Order::Heard(n, step) if is(&main, n) => {
+                if let Step::Done(ok) = step {
+                    main = None;
+                    if ok {
+                        beside = None;
+                    }
+                }
+                Some(step)
+            }
+            Order::Heard(n, step) if beside.as_ref().is_some_and(|(h, _)| h.number == n) => {
+                match step {
+                    // Its pam_fprintd found the reader held by the first, and
+                    // this is the password. Anything asked after that is not
+                    // what was typed, so the attempt ends there.
+                    Step::Prompt { echo: false, .. } => {
+                        let answered = beside.as_mut().and_then(|(h, secret)| {
+                            let mut secret = secret.take()?;
+                            h.running.answer(&mut secret).ok()
+                        });
+                        if answered.is_some() {
+                            None
+                        } else {
+                            beside = None;
+                            Some(Step::Done(false))
+                        }
+                    }
+                    Step::Prompt { echo: true, .. } => {
+                        beside = None;
+                        Some(Step::Done(false))
+                    }
+                    Step::Done(ok) => {
+                        beside = None;
+                        if ok {
+                            main = None;
+                        }
+                        Some(Step::Done(ok))
+                    }
+                    // What the dialog says about a wrong password is its own.
+                    Step::Info(_) | Step::Error(_) => None,
                 }
             }
-        }
-        // Relay what the helper says until it asks again or is done.
-        while let Some(a) = attempt.as_mut() {
-            let said = a.step().unwrap_or(Step::Done(false));
-            let asks = matches!(said, Step::Prompt { .. });
-            let done = matches!(said, Step::Done(_));
-            if events.send(Event::Step(said)).is_err() {
-                return;
-            }
-            if done {
-                attempt = None;
-            }
-            if asks || done {
-                break;
-            }
+            // From a helper already ended.
+            Order::Heard(..) => None,
+        };
+        if let Some(step) = tell
+            && events.send(Event::Step(step)).is_err()
+        {
+            return;
         }
     }
 }
@@ -200,8 +286,12 @@ pub fn ask(request: Request) -> Result<bool, String> {
     let (sender, events) = host::events();
     let verified = sender.clone();
     let cookie = request.cookie.clone();
-    std::thread::spawn(move || converse(&cookie, &received, &sender));
+    let back = orders.clone();
+    std::thread::spawn(move || converse(&cookie, &received, &back, &sender));
     let _ = orders.send(Order::Start(user));
+    // The helpers hold the way back too, so the conversation is told when
+    // the dialog is gone rather than left to notice.
+    let quit = orders.clone();
 
     let mut prompt = Prompt::new(request, first);
     let socket = listen(verified, || Event::Verified);
@@ -222,6 +312,7 @@ pub fn ask(request: Request) -> Result<bool, String> {
         ..host::Options::new("alpymist-auth")
     };
     let result = host::run(dialog, &options, events, None);
+    let _ = quit.send(Order::Quit);
     if let Some(path) = &socket {
         std::fs::remove_file(path).ok();
     }

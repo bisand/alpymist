@@ -71,63 +71,86 @@ pub fn parse(line: &str) -> Step {
     }
 }
 
-/// One attempt at authenticating.
-pub struct Attempt {
-    child: Child,
-    input: ChildStdin,
-    output: BufReader<ChildStdout>,
-    over: bool,
+/// Start the helper at `path` for `user`, and give it the authentication's
+/// `cookie`.
+fn spawn(
+    path: &Path,
+    user: &str,
+    cookie: &str,
+) -> std::io::Result<(Child, ChildStdin, ChildStdout)> {
+    let mut child = Command::new(path)
+        .arg(user)
+        .env_clear()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let (Some(mut input), Some(output)) = (child.stdin.take(), child.stdout.take()) else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(std::io::Error::other("the helper has no pipes"));
+    };
+    // The cookie goes on standard input, where no other process can see
+    // it, rather than in the arguments, where any can.
+    let sent = input
+        .write_all(cookie.as_bytes())
+        .and_then(|()| input.write_all(b"\n"))
+        .and_then(|()| input.flush());
+    if let Err(e) = sent {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(e);
+    }
+    Ok((child, input, output))
 }
 
-impl Attempt {
+/// Write `secret` and a newline to the helper, wiping it once written.
+fn send(input: &mut ChildStdin, secret: &mut Secret) -> std::io::Result<()> {
+    let result = input
+        .write_all(secret.expose())
+        .and_then(|()| input.write_all(b"\n"))
+        .and_then(|()| input.flush());
+    secret.clear();
+    result
+}
+
+/// An attempt whose every line is read on a thread of its own and handed to
+/// a callback, so that one waiting on PAM — for a finger on the reader, say —
+/// keeps nobody else waiting. Dropping it ends the helper.
+pub struct Running {
+    child: Child,
+    input: ChildStdin,
+}
+
+impl Running {
     /// Start the helper at `path` for `user`, with the authentication's
-    /// `cookie`.
+    /// `cookie`, handing each line it says to `heard` until it is done, its
+    /// output ends, or `heard` returns false.
     ///
     /// # Errors
     /// The helper could not be started.
-    pub fn start(path: &Path, user: &str, cookie: &str) -> std::io::Result<Self> {
-        let mut child = Command::new(path)
-            .arg(user)
-            .env_clear()
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()?;
-        let (Some(mut input), Some(output)) = (child.stdin.take(), child.stdout.take()) else {
-            let _ = child.kill();
-            return Err(std::io::Error::other("the helper has no pipes"));
-        };
-        // The cookie goes on standard input, where no other process can see
-        // it, rather than in the arguments, where any can.
-        input.write_all(cookie.as_bytes())?;
-        input.write_all(b"\n")?;
-        input.flush()?;
-        Ok(Self {
-            child,
-            input,
-            output: BufReader::new(output),
-            over: false,
-        })
-    }
-
-    /// The next thing the helper says. The end of its output is a failure.
-    ///
-    /// # Errors
-    /// Reading from the helper failed.
-    pub fn step(&mut self) -> std::io::Result<Step> {
-        if self.over {
-            return Ok(Step::Done(false));
-        }
-        let mut line = String::new();
-        if self.output.read_line(&mut line)? == 0 {
-            self.over = true;
-            return Ok(Step::Done(false));
-        }
-        let step = parse(&line);
-        if matches!(step, Step::Done(_)) {
-            self.over = true;
-        }
-        Ok(step)
+    pub fn start(
+        path: &Path,
+        user: &str,
+        cookie: &str,
+        mut heard: impl FnMut(Step) -> bool + Send + 'static,
+    ) -> std::io::Result<Self> {
+        let (child, input, output) = spawn(path, user, cookie)?;
+        std::thread::spawn(move || {
+            let mut output = BufReader::new(output);
+            loop {
+                let mut line = String::new();
+                let step = match output.read_line(&mut line) {
+                    Ok(0) | Err(_) => Step::Done(false),
+                    Ok(_) => parse(&line),
+                };
+                let done = matches!(step, Step::Done(_));
+                if !heard(step) || done {
+                    return;
+                }
+            }
+        });
+        Ok(Self { child, input })
     }
 
     /// Answer a prompt, wiping the answer once written.
@@ -135,28 +158,23 @@ impl Attempt {
     /// # Errors
     /// Writing to the helper failed.
     pub fn answer(&mut self, secret: &mut Secret) -> std::io::Result<()> {
-        let result = self
-            .input
-            .write_all(secret.expose())
-            .and_then(|()| self.input.write_all(b"\n"))
-            .and_then(|()| self.input.flush());
-        secret.clear();
-        result
+        send(&mut self.input, secret)
     }
 }
 
-impl Drop for Attempt {
+impl Drop for Running {
     fn drop(&mut self) {
-        if !self.over {
-            let _ = self.child.kill();
-        }
+        // Done or not: a helper that finished has exited, and one still
+        // waiting — on a finger, or a password nobody will type — must not
+        // be left to.
+        let _ = self.child.kill();
         let _ = self.child.wait();
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Attempt, Step, parse};
+    use super::{Running, Step, parse};
     use crate::secret::Secret;
     use std::path::PathBuf;
 
@@ -202,10 +220,13 @@ mod tests {
 
     fn attempt(password: &str) -> Vec<Step> {
         let helper = fake_helper();
-        let mut a = Attempt::start(&helper, "alice", "c00kie").unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut a = Running::start(&helper, "alice", "c00kie", move |step| {
+            tx.send(step).is_ok()
+        })
+        .unwrap();
         let mut steps = Vec::new();
-        loop {
-            let step = a.step().unwrap();
+        for step in rx {
             if let Step::Prompt { .. } = step {
                 let mut secret = Secret::new();
                 password.chars().for_each(|c| {
@@ -214,12 +235,9 @@ mod tests {
                 a.answer(&mut secret).unwrap();
                 assert!(secret.is_empty(), "wiped once written");
             }
-            let done = matches!(step, Step::Done(_));
             steps.push(step);
-            if done {
-                return steps;
-            }
         }
+        steps
     }
 
     #[test]

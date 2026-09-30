@@ -180,3 +180,13 @@ any frame time here, and never reached by a compositor behaving normally.
   frame before, which the login screen is free to ignore and does.
 - Nothing here shows the screensaver behind the lock, and nothing here unlocks
   by fingerprint. Both would be this program's to grow; neither is missed yet.
+
+## Addendum — 2026-09-30: a finger unlocks it too, when turned on
+
+The last consequence above said nothing here unlocks by fingerprint. Now
+something does, when an administrator turns it on. With Settings › System ›
+Unlock with a fingerprint on, the lock asks a second PAM service,
+`alpymist-lock-fingerprint`, beside the password's, and an enrolled finger
+unlocks as the password does. The password service and everything else here
+are unchanged. [ADR 0016](0016-fingerprints.md) has the reasons, and the
+reasons the login screen still takes only the password.

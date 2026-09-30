@@ -284,7 +284,7 @@ pub fn paint(
     // The field.
     let hint = match prompt.phase {
         Phase::Starting => "Getting ready…",
-        Phase::Asking | Phase::Checking => prompt.label.as_str(),
+        Phase::Asking | Phase::Touching | Phase::Checking => prompt.label.as_str(),
     };
     field(
         &mut pen,
@@ -297,7 +297,7 @@ pub fn paint(
             secret: &prompt.secret,
             echo: prompt.echo,
             hint,
-            taking: prompt.phase == Phase::Asking,
+            taking: prompt.taking(),
             focused: prompt.focus == Focus::Field,
         },
     );
@@ -342,7 +342,7 @@ pub fn paint(
     }
 
     // Buttons.
-    let ready = prompt.phase == Phase::Asking && !prompt.secret.is_empty();
+    let ready = prompt.taking() && !prompt.secret.is_empty();
     draw::outline_button(
         &mut pen,
         engine,

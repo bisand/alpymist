@@ -23,7 +23,8 @@ alpymist-lock — lock this session behind the Alpymist login screen
     alpymist-lock --help   this
 
 The password is the account's own, checked by PAM as the alpymist-lock
-service. The compositor holds the lock: it stays even if this program is
+service. When Settings › System lets a fingerprint unlock the screen, an
+enrolled finger on the reader does too, checked as alpymist-lock-fingerprint. The compositor holds the lock: it stays even if this program is
 killed, and only the password takes it away.
 ";
 
@@ -60,7 +61,7 @@ fn main() {
 mod lock {
     use alpymist_greeter::app::{App, Authenticator, Purpose};
     use alpymist_lock::host::{self, Ending};
-    use alpymist_lock::{pam, who};
+    use alpymist_lock::{finger, pam, who};
     use std::io::{BufRead, BufReader, Write};
     use std::process::{Command, Stdio};
     use std::sync::Arc;
@@ -97,6 +98,14 @@ mod lock {
     /// Lock, and stay until the password is given.
     pub fn now() -> Result<(), String> {
         let user = preflight()?;
+        let fingers = finger::enabled().then(|| {
+            let (sender, fingers) = smithay_client_toolkit::reexports::calloop::channel::channel();
+            let name = user.name.clone();
+            std::thread::spawn(move || {
+                finger::listen(&name, &|heard| sender.send(heard).is_ok());
+            });
+            fingers
+        });
         let authenticate: Authenticator = Arc::new(pam::check);
         let mut app = App::new(
             vec![user],
@@ -120,7 +129,7 @@ mod lock {
             forget_keys();
             forget_clipboard();
         });
-        match host::run(app, covered)? {
+        match host::run(app, covered, fingers)? {
             Ending::Unlocked => Ok(()),
             Ending::Refused => {
                 eprintln!("alpymist-lock: the session was already locked");

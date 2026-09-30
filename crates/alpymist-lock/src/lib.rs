@@ -13,12 +13,17 @@
 //!   the keyboard. A screensaver is a picture in front of an unlocked session
 //!   (ADR 0009); this is not.
 //!
+//! A finger on the reader may unlock it as well, when Settings says so:
+//! [`finger`] asks a PAM service of its own beside the password's.
+//!
 //! Which account it asks about is [`who`]: the one this session belongs to,
 //! and no list to choose from — switching users is what the login screen is
 //! for.
 
 #![forbid(unsafe_code)]
 
+#[cfg(target_os = "linux")]
+pub mod finger;
 #[cfg(target_os = "linux")]
 pub mod host;
 #[cfg(target_os = "linux")]
