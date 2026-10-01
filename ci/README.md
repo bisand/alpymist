@@ -29,6 +29,16 @@ kept in the Actions cache under a key of its aport and the builder, and built
 again only when one of those changes, or at least once a month so it follows
 Alpine's libraries.
 
+The dev channel also keeps cargo's registry and target directory between
+runs, so the 280 or so crates that are other people's are compiled once and
+not on every push. The key is the compiler's version, `Cargo.lock` and the
+builder, with no fallback: change any of them and the next run builds from
+nothing and saves that. Only third-party crates are kept; the workspace's own
+are pruned before the cache is saved, and are compiled every run anyway.
+**Release keeps nothing**: what stable ships is compiled from source in the
+run that builds it. To throw the kept crates away, bump `cargo-dev-v1` in
+`.github/workflows/packages.yml`.
+
 The first-party packages build one after another, each from its own copy of
 the workspace, but into one cargo target directory, so a dependency is
 compiled once for each set of features it is built with rather than once for
