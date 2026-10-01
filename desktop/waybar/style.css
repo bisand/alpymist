@@ -99,7 +99,8 @@ window#waybar {
 #custom-battery.critical { color: @alpymist-error; }
 #custom-ai.warning { color: @alpymist-warning; }
 #custom-ai.critical { color: @alpymist-error; }
-#custom-ai.unknown { color: @alpymist-muted; }
+#custom-ai.unknown,
+#custom-ai.off { color: @alpymist-muted; }
 #custom-wifi.off,
 #custom-wifi.unavailable { color: @alpymist-muted; }
 #custom-wifi.connecting { color: @alpymist-accent; }

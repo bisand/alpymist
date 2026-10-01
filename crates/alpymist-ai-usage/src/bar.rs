@@ -3,8 +3,8 @@
 //! Waybar runs `alpymist-ai-usage --waybar` as a custom module and reads a
 //! line of JSON whenever it changes: an icon with the percentage of whichever
 //! provider is closest to its limit, a tooltip listing every provider turned
-//! on, and a class the stylesheet colours. With nothing turned on the text
-//! is empty, and Waybar hides the module.
+//! on, and a class the stylesheet colours. With nothing turned on it is the
+//! icon alone, dimmed: a click on it opens the popup, where one is turned on.
 
 use crate::config::Config;
 use crate::definition::Definition;
@@ -107,8 +107,14 @@ pub fn summary(entries: &[Entry<'_>], now: i64) -> String {
 #[cfg(feature = "bar")]
 #[must_use]
 pub fn waybar(entries: &[Entry<'_>], config: &Config, now: i64) -> String {
+    // Nothing turned on: the icon alone, dimmed, since a click on it is how
+    // one is turned on.
     if entries.is_empty() {
-        return alpymist_widget::waybar::line("", "", "off");
+        return alpymist_widget::waybar::line(
+            ICON,
+            "No AI provider is turned on.\nClick to turn one on.",
+            "off",
+        );
     }
     let text = match worst(entries) {
         Some((_, used)) => format!("{ICON} {}", percent(used)),
@@ -201,10 +207,16 @@ mod tests {
     }
 
     #[test]
-    fn nothing_turned_on_hides_it_and_nothing_known_says_so() {
+    fn nothing_turned_on_is_the_icon_dimmed_and_nothing_known_says_so() {
         let config = Config::default();
         let line: serde_json::Value = serde_json::from_str(&waybar(&[], &config, 0)).unwrap();
-        assert_eq!(line["text"], "", "an empty text hides the module");
+        assert_eq!(
+            line["text"],
+            super::ICON,
+            "the icon stays: a click turns one on"
+        );
+        assert_eq!(line["class"], "off");
+        assert!(line["tooltip"].as_str().unwrap().contains("Click"));
 
         let claude = def("claude", "Claude");
         let never = Kept::default().after(10, Err("No API key yet.".into()));
