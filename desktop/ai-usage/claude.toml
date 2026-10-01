@@ -21,3 +21,6 @@ disable = "alpymist-ai-provider claude-disable"
 program = "claude"
 about = "Claude Code, Anthropic's command-line tool"
 install = "curl -fsSL https://claude.ai/install.sh | bash"
+# What Anthropic's documentation says removes a native installation. ~/.claude
+# and ~/.claude.json, the login and settings, are left.
+remove = "rm -f ~/.local/bin/claude && rm -rf ~/.local/share/claude"

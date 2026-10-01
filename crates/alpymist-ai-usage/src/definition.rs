@@ -61,6 +61,11 @@ pub struct Requires {
     /// The vendor's own way to install it, as a shell command line. Shown,
     /// and run in a terminal where it can be watched.
     pub install: String,
+    /// How to take it away again, as a shell command line, where that is
+    /// known. Shown and run the same way. What the tool keeps of its own —
+    /// its login, its settings — is not this command's to remove.
+    #[serde(default)]
+    pub remove: Option<String>,
 }
 
 /// A provider.

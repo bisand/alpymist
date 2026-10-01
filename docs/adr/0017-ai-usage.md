@@ -176,3 +176,25 @@ until one already was. The icon is now always shown, dimmed while nothing is
 on, with a tooltip saying a click turns one on. What that gave up: everyone
 with the desktop installed has an icon in the bar for something they may
 never use. Removing `custom/ai` from the bar's modules takes it away.
+
+## Addendum — 2026-10-01: the vendors' tools in the menu
+
+The tools the providers are read through are worth having for their own
+sake, so the menu has them: an AI menu that starts Claude Code, Codex and
+Gemini CLI in a terminal, and each under Install and Remove, as Jottacloud
+is.
+
+- **A provider's file says how its tool is removed**, beside how it is
+  installed: `remove`, a shell line, shown and asked about before it runs.
+  It takes away what the installer put down and nothing else; a tool's
+  login and settings stay.
+- **`alpymist-ai-usage tool run | install | remove ID`** does it. Starting
+  one that is not installed offers to install it first; installing again
+  is how each updates; removing one turns its provider off, which could no
+  longer be read.
+- **Still never a dependency.** The menu's entries are in a file of the
+  package's, `/usr/share/alpymist/menu.d/ai-usage.toml`, and
+  `tests/definitions.rs` holds each to a shipped provider that says how its
+  tool is removed.
+- A tool is started with `~/.local/bin` on its `PATH`, where two of the
+  three installers put it and where the desktop's own `PATH` does not look.

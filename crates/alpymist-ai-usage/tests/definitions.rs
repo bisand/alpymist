@@ -115,3 +115,43 @@ fn every_installer_has_the_shell_it_is_piped_into() {
         }
     }
 }
+
+/// The menu's entries for the vendors' tools name providers that are
+/// shipped, read through a tool, and say how it is removed; and the package
+/// installs the file.
+#[test]
+fn the_menu_names_tools_that_can_be_run_installed_and_removed() {
+    let menu = include_str!("../../../desktop/ai-usage/menu/ai-usage.toml");
+    let apkbuild = include_str!("../../../aports/alpymist-ai-usage/APKBUILD");
+    assert!(apkbuild.contains("menu.d/ai-usage.toml"));
+    let program = include_str!("../src/main.rs");
+    let found = shipped();
+    let mut named = 0;
+    for line in menu.lines() {
+        let Some(rest) = line.split("alpymist-ai-usage tool ").nth(1) else {
+            continue;
+        };
+        let mut words = rest.split(['"', ' ']);
+        let (verb, id) = (words.next().unwrap(), words.next().unwrap());
+        assert!(
+            program.contains(&format!("[\"tool\", \"{verb}\", id]")),
+            "alpymist-ai-usage tool does not answer to {verb}"
+        );
+        let def = found
+            .iter()
+            .find(|d| d.id == id)
+            .unwrap_or_else(|| panic!("the menu names {id}, which is not shipped"));
+        let requires = def
+            .requires
+            .as_ref()
+            .unwrap_or_else(|| panic!("{id} is not read through a tool"));
+        assert!(
+            requires.remove.is_some(),
+            "{id} does not say how it is removed"
+        );
+        named += 1;
+    }
+    // Every tool there is, three ways each: run, install, remove.
+    let tools = found.iter().filter(|d| d.requires.is_some()).count();
+    assert_eq!(named, tools * 3);
+}

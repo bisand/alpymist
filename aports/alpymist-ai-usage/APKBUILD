@@ -57,6 +57,9 @@ package() {
 	# Every provider there is a file for: a new one is not forgotten here.
 	install -Dm644 -t "$pkgdir"/usr/share/alpymist/ai-usage \
 		"$builddir"/desktop/ai-usage/*.toml
+	# The AI menu, and the tools' entries under Install and Remove.
+	install -Dm644 "$builddir"/desktop/ai-usage/menu/ai-usage.toml \
+		"$pkgdir"/usr/share/alpymist/menu.d/ai-usage.toml
 }
 
 # Filled in by `abuild checksum` at build time; see alpymist-install.

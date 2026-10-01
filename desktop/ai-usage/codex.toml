@@ -17,3 +17,7 @@ unofficial = true
 program = "codex"
 about = "Codex, OpenAI's command-line tool"
 install = "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+# What that installer puts down, by its own script: two links in ~/.local/bin
+# and the program under ~/.codex/packages. The rest of ~/.codex, the login
+# and settings, is left.
+remove = "rm -f ~/.local/bin/codex ~/.local/bin/codex-code-mode-host && rm -rf ~/.codex/packages/standalone"

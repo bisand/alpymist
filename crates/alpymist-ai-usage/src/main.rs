@@ -10,6 +10,9 @@
 //! alpymist-ai-usage disable ID      turn it off
 //! alpymist-ai-usage key ID [NAME]   give it a key, kept in the keyring
 //! alpymist-ai-usage forget ID       forget its keys and what it last said
+//! alpymist-ai-usage tool run ID     start a provider's vendor's tool
+//! alpymist-ai-usage tool install ID install it, or update it
+//! alpymist-ai-usage tool remove ID  take it away again
 //! alpymist-ai-usage refresh         ask every one again, now
 //! alpymist-ai-usage --waybar        a line of JSON for Waybar at every change
 //! ```
@@ -45,6 +48,10 @@ With no command, opens the popup under the bar; run it again to close it.
   key ID       give a provider its key, typed unseen and kept in the keyring
   forget ID    forget a provider's keys and what it last said
   refresh      ask every provider turned on again, now
+  tool run ID      start the vendor's tool a provider is read through, such
+                   as Claude Code for claude, offering to install it first
+  tool install ID  install that tool its vendor's way, or update it
+  tool remove ID   take it away again; its login and settings stay
   --waybar     print a line of JSON for a Waybar custom module at every change";
 
 /// The popup's name: its socket, and its layer surface's namespace.
@@ -75,6 +82,9 @@ fn main() -> ExitCode {
         ["key", id] => key(id, None),
         ["key", id, name] => key(id, Some(name)),
         ["forget", id] => forget(id),
+        ["tool", "run", id] => tool_run(id),
+        ["tool", "install", id] => tool_install(id),
+        ["tool", "remove", id] => tool_remove(id),
         ["refresh"] => {
             refresh_all(true);
             status();
@@ -374,6 +384,139 @@ fn installed(program: &str) -> bool {
     dirs.iter().any(|dir| dir.join(program).is_file())
 }
 
+/// Where `program` is: on `PATH`, or where vendors' own installers put
+/// things for one account, which the desktop's `PATH` does not have.
+fn tool_path(program: &str) -> Option<PathBuf> {
+    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|path| std::env::split_paths(&path).collect())
+        .unwrap_or_default();
+    dirs.extend(local_bin());
+    dirs.into_iter()
+        .map(|dir| dir.join(program))
+        .find(|path| path.is_file())
+}
+
+/// `~/.local/bin`.
+fn local_bin() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/bin"))
+}
+
+/// `PATH` with `~/.local/bin` in front: what a vendor's tool, and its
+/// installer, expect to find themselves on.
+fn path_with_local_bin() -> std::ffi::OsString {
+    let known = std::env::var_os("PATH").unwrap_or_default();
+    let dirs = local_bin().into_iter().chain(std::env::split_paths(&known));
+    std::env::join_paths(dirs).unwrap_or(known)
+}
+
+/// Show a vendor's command line, ask, and run it where it can be watched.
+/// `Ok(false)` is a no.
+fn run_shown(line: &str) -> Result<bool, String> {
+    println!("\n    {line}\n");
+    if !agreed("Run it now?") {
+        return Ok(false);
+    }
+    let status = Command::new("sh")
+        .args(["-c", line])
+        .env("PATH", path_with_local_bin())
+        .status()
+        .map_err(|e| format!("sh: {e}"))?;
+    if status.success() {
+        Ok(true)
+    } else {
+        Err(format!("it failed ({status})"))
+    }
+}
+
+/// Install a provider's vendor's tool, its vendor's way.
+fn install_tool(requires: &definition::Requires) -> Result<(), String> {
+    println!("Its vendor's installer is:");
+    match run_shown(&requires.install) {
+        Ok(true) if installed(&requires.program) => Ok(()),
+        Ok(true) | Err(_) => Err(format!("{} did not install", requires.program)),
+        Ok(false) => Err(format!("{} was not installed", requires.program)),
+    }
+}
+
+/// The provider `id`, and the vendor's tool it is read through.
+fn tool_of(id: &str) -> Result<(Definition, definition::Requires), String> {
+    let def = find(id)?;
+    let requires = def
+        .requires
+        .clone()
+        .ok_or_else(|| format!("{} is not read through a tool of its vendor's", def.name))?;
+    Ok((def, requires))
+}
+
+/// Start a provider's vendor's tool here, in this terminal, offering to
+/// install it first where it is not there.
+fn tool_run(id: &str) -> Result<(), String> {
+    use std::os::unix::process::CommandExt as _;
+    let (_, requires) = tool_of(id)?;
+    if !installed(&requires.program) {
+        println!("{} is not installed.", requires.about);
+        install_tool(&requires)?;
+        println!();
+    }
+    let path = tool_path(&requires.program)
+        .ok_or_else(|| format!("{} is not where it was installed", requires.program))?;
+    let failed = Command::new(&path)
+        .env("PATH", path_with_local_bin())
+        .exec();
+    Err(format!("{}: {failed}", path.display()))
+}
+
+/// Install a provider's vendor's tool, or run its installer again, which
+/// is how each of them updates.
+fn tool_install(id: &str) -> Result<(), String> {
+    let (def, requires) = tool_of(id)?;
+    if installed(&requires.program) {
+        println!(
+            "{} is installed. Its installer also updates it.",
+            requires.about
+        );
+    }
+    install_tool(&requires)?;
+    println!(
+        "\n{} is installed. To see its limits in the bar: alpymist-ai-usage enable {}",
+        requires.about, def.id
+    );
+    Ok(())
+}
+
+/// Take a provider's vendor's tool away again, and turn the provider off,
+/// since it cannot be read without it.
+fn tool_remove(id: &str) -> Result<(), String> {
+    let (def, requires) = tool_of(id)?;
+    if !installed(&requires.program) {
+        println!("{} is not installed.", requires.about);
+        return Ok(());
+    }
+    let line = requires
+        .remove
+        .as_deref()
+        .ok_or_else(|| format!("{} does not say how it is removed", def.name))?;
+    println!(
+        "This removes {}. Its login and its settings stay where it keeps them.",
+        requires.about
+    );
+    match run_shown(line) {
+        Ok(true) if !installed(&requires.program) => {}
+        Ok(true) => return Err(format!("{} is still there", requires.program)),
+        Ok(false) => return Err(format!("{} was not removed", requires.program)),
+        Err(why) => return Err(why),
+    }
+    if Config::load().is_enabled(&def.id) {
+        disable(&def.id)?;
+        println!(
+            "{} is turned off in the bar: it was read through it.",
+            def.name
+        );
+    }
+    println!("Removed.");
+    Ok(())
+}
+
 /// A yes or no, asked at the terminal. No is the answer to anything else.
 fn agreed(question: &str) -> bool {
     print!("{question} [y/N] ");
@@ -447,28 +590,15 @@ fn enable(id: &str, asking: bool) -> Result<(), String> {
     // The vendor's own tool, the vendor's own way, where it can be watched.
     if let Some(requires) = def.requires.as_ref().filter(|r| !installed(&r.program)) {
         println!(
-            "{} is read through {}, which is not installed.\n\
-             Its vendor's installer is:\n\n    {}\n",
-            def.name, requires.about, requires.install
+            "{} is read through {}, which is not installed.",
+            def.name, requires.about
         );
         if !asking {
             return Err(format!(
                 "run this in a terminal to install it: alpymist-ai-usage enable {id}"
             ));
         }
-        if !agreed("Run it now?") {
-            return Err(format!("{} was not turned on", def.name));
-        }
-        let status = Command::new("sh")
-            .args(["-c", &requires.install])
-            .status()
-            .map_err(|e| format!("sh: {e}"))?;
-        if !status.success() || !installed(&requires.program) {
-            return Err(format!(
-                "{} did not install; {} was not turned on",
-                requires.program, def.name
-            ));
-        }
+        install_tool(requires).map_err(|why| format!("{why}; {} was not turned on", def.name))?;
     }
     if !def.credentials.is_empty()
         && let Some(why) = secrets::state().refusal()
