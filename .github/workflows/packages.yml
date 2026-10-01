@@ -79,8 +79,9 @@ jobs:
       - uses: actions/cache@v5
         if: inputs.channel == 'dev'
         with:
-          path: cargo
-          key: cargo-dev-v1-${{ matrix.arch }}-${{ steps.rustc.outputs.version }}-${{ hashFiles('Cargo.lock', 'builder/**') }}
+          # Outside the checkout, which every package's build copies whole.
+          path: ~/alpymist-cargo
+          key: cargo-dev-v2-${{ matrix.arch }}-${{ steps.rustc.outputs.version }}-${{ hashFiles('Cargo.lock', 'builder/**') }}
 
       - name: Build the packages
         env:
@@ -93,14 +94,14 @@ jobs:
           # The cache action restores as the runner, and the container builds
           # as its own user: without this, replacing a kept package fails on
           # the files an earlier run left behind.
-          mkdir -p out cache cargo && chmod 777 out cache cargo \
-            && chmod -R u+rwX,go+rwX cache cargo
+          mkdir -p out cache ~/alpymist-cargo && chmod 777 out cache ~/alpymist-cargo \
+            && chmod -R u+rwX,go+rwX cache ~/alpymist-cargo
           docker run --rm -v "$PWD":/src -v "$PWD/out":/out -v "$PWD/cache":/cache \
-            -v "$PWD/cargo":/cargo \
+            -v "$HOME/alpymist-cargo":/cargo \
             -e PACKAGE_CACHE=/cache -e CHANNEL -e BUILD -e CARGO_KEPT \
             alpymist-builder bash /src/ci/build-packages.sh /out/packages
           # For the cache action, which saves as the runner.
-          sudo chown -R "$(id -u):$(id -g)" cargo
+          sudo chown -R "$(id -u):$(id -g)" ~/alpymist-cargo
 
       - uses: actions/upload-artifact@v7
         with:

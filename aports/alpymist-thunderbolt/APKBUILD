@@ -22,7 +22,9 @@ subpackages="$pkgname-openrc"
 options="!check"  # the test suite runs in CI, not in the package build
 install="$pkgname-openrc.post-install"
 source="alpymist-thunderbolt.initd"
-builddir="$srcdir"
+# The workspace: a copy of this package's own, or the one copy a dev build
+# makes for all of them (ALPYMIST_WORKSPACE, from ci/build-packages.sh).
+builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
 
 # Where cargo leaves what it builds. build-packages.sh points every package at
 # one directory, so a dependency compiled for one is not compiled again for the
@@ -30,6 +32,8 @@ builddir="$srcdir"
 _release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
 
 prepare() {
+	# Already there, once for every package of this build.
+	[ -z "${ALPYMIST_WORKSPACE:-}" ] || return 0
 	# Same as alpymist: the workspace is bind-mounted at /src.
 	tar -C /src -cf - \
 		--exclude=./target \

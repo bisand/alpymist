@@ -72,6 +72,10 @@ jobs:
 
       - name: Sign and publish
         env:
+          # The toolchain installed above, as it is. rust-toolchain.toml also
+          # asks for clippy, rustfmt and the musl targets, which xtask does not
+          # need, and rustup would stop here to download them.
+          RUSTUP_TOOLCHAIN: "1.96"
           GH_TOKEN: ${{ github.token }}
           GIT_SSH_COMMAND: ssh -i ${{ runner.temp }}/keys/deploy -o IdentitiesOnly=yes -o UserKnownHostsFile=${{ runner.temp }}/keys/known_hosts
           GIT_AUTHOR_NAME: Alpymist CI

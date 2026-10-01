@@ -36,7 +36,7 @@ builder, with no fallback: change any of them and the next run builds from
 nothing and saves that. Only third-party crates are kept; the workspace's own
 are pruned before the cache is saved, and are compiled every run anyway.
 **Release keeps nothing**: what stable ships is compiled from source in the
-run that builds it. To throw the kept crates away, bump `cargo-dev-v1` in
+run that builds it. To throw the kept crates away, bump `cargo-dev-v2` in
 `.github/workflows/packages.yml`.
 
 The first-party packages build one after another, each from its own copy of
@@ -46,6 +46,10 @@ each package. Each package still builds only its own crates, with
 `cargo build -p` and its own features. That is deliberate: a crate that only
 compiles with a feature some other crate turns on in the workspace build fails
 here, as Settings did when it used the screensaver's `paint` without `saver`.
+On the dev channel they all build from one copy of the workspace, not one
+each: cargo knows a workspace crate by its path, so from twenty copies every
+package compiled the crates it shares with the others again. What each
+package asks cargo for is unchanged, so the rule above holds there too.
 squint and validity-fprintd build in their own trees, as upstream wrote them.
 The ISO jobs build no packages at all: they index and sign the ones the
 package jobs made. What is left of an image's time is mostly squashing the
