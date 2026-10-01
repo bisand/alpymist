@@ -3,6 +3,7 @@
 //!
 //! ```text
 //! alpymist-ai-usage                 open the popup (run again to close it)
+//! alpymist-ai-usage setup ID        open the popup and turn one on there
 //! alpymist-ai-usage status          what every provider turned on says
 //! alpymist-ai-usage list            the providers there are, and which are on
 //! alpymist-ai-usage enable ID       turn one on: its tool, its key, its setup
@@ -30,10 +31,12 @@ use std::process::{Command, ExitCode};
 use std::time::Duration;
 
 const USAGE: &str = "\
-usage: alpymist-ai-usage [status | list | enable ID | disable ID | key ID [NAME]
-                          | forget ID | refresh | --waybar]
+usage: alpymist-ai-usage [setup ID | status | list | enable ID | disable ID
+                          | key ID [NAME] | forget ID | refresh | --waybar]
 
 With no command, opens the popup under the bar; run it again to close it.
+  setup ID     open the popup and turn a provider on there: its key is typed
+               in the popup, and its vendor's tool installed in a terminal
   status       what every provider turned on last reported
   list         the providers there are, and which are turned on
   enable ID    turn one on: install its vendor's tool if it needs one, ask
@@ -55,7 +58,10 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let result = match args.as_slice() {
-        [] => alpymist_widget::instance::toggle(NAME, open),
+        [] => alpymist_widget::instance::toggle(NAME, |listener| open(listener, None)),
+        ["setup", id] => {
+            find(id).and_then(|_| alpymist_widget::instance::toggle(NAME, |l| open(l, Some(id))))
+        }
         ["status"] => {
             status();
             Ok(())
@@ -64,7 +70,7 @@ fn main() -> ExitCode {
             list();
             Ok(())
         }
-        ["enable", id] => enable(id),
+        ["enable", id] => enable(id, std::io::stdin().is_terminal()),
         ["disable", id] => disable(id),
         ["key", id] => key(id, None),
         ["key", id, name] => key(id, Some(name)),
@@ -197,20 +203,102 @@ fn waybar() {
     );
 }
 
+/// What the popup's watcher and worker do.
 #[cfg(target_os = "linux")]
-fn open(listener: Option<UnixListener>) -> Result<bool, String> {
-    use alpymist_ai_usage::popup::{Command, Reading};
+mod work {
+    use super::{Config, Definition, Kept, definition, disable, enable, find, installed};
+    use super::{run, secrets, store, when};
+    use alpymist_ai_usage::popup::{Reading, Reply};
+
+    pub fn reading() -> Reading {
+        let config = Config::load();
+        let installed: Vec<(Definition, Kept)> = definition::discover()
+            .into_iter()
+            .map(|def| {
+                let kept = store::load(&def.id);
+                (def, kept)
+            })
+            .collect();
+        Reading::of(&installed, &config, when::now(), |def| {
+            run::every(def, &config)
+        })
+    }
+
+    /// Turn `id` on, or say what it still needs: its vendor's tool, which
+    /// is installed in a terminal, or a key, which the popup asks for.
+    pub fn turn_on(id: &str) -> Reply {
+        let def = match find(id) {
+            Ok(def) => def,
+            Err(why) => return Reply::Failed(why),
+        };
+        if def
+            .requires
+            .as_ref()
+            .is_some_and(|r| !installed(&r.program))
+        {
+            return Reply::NeedsTool;
+        }
+        if !def.credentials.is_empty() {
+            if let Some(why) = secrets::state().refusal() {
+                return Reply::Failed(why.into());
+            }
+            let mut missing = Vec::new();
+            for credential in def.credentials.iter().filter(|c| !c.optional) {
+                match secrets::lookup(&def.id, &credential.key) {
+                    Ok(Some(_)) => {}
+                    Ok(None) => missing.push(credential.key.clone()),
+                    Err(why) => return Reply::Failed(why),
+                }
+            }
+            if !missing.is_empty() {
+                return Reply::NeedsKeys(missing);
+            }
+        }
+        done(enable(id, false))
+    }
+
+    pub fn keep(id: &str, key: &str, secret: &str) -> Result<(), String> {
+        let def = find(id)?;
+        let credential = def
+            .credentials
+            .iter()
+            .find(|c| c.key == key)
+            .ok_or_else(|| format!("{} has no credential called {key}", def.name))?;
+        if let Some(why) = secrets::state().refusal() {
+            return Err(why.into());
+        }
+        secrets::store(
+            &def.id,
+            &credential.key,
+            &format!("{} {}", def.name, credential.title),
+            secret,
+        )
+    }
+
+    pub fn set(change: impl FnOnce(&mut Config)) -> Result<(), String> {
+        let mut config = Config::load();
+        change(&mut config);
+        config.save()
+    }
+
+    pub fn done(result: Result<(), String>) -> Reply {
+        result.map_or_else(Reply::Failed, |()| Reply::Done)
+    }
+
+    pub fn turn_off(id: &str) -> Reply {
+        done(disable(id))
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn open(listener: Option<UnixListener>, setting_up: Option<&str>) -> Result<bool, String> {
+    use alpymist_ai_usage::popup::{Command, Popup, Reply};
     use widget::Event;
+    use work::{done, keep, reading, set, turn_off, turn_on};
 
     /// How often the popup looks at what is kept: the bar does the asking,
     /// and the time until a limit resets moves on by itself.
     const LOOK_EVERY: Duration = Duration::from_secs(5);
-
-    fn reading() -> Reading {
-        let config = Config::load();
-        let kept = kept(&config);
-        Reading::of(&entries(&kept, &config), &config, when::now())
-    }
 
     let appearance = alpymist_widget::appearance();
     let fonts = alpymist_ai_usage::view::Fonts::load(&appearance);
@@ -229,15 +317,23 @@ fn open(listener: Option<UnixListener>) -> Result<bool, String> {
         });
     }
 
-    // The worker: one asking at a time, a fresh reading after each.
+    // The worker: one thing at a time, a fresh reading after each.
     let (commands, queue) = std::sync::mpsc::channel::<Command>();
     std::thread::spawn(move || {
         for command in queue {
-            match command {
-                Command::Refresh => drop(refresh_all(true)),
-            }
+            let reply = match &command {
+                Command::Refresh => {
+                    drop(refresh_all(true));
+                    Reply::Done
+                }
+                Command::TurnOn(id) => turn_on(id),
+                Command::TurnOff(id) => turn_off(id),
+                Command::Keep { id, key, secret } => done(keep(id, key, secret)),
+                Command::Notify(on) => done(set(|c| c.notify = *on)),
+                Command::WarnAt(percent) => done(set(|c| c.warn_at = *percent)),
+            };
             if events.send(Event::Reading(reading())).is_err()
-                || events.send(Event::Done(command)).is_err()
+                || events.send(Event::Done(command, reply)).is_err()
             {
                 return;
             }
@@ -245,7 +341,12 @@ fn open(listener: Option<UnixListener>) -> Result<bool, String> {
     });
 
     alpymist_widget::host::run(
-        widget::UsagePopup::new(appearance, fonts, commands),
+        widget::UsagePopup::new(
+            appearance,
+            fonts,
+            setting_up.map_or_else(Popup::new, Popup::setting_up),
+            commands,
+        ),
         &alpymist_widget::host::Options::new(NAME),
         channel,
         listener,
@@ -253,7 +354,7 @@ fn open(listener: Option<UnixListener>) -> Result<bool, String> {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn open(_: Option<UnixListener>) -> Result<bool, String> {
+fn open(_: Option<UnixListener>, _: Option<&str>) -> Result<bool, String> {
     Err(
         "the popup draws on a Wayland layer surface, which needs Linux.\n\
          To see it here: cargo run -p alpymist-ai-usage --example snapshot -- out/"
@@ -332,7 +433,9 @@ fn key(id: &str, name: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
-fn enable(id: &str) -> Result<(), String> {
+/// Turn `id` on. When `asking`, someone is at a terminal to say yes to an
+/// installer and to type a key; when not, what is missing is an error.
+fn enable(id: &str, asking: bool) -> Result<(), String> {
     let def = find(id)?;
     if def.unofficial {
         println!(
@@ -348,7 +451,7 @@ fn enable(id: &str) -> Result<(), String> {
              Its vendor's installer is:\n\n    {}\n",
             def.name, requires.about, requires.install
         );
-        if !std::io::stdin().is_terminal() {
+        if !asking {
             return Err(format!(
                 "run this in a terminal to install it: alpymist-ai-usage enable {id}"
             ));
@@ -374,7 +477,7 @@ fn enable(id: &str) -> Result<(), String> {
     }
     for credential in &def.credentials {
         let has = secrets::lookup(&def.id, &credential.key)?.is_some();
-        if has || (credential.optional && !std::io::stdin().is_terminal()) {
+        if has || (credential.optional && !asking) {
             continue;
         }
         if credential.optional

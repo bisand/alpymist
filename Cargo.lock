@@ -67,6 +67,7 @@ dependencies = [
 name = "alpymist-ai-usage"
 version = "0.2.0"
 dependencies = [
+ "alpymist-core",
  "alpymist-widget",
  "denise",
  "denise-render",

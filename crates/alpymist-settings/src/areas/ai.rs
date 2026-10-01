@@ -8,10 +8,11 @@
 //!
 //! Turning a provider on may need things a switch cannot ask for: a key,
 //! typed unseen, or the vendor's installer for the tool it reads through,
-//! which the person should see run. Then the switch opens a terminal on
-//! `alpymist-ai-usage enable`, which asks; a provider with everything it
-//! needs already is simply turned on. Keys are never a setting's value: they
-//! would be an argument, which any process can read.
+//! which the person should see run. Then the switch opens the popup under
+//! the bar on that provider (`alpymist-ai-usage setup`), which has a field
+//! for the key and a button for the installer; a provider with everything
+//! it needs already is simply turned on. Keys are never a setting's value:
+//! they would be an argument, which any process can read.
 
 use crate::env::Env;
 use crate::model::{Applies, Kind, Scope, Setting, Value};
@@ -151,7 +152,7 @@ pub fn get(env: &Env, s: &Setting) -> Value {
     }
 }
 
-/// Whether turning `def` on needs someone at a terminal: a tool of its
+/// Whether turning `def` on needs someone to answer: a tool of its
 /// vendor's to install, or a key the keyring does not have.
 fn needs_asking(def: &Definition, has_program: impl Fn(&str) -> bool) -> bool {
     if def
@@ -211,25 +212,13 @@ fn turn(env: &Env, def: &Definition, on: bool) -> Result<Vec<String>, String> {
         env.run(&["alpymist-ai-usage", "enable", &def.id])?;
         return Ok(Vec::new());
     }
-    // Something to type or to watch: in a terminal, which stays until read.
-    let command = [
-        "sh".to_owned(),
-        "-c".to_owned(),
-        format!(
-            "alpymist-ai-usage enable {}; printf '\\nPress Enter to close. '; read -r _",
-            def.id
-        ),
-    ];
-    let argv = alpymist_core::defaults::terminal_argv(
-        &alpymist_core::defaults::Places::current(),
-        &command,
-    );
-    std::process::Command::new(&argv[0])
-        .args(&argv[1..])
+    // Something to type or to watch: the popup under the bar asks for it.
+    std::process::Command::new("alpymist-ai-usage")
+        .args(["setup", &def.id])
         .spawn()
-        .map_err(|e| format!("{}: {e}", argv[0]))?;
+        .map_err(|e| format!("alpymist-ai-usage: {e}"))?;
     Ok(vec![format!(
-        "{} is turned on in the terminal that opened: it has something to ask.",
+        "{} is set up in the popup that opened: it has something to ask.",
         def.name
     )])
 }
