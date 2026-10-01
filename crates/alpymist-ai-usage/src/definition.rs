@@ -84,6 +84,12 @@ pub struct Definition {
     /// The least seconds between two askings, as the provider allows.
     #[serde(default = "default_refresh")]
     pub refresh: i64,
+    /// Whether asking it reaches nobody: it reads what is already on this
+    /// machine. Then how often Settings says to ask does not hold it back,
+    /// since that is there to spare a vendor's service and the battery's
+    /// radio, and it is asked as often as `refresh` allows.
+    #[serde(default)]
+    pub local: bool,
     /// Whether what it reads comes without any documented promise, and may
     /// stop working when the vendor changes something.
     #[serde(default)]
