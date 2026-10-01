@@ -91,6 +91,19 @@ quick_profile() {
 		export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
 	EOF
 	QUICK=(ABUILD_USERCONF="$HOME/.abuild/dev.conf")
+
+	# One copy of the workspace for all of dev's packages, where each used to
+	# make its own. Cargo knows a crate of the workspace by its path, so
+	# twenty copies were twenty different crates to it, and every package
+	# compiled the ones it shares with the others again: alpymist-ui a dozen
+	# times a build. From one path each is compiled once for each set of
+	# features, as the dependencies already were. Each package still asks
+	# cargo for its own crates and features only.
+	WORKSPACE=~/workspace
+	rm -rf "$WORKSPACE" && mkdir -p "$WORKSPACE"
+	tar -C /src -cf - --exclude=./target --exclude=./out --exclude=./.git \
+		--exclude=./cache . | tar -C "$WORKSPACE" -xf -
+	QUICK+=(ALPYMIST_WORKSPACE="$WORKSPACE")
 }
 
 case "$CHANNEL" in

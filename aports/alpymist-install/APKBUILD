@@ -16,7 +16,9 @@ install=""
 subpackages="$pkgname-openrc"
 options="!check"  # the test suite runs in CI, not in the package build
 source="alpymist-install.initd"
-builddir="$srcdir"
+# The workspace: a copy of this package's own, or the one copy a dev build
+# makes for all of them (ALPYMIST_WORKSPACE, from ci/build-packages.sh).
+builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
 
 # Where cargo leaves what it builds. build-packages.sh points every package at
 # one directory, so a dependency compiled for one is not compiled again for the
@@ -24,6 +26,8 @@ builddir="$srcdir"
 _release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
 
 prepare() {
+	# Already there, once for every package of this build.
+	[ -z "${ALPYMIST_WORKSPACE:-}" ] || return 0
 	# The workspace is bind-mounted at /src by the builder container. Copy the
 	# whole tree rather than a list of members: cargo needs every workspace
 	# member's manifest to resolve.
