@@ -17,7 +17,9 @@ license="MIT OR Apache-2.0"
 # provider is turned on. What that tool needs from Alpine on musl is here
 # instead, since its installer cannot add packages: libgcc, libstdc++ and
 # ripgrep, as Anthropic's documentation asks of Alpine.
-makedepends="cargo"
+# libxkbcommon is alpymist-widget's, which the bar's line comes from and the
+# popup will be drawn with.
+makedepends="cargo libxkbcommon-dev"
 depends="curl font-nerd-fonts-symbols libgcc libsecret libstdc++ ripgrep"
 options="!check"  # the test suite runs in CI, not in the package build
 source=""
