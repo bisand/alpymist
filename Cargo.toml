@@ -41,6 +41,7 @@ repository = "https://github.com/bisand/alpymist"
 
 [workspace.dependencies]
 alpymist-about = { path = "crates/alpymist-about" }
+alpymist-ai-usage = { path = "crates/alpymist-ai-usage", default-features = false }
 alpymist-auth = { path = "crates/alpymist-auth" }
 alpymist-clipboard = { path = "crates/alpymist-clipboard" }
 alpymist-core = { path = "crates/alpymist-core" }

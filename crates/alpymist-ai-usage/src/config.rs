@@ -19,6 +19,9 @@ pub struct Config {
     pub warn_at: u8,
     /// The battery percentage below which nothing is asked while unplugged.
     pub battery_floor: u8,
+    /// Whether to notify when a provider passes `warn_at`, and again when it
+    /// is nearly spent.
+    pub notify: bool,
 }
 
 impl Default for Config {
@@ -28,9 +31,13 @@ impl Default for Config {
             refresh_minutes: 10,
             warn_at: 80,
             battery_floor: 20,
+            notify: true,
         }
     }
 }
+
+/// The settings' file, under the account's configuration directory.
+pub const FILE: &str = "alpymist/ai-usage.toml";
 
 /// Where the settings are.
 #[must_use]
@@ -39,7 +46,7 @@ pub fn path() -> Option<PathBuf> {
         .filter(|d| !d.is_empty())
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
-    Some(base.join("alpymist/ai-usage.toml"))
+    Some(base.join(FILE))
 }
 
 impl Config {
@@ -47,8 +54,15 @@ impl Config {
     /// they do not parse.
     #[must_use]
     pub fn load() -> Self {
-        path()
-            .and_then(|p| std::fs::read_to_string(p).ok())
+        path().map(|p| Self::load_from(&p)).unwrap_or_default()
+    }
+
+    /// The settings in `path`, or the defaults where it is not there or does
+    /// not parse.
+    #[must_use]
+    pub fn load_from(path: &std::path::Path) -> Self {
+        std::fs::read_to_string(path)
+            .ok()
             .and_then(|text| toml::from_str(&text).ok())
             .unwrap_or_default()
     }
@@ -58,12 +72,19 @@ impl Config {
     /// # Errors
     /// The file could not be written.
     pub fn save(&self) -> Result<(), String> {
-        let path = path().ok_or("no home directory to keep settings in")?;
+        self.save_to(&path().ok_or("no home directory to keep settings in")?)
+    }
+
+    /// Write them to `path`.
+    ///
+    /// # Errors
+    /// The file could not be written.
+    pub fn save_to(&self, path: &std::path::Path) -> Result<(), String> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         }
         let text = toml::to_string(self).map_err(|e| e.to_string())?;
-        std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))
+        std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
     }
 
     /// Whether provider `id` is turned on.

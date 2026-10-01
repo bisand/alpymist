@@ -11,10 +11,18 @@ repository.workspace = true
 name = "alpymist_ai_usage"
 path = "src/lib.rs"
 
+[features]
+default = ["bar"]
+# The bar's line, which is alpymist-widget's and so brings Wayland with it.
+# Without it the crate is the providers, the settings and the keyring: what
+# Settings uses.
+bar = ["dep:alpymist-widget"]
+
 # The bar's module and the command line.
 [[bin]]
 name = "alpymist-ai-usage"
 path = "src/main.rs"
+required-features = ["bar"]
 
 # The providers Alpymist ships, one program answering to several names. A
 # provider is whatever a file in /usr/share/alpymist/ai-usage names; these
@@ -25,7 +33,7 @@ path = "src/bin/provider.rs"
 
 [dependencies]
 # The bar's line.
-alpymist-widget = { workspace = true }
+alpymist-widget = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { version = "0.9", default-features = false, features = ["parse", "display", "serde", "std"] }

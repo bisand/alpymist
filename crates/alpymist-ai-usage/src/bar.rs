@@ -8,6 +8,7 @@
 
 use crate::config::Config;
 use crate::definition::Definition;
+#[cfg(feature = "bar")]
 use crate::report::percent;
 use crate::store::Kept;
 use crate::when;
@@ -98,6 +99,7 @@ pub fn summary(entries: &[Entry<'_>], now: i64) -> String {
 }
 
 /// The bar's line.
+#[cfg(feature = "bar")]
 #[must_use]
 pub fn waybar(entries: &[Entry<'_>], config: &Config, now: i64) -> String {
     if entries.is_empty() {

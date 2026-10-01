@@ -1,5 +1,6 @@
 //! Every area, and which one answers for a setting.
 
+pub mod ai;
 pub mod appearance;
 pub mod bluetooth;
 pub mod clipboard;
@@ -139,6 +140,24 @@ pub const AREAS: &[Area] = &[
         keywords: &["mako", "popups", "alerts", "dnd", "do not disturb"],
     },
     Area {
+        id: "ai",
+        title: "AI usage",
+        description: "Which AI subscriptions and API budgets the bar watches, and when it warns",
+        icon: "\u{f06a9}",
+        keywords: &[
+            "ai",
+            "claude",
+            "openai",
+            "openrouter",
+            "subscription",
+            "api",
+            "limit",
+            "usage",
+            "budget",
+            "tokens",
+        ],
+    },
+    Area {
         id: "clipboard",
         title: "Clipboard",
         description: "Copy and paste on Super+C and Super+V, and a history of what was copied",
@@ -250,6 +269,7 @@ pub fn all() -> Vec<Setting> {
         ssh::settings(),
         power::settings(),
         notifications::settings(),
+        ai::settings(),
         clipboard::settings(),
         default_apps::settings(),
         startup::settings(),
@@ -276,6 +296,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "ssh" => Ok(ssh::get(env)),
         "power" => power::get(env, s),
         "notifications" => notifications::get(env, s),
+        "ai" => Ok(ai::get(env, s)),
         "clipboard" => Ok(clipboard::get(env, s)),
         "default" => default_apps::get(env, s),
         "startup" => startup::get(env, s),
@@ -308,6 +329,7 @@ pub fn set(
         "ssh" => ssh::set(env, value),
         "power" => none(power::set(env, s, value)),
         "notifications" => notifications::set(env, s, value, force),
+        "ai" => ai::set(env, s, value),
         "clipboard" => clipboard::set(env, s, value),
         "default" => default_apps::set(env, s, value),
         "startup" => none(startup::set(env, s, value)),

@@ -10,8 +10,8 @@
 use crate::config::Config;
 use crate::definition::Definition;
 use crate::report::Report;
-use crate::secrets;
 use crate::store::{self, Kept};
+use crate::{notify, secrets};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io::{Read as _, Write as _};
@@ -183,16 +183,34 @@ pub fn every(def: &Definition, config: &Config) -> i64 {
 }
 
 /// Ask `def` if it is time to, or regardless when `force`d, and keep what
-/// came of it. Returns what is kept either way.
+/// came of it; and say so, once, if that took it past the warning. Returns
+/// what is kept either way.
+///
+/// Only one process asks at a time ([`store::claim`]): the bar runs once for
+/// every screen, and they all find the same provider due at the same moment.
 #[must_use]
 pub fn refresh(def: &Definition, config: &Config, now: i64, force: bool) -> Kept {
+    let every = every(def, config);
     let kept = store::load(&def.id);
-    if !force && !kept.due(now, every(def, config)) {
+    if !force && !kept.due(now, every) {
+        return kept;
+    }
+    let Some(_claim) = store::claim(&def.id) else {
+        return kept;
+    };
+    // Read again now that it is ours: whoever had it may just have asked.
+    let kept = store::load(&def.id);
+    if !force && !kept.due(now, every) {
         return kept;
     }
     let outcome = credentials(def).and_then(|input| ask(def, &input));
-    let kept = kept.after(now, outcome);
+    let mut kept = kept.after(now, outcome);
+    let (level, say) = notify::due(def, &kept, config, now);
+    kept.told = level;
     store::save(&def.id, &kept);
+    if let Some((summary, body)) = say {
+        notify::send(&summary, &body, level >= 2);
+    }
     kept
 }
 

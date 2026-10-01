@@ -24,6 +24,11 @@ pub struct Kept {
     /// Why the last asking failed, when it did.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// How far along it was when a notification last said so: 0 for not at
+    /// all, 1 for the warning, 2 for nearly spent. What keeps one crossing
+    /// from being told every few minutes.
+    #[serde(default)]
+    pub told: u8,
 }
 
 impl Kept {
@@ -37,6 +42,7 @@ impl Kept {
                 fetched_at: Some(now),
                 tried_at: now,
                 error: None,
+                told: self.told,
             },
             Err(why) => Self {
                 tried_at: now,
@@ -61,6 +67,63 @@ pub fn path(id: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))?;
     Some(base.join("alpymist/ai-usage").join(format!("{id}.json")))
+}
+
+/// How long a claim on a provider stands when whoever made it never let go.
+const CLAIM_LASTS: std::time::Duration = std::time::Duration::from_mins(2);
+
+/// A claim on asking provider `id`, held until dropped. The bar runs once
+/// for every screen, and each of them wakes at the same moment to find the
+/// same provider due; only the one that gets this asks it, and notifies.
+pub struct Claim(Option<PathBuf>);
+
+impl Drop for Claim {
+    fn drop(&mut self) {
+        if let Some(path) = &self.0 {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+/// Claim provider `id`, or `None` when another process has it. Where there
+/// is nowhere to keep a claim, everyone gets one: asking twice is better
+/// than never.
+#[must_use]
+pub fn claim(id: &str) -> Option<Claim> {
+    let Some(lock) = path(id).map(|p| p.with_extension("lock")) else {
+        return Some(Claim(None));
+    };
+    claim_at(lock)
+}
+
+/// As [`claim`], with the lock at this path.
+fn claim_at(lock: PathBuf) -> Option<Claim> {
+    if let Some(dir) = lock.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    for _ in 0..2 {
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock)
+        {
+            Ok(_) => return Some(Claim(Some(lock))),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Left by a process that died holding it: take it over.
+                let stale = std::fs::metadata(&lock)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|at| at.elapsed().ok())
+                    .is_some_and(|age| age > CLAIM_LASTS);
+                if !stale {
+                    return None;
+                }
+                let _ = std::fs::remove_file(&lock);
+            }
+            Err(_) => return Some(Claim(None)),
+        }
+    }
+    None
 }
 
 /// What is kept for `id`: nothing yet, when there is no file or it does not
@@ -92,8 +155,25 @@ pub fn save(id: &str, kept: &Kept) {
 
 #[cfg(test)]
 mod tests {
-    use super::Kept;
+    use super::{Kept, claim_at};
     use crate::report::{Meter, Report};
+
+    #[test]
+    fn only_one_asks_at_a_time_and_a_claim_let_go_can_be_taken() {
+        let lock =
+            std::env::temp_dir().join(format!("alpymist-ai-claim-{}.lock", std::process::id()));
+        std::fs::remove_file(&lock).ok();
+        let first = claim_at(lock.clone());
+        assert!(first.is_some());
+        assert!(
+            claim_at(lock.clone()).is_none(),
+            "the bar on another screen waits"
+        );
+        drop(first);
+        assert!(!lock.exists(), "let go when done");
+        assert!(claim_at(lock.clone()).is_some());
+        assert!(!lock.exists());
+    }
 
     #[test]
     fn a_failure_keeps_the_last_report_and_paces_the_next_try() {
