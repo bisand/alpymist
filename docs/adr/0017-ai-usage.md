@@ -110,4 +110,10 @@ screen, and each of them finds the same provider due at the same moment. A
 lock file beside the kept report decides which one asks and notifies; the
 others show what it kept.
 
-The popup under the bar is still to come.
+**A popup under the bar** opens at a click on the icon, as Wi-Fi's and the
+battery's do: every provider turned on, each meter with what it says and a
+bar where it has a limit, and how old the answer is where that matters. It
+reads what is kept and asks nobody by being opened; a button asks them all
+again, and another opens Settings. `alpymist-ai-usage` with no command is
+the popup, as `alpymist-wifi` and `alpymist-power` are, and what it used to
+print is `alpymist-ai-usage status`.
