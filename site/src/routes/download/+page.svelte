@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Shell from '$lib/components/Shell.svelte';
-	import { ALPINE_VERSION, KEY_NAME, PKGS, REPO } from '$lib/site';
+	import { ALPINE_VERSION, DEV_PKGS, KEY_NAME, PKGS, RELEASES, REPO } from '$lib/site';
 
 	let { data } = $props();
 </script>
@@ -9,7 +9,7 @@
 	<title>Download — Alpymist</title>
 	<meta
 		name="description"
-		content="Add the signed Alpymist package repository to Alpine Linux, or build the Alpymist ISO yourself."
+		content="Download the Alpymist installer image, or add the signed package repository to Alpine Linux. How upgrades and the stable and dev channels work."
 	/>
 </svelte:head>
 
@@ -18,9 +18,8 @@
 		<p class="eyebrow">Download</p>
 		<h1>Get Alpymist</h1>
 		<p>
-			There are two ways onto an Alpymist system, and neither is a script piped into a shell. Add
-			the signed repository to an Alpine machine you already have, or build the installer image and
-			boot it.
+			There are two ways onto an Alpymist system, and neither is a script piped into a shell. Boot
+			the installer image, or add the signed repository to an Alpine machine you already have.
 		</p>
 		<p class="warning" role="note">
 			<strong>Young software.</strong> It installs and it runs, and it will have rough edges. Try it in
@@ -29,6 +28,43 @@
 	</header>
 
 	<div class="options">
+		<section class="option" aria-labelledby="iso">
+			<p class="badge live">Available</p>
+			<h2 id="iso">Installer image</h2>
+			<p>
+				Every release has an ISO for each architecture attached, with its SHA-256 checksum:
+				<strong>x86_64</strong> for laptops and PCs, and <strong>aarch64</strong> for virtual
+				machines on Apple silicon Macs, such as UTM.
+			</p>
+			<p><a class="button" href={RELEASES}>Download from the latest release →</a></p>
+			<p>Check the download against its checksum, with both files in the same directory:</p>
+			<Shell lines={['sha256sum -c alpymist-*.iso.sha256']} />
+			<p>
+				The checksum is published beside the image, so it says the download is intact, not who
+				made it. The packages an installed system upgrades from are signed; the image is not yet.
+			</p>
+
+			<h3>What the installer asks</h3>
+			<p>
+				Keyboard, region, network, which disk and whether to encrypt it, and the first account.
+				It then says how Hyprland will do on the machine, and why. Nothing is written to the disk
+				until you confirm on the last screen. The <code>root</code> account is locked, and
+				administration is through <code>doas</code> with your password.
+			</p>
+			<p>
+				In a virtual machine with a virtio-gpu display, the installer offers to draw with the
+				host's graphics card. That takes a Mesa from a second repository, which is
+				<a href="/docs/adr/0018-guest-graphics/">its own decision</a> and can be declined.
+			</p>
+
+			<h3>Or build it yourself</h3>
+			<p>
+				<code>make iso</code> builds the same image in an Alpine container, and
+				<code>make smoke</code> boots it in QEMU.
+				<a href="/docs/building/">Building from source →</a>
+			</p>
+		</section>
+
 		<section class="option" aria-labelledby="repo">
 			<p class="badge live">Available</p>
 			<h2 id="repo">On an existing Alpine {ALPINE_VERSION} system</h2>
@@ -62,38 +98,59 @@
 			<Shell lines={[`sha256sum /etc/apk/keys/${KEY_NAME}.pub`]} />
 			<p class="fingerprint"><code>{data.fingerprint}</code></p>
 		</section>
-
-		<section class="option" aria-labelledby="iso">
-			<p class="badge soon">Build it yourself</p>
-			<h2 id="iso">Bootable ISO</h2>
-			<p>
-				Signed images are not published yet. CI builds an x86_64 ISO every night and boots it in
-				QEMU, and you can build the same image locally. You need Docker and a Rust toolchain.
-			</p>
-			<Shell
-				lines={[
-					'git clone https://github.com/bisand/alpymist.git',
-					'cd alpymist',
-					'make iso ARCH=x86_64',
-					'make smoke ARCH=x86_64'
-				]}
-			/>
-			<p>
-				<code>make iso</code> builds the packages inside an Alpine container and assembles an image
-				in <code>out/</code>. <code>make smoke</code> boots it and checks that it reports a desktop tier.
-				Use <code>ARCH=aarch64</code> for ARM machines and Apple Silicon virtual machines.
-			</p>
-			<p><a href="/docs/building/">More on building from source →</a></p>
-		</section>
 	</div>
 
-	<section class="why" aria-labelledby="why">
-		<h2 id="why">Why only signed packages</h2>
+	<section class="more" aria-labelledby="channels">
+		<h2 id="channels">Upgrades and channels</h2>
 		<p>
-			Only the repository index is signed, by hand, with a key CI never sees. The index pins the hash
-			of every package, so a compromised build can produce a bad artifact but never an update that
-			an installed system will accept. The reasoning is in
-			<a href="/docs/adr/0002-supply-chain/">ADR 0002</a>.
+			An image is for installing, not for upgrading. An installed system upgrades with
+			<code>doas apk upgrade -U</code>, or Update in the menu, from the channel it follows:
+		</p>
+		<div class="table-scroll">
+			<table>
+				<thead><tr><th>Channel</th><th>Moves</th><th>Repository</th></tr></thead>
+				<tbody>
+					<tr>
+						<td><strong>stable</strong></td>
+						<td>At each release. What the installer sets up.</td>
+						<td><code>{PKGS}/{ALPINE_VERSION}/alpymist</code></td>
+					</tr>
+					<tr>
+						<td><strong>dev</strong></td>
+						<td>On every push to <code>main</code>.</td>
+						<td><code>{DEV_PKGS}/{ALPINE_VERSION}/alpymist</code></td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+		<Shell
+			lines={[
+				'alpymist channel',
+				'doas alpymist channel dev',
+				'doas alpymist channel stable'
+			]}
+		/>
+		<p>
+			The first says which channel the system follows. Following dev trusts its key and upgrades;
+			going back to stable distrusts the key again and downgrades to the release. The dev key is
+			shipped where apk does not look, so a system that never asked for dev does not trust it.
+			The reasoning is in <a href="/docs/adr/0006-release-channels/">ADR 0006</a>.
+		</p>
+	</section>
+
+	<section class="more" aria-labelledby="why">
+		<h2 id="why">What the signature does and does not say</h2>
+		<p>
+			The repository's index is signed, and it pins the hash of every package, so apk refuses a
+			package that was swapped or changed after the index was made. Stable's index is signed by
+			CI, on a Release run of a tagged commit on <code>main</code>: what is signed is what was
+			built in the open.
+		</p>
+		<p>
+			What that does not give is a person between a release and your machine. The signing key
+			was once kept offline and is now held by GitHub Actions, so anyone following either channel
+			is trusting that. <a href="/docs/adr/0002-supply-chain/">ADR 0002</a> and its addenda record
+			the trade, and what was given up for it.
 		</p>
 	</section>
 </div>
@@ -173,11 +230,6 @@
 		border-color: color-mix(in srgb, var(--green) 45%, transparent);
 	}
 
-	.soon {
-		color: var(--amber) !important;
-		border-color: color-mix(in srgb, var(--amber) 45%, transparent);
-	}
-
 	.fingerprint code {
 		display: block;
 		overflow-wrap: anywhere;
@@ -186,16 +238,34 @@
 		color: var(--green);
 	}
 
-	.why {
+	.button {
+		display: inline-flex;
+		padding: 0.6rem 1.1rem;
+		border-radius: 6px;
+		background: var(--accent);
+		color: var(--sky-high);
+		font-weight: 600;
+		text-decoration: none;
+	}
+
+	.button:hover {
+		background: var(--ink);
+	}
+
+	.more {
 		max-width: var(--measure);
 		margin-top: 4rem;
 	}
 
-	.why h2 {
+	.more h2 {
 		font-size: 1.4rem;
 	}
 
-	.why p {
+	.more p {
 		color: var(--ink-dim);
+	}
+
+	td code {
+		overflow-wrap: anywhere;
 	}
 </style>

@@ -1,6 +1,63 @@
 <script lang="ts">
 	import Backdrop from '$lib/components/Backdrop.svelte';
-	import { REPO, verdicts } from '$lib/site';
+	import { RELEASES, REPO, features, verdicts } from '$lib/site';
+	import menu from '$lib/assets/shots/menu.webp';
+	import terminals from '$lib/assets/shots/terminals.webp';
+	import vscode from '$lib/assets/shots/vscode.webp';
+	import libreoffice from '$lib/assets/shots/libreoffice.webp';
+	import appearance from '$lib/assets/shots/settings-appearance.webp';
+	import displays from '$lib/assets/shots/settings-displays.webp';
+	import saver from '$lib/assets/shots/saver-mountains.webp';
+	import lock from '$lib/assets/shots/lock.webp';
+
+	// Captured with grim from a ThinkPad X1 Carbon on the dev channel, except
+	// the lock screen: a session lock shows nothing else while it is up, so it
+	// cannot be captured from inside the session. That one is drawn by the lock
+	// screen's own code (crates/alpymist-lock/examples/snapshot.rs).
+	const leads = [
+		{
+			src: menu,
+			alt: 'The Alpymist desktop: a bar along the top, a terminal showing the probe\'s report, and the menu open over a mountain wallpaper.',
+			caption: 'The menu on Super+Space, over a terminal showing what the probe says of this machine.'
+		},
+		{
+			src: terminals,
+			alt: 'Three tiled terminals: a shell that has run alpymist probe, nano editing the Hyprland configuration, and btop showing processor, memory, disks and processes.',
+			caption: 'Three terminals, tiled: a shell, nano on the Hyprland configuration, and btop.'
+		}
+	];
+	const shots = [
+		{
+			src: appearance,
+			alt: 'The Settings window on its Appearance page, with style, accent colour, text size and a grid of wallpapers.',
+			caption: 'Settings › Appearance'
+		},
+		{
+			src: displays,
+			alt: 'The Settings window on its Displays page, with three screens side by side and the built-in one selected.',
+			caption: 'Settings › Displays, with a dock\'s two screens'
+		},
+		{
+			src: vscode,
+			alt: 'Visual Studio Code filling the screen, with the Alpymist source tree on the left and a Rust file open.',
+			caption: 'Visual Studio Code, from Flathub'
+		},
+		{
+			src: libreoffice,
+			alt: 'LibreOffice Writer with a one-page document about Alpymist: headings, paragraphs and a small table.',
+			caption: 'LibreOffice Writer'
+		},
+		{
+			src: saver,
+			alt: 'A screensaver of dark, pixelated mountain ranges in mist under a few stars.',
+			caption: 'The Mountains screensaver'
+		},
+		{
+			src: lock,
+			alt: 'The lock screen: a clock and date over a photograph of the Milky Way above mountains, and a card with the account\'s name and a password field.',
+			caption: 'The lock screen, which is the login screen'
+		}
+	];
 
 	const pillars = [
 		{
@@ -12,13 +69,19 @@
 		{
 			tag: 'signed packages',
 			title: 'No curl | sh. Ever.',
-			body: 'Every piece of Alpymist, down to the wallpaper, is an apk in a repository whose index is signed with a key CI never sees. You boot a signed ISO, or you apk add it onto Alpine.',
+			body: 'Every piece of Alpymist, down to the wallpaper, is an apk in a signed repository, built in the open from a tagged commit. You boot the installer, or you apk add it onto Alpine, and upgrades are apk upgrade.',
 			href: '/docs/adr/0002-supply-chain/'
+		},
+		{
+			tag: 'secure by default',
+			title: 'Nothing unsafe is on',
+			body: 'No automatic login, no passwordless root, no listening service, no secret kept in the clear. The means to weaken any of it ship as a switch that says what it gives up, and turns back off.',
+			href: '/docs/adr/0011-secure-by-default/'
 		},
 		{
 			tag: 'rust',
 			title: 'First-party code in Rust',
-			body: 'The installer, splash, menu and hardware probe are Rust. unsafe is denied workspace-wide and confined to one short file that talks to EGL, where there is no other way.',
+			body: 'The installer, the login and lock screens, Settings, the menu and the popups under the bar are Rust. unsafe is denied workspace-wide and confined to one short file that talks to EGL, where there is no other way.',
 			href: '/docs/adr/0004-unsafe-and-musl-linking/'
 		},
 		{
@@ -26,6 +89,12 @@
 			title: 'A base you can audit',
 			body: 'Pure musl Alpine underneath. Proprietary and glibc-only software runs through Flatpak, in a sandbox, rather than natively beside it.',
 			href: '/docs/adr/0003-foundational-choices/'
+		},
+		{
+			tag: 'written down',
+			title: 'Every decision has a record',
+			body: 'What forced each choice, what was chosen and what it costs. A decision that is reversed gets a dated addendum, and the original stays.',
+			href: '/docs/'
 		}
 	];
 </script>
@@ -34,18 +103,18 @@
 	<title>Alpymist — a Hyprland desktop on Alpine</title>
 	<meta
 		name="description"
-		content="An opinionated desktop on Alpine Linux: Hyprland on Wayland, configured once and kept in focus, shipped only as signed packages."
+		content="An opinionated desktop on Alpine Linux: Hyprland on Wayland, configured once and kept in focus, secure by default, shipped only as signed packages."
 	/>
 </svelte:head>
 
 <section class="hero">
-	<Backdrop />
+	<Backdrop picture />
 	<div class="wrap hero-inner">
 		<p class="eyebrow">Alpine + mist · early days</p>
 		<h1>A curated desktop for the machine you already have.</h1>
 		<p class="lede">
 			Alpymist is an opinionated Wayland desktop on Alpine Linux: Hyprland, configured once and
-			kept in focus, and shipped as nothing but signed packages.
+			kept in focus, secure by default, and shipped as nothing but signed packages.
 		</p>
 		<div class="actions">
 			<a class="button primary" href="/download/">Get Alpymist</a>
@@ -71,6 +140,56 @@
 			<span class="more">Read the decision →</span>
 		</a>
 	{/each}
+</section>
+
+<section class="wrap desktop">
+	<div class="desktop-head">
+		<p class="eyebrow">The desktop</p>
+		<h2>What is in it</h2>
+		<p>
+			A login screen, a bar, a menu on Super+Space and a Settings app, with a terminal, a browser
+			and Flatpak behind them. These are the parts Alpymist wrote itself, and each has a record
+			of why it is the way it is.
+		</p>
+	</div>
+	<div class="leads">
+		{#each leads as shot (shot.src)}
+			<figure>
+				<a href={shot.src}
+					><img src={shot.src} alt={shot.alt} width="1600" height="900" loading="lazy" /></a
+				>
+				<figcaption>{shot.caption}</figcaption>
+			</figure>
+		{/each}
+	</div>
+	<div class="shots">
+		{#each shots as shot (shot.src)}
+			<figure>
+				<a href={shot.src}
+					><img src={shot.src} alt={shot.alt} width="1600" height="900" loading="lazy" /></a
+				>
+				<figcaption>{shot.caption}</figcaption>
+			</figure>
+		{/each}
+	</div>
+	<p class="ahead">
+		Taken on a ThinkPad X1 Carbon following the dev channel, on 1 October 2026. The lock screen is
+		drawn by its own code rather than captured: while it is up, the compositor shows nothing else.
+	</p>
+	<ul class="feature-list">
+		{#each features as f (f.adr)}
+			<li>
+				<a href="/docs/adr/{f.adr}/">
+					<h3>{f.title}</h3>
+					<p>{f.body}</p>
+				</a>
+			</li>
+		{/each}
+	</ul>
+	<p class="ahead">
+		The newest of these reach the dev channel first, and the installer image with the release
+		after. <a href="/download/#channels">How the channels work</a>.
+	</p>
 </section>
 
 <section class="wrap tiers">
@@ -101,15 +220,18 @@
 	<div class="status-card">
 		<div>
 			<p class="eyebrow">Status</p>
-			<h2>Early, and honest about it</h2>
+			<h2>Early, and installable</h2>
 			<p>
-				The build pipeline runs end to end: CI builds a bootable ISO, boots it in QEMU and checks
-				what it reports of Hyprland. Packages are published to a signed repository. It is not yet something
-				to install on a machine you depend on.
+				Each release comes with an installer image for x86_64 and for aarch64, built by CI from
+				the same packages the signed repository serves; the x86_64 one is booted in QEMU before
+				those packages are published. Installed systems upgrade with <code>apk upgrade</code>. It is
+				young software with rough edges: try it in a virtual machine, or on hardware you do not
+				need tomorrow.
 			</p>
 		</div>
 		<div class="actions">
 			<a class="button primary" href="/download/">Download options</a>
+			<a class="button" href={RELEASES}>Latest release</a>
 			<a class="button" href={REPO}>Follow on GitHub</a>
 		</div>
 	</div>
@@ -200,7 +322,7 @@
 
 	.pillars {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
 		gap: 1rem;
 		padding-block: 3rem 5rem;
 	}
@@ -244,6 +366,95 @@
 		color: var(--accent);
 	}
 
+	.desktop {
+		padding-block: 3rem 4rem;
+		border-top: 1px solid var(--line);
+	}
+
+	.desktop-head {
+		max-width: 46rem;
+	}
+
+	.desktop-head p:not(.eyebrow) {
+		color: var(--ink-dim);
+	}
+
+	figure {
+		margin: 0;
+	}
+
+	figure img {
+		display: block;
+		width: 100%;
+		height: auto;
+		border: 1px solid var(--line-strong);
+		border-radius: var(--radius);
+		background: var(--surface);
+	}
+
+	figure a:hover img {
+		border-color: var(--accent-deep);
+	}
+
+	figcaption {
+		margin-top: 0.5rem;
+		font-size: 0.88rem;
+		color: var(--ink-dim);
+	}
+
+	.leads {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+		gap: 1.25rem;
+		margin-top: 2rem;
+	}
+
+	.shots {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+		gap: 1.25rem;
+		margin-top: 1.25rem;
+	}
+
+	.feature-list {
+		list-style: none;
+		margin: 2rem 0 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+		gap: 0 3rem;
+	}
+
+	.feature-list a {
+		display: block;
+		height: 100%;
+		padding: 1.1rem 0;
+		border-top: 1px solid var(--line);
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.feature-list h3 {
+		font-size: 1.05rem;
+		margin: 0 0 0.3rem;
+	}
+
+	.feature-list a:hover h3 {
+		color: var(--accent);
+	}
+
+	.feature-list p {
+		margin: 0;
+		font-size: 0.93rem;
+		color: var(--ink-dim);
+	}
+
+	.ahead {
+		margin: 1.5rem 0 0;
+		font-size: 0.93rem;
+		color: var(--ink-dim);
+	}
+
 	.tiers {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
@@ -252,6 +463,7 @@
 		border-top: 1px solid var(--line);
 	}
 
+	.desktop-head h2,
 	.tiers-head h2,
 	.status h2 {
 		font-size: clamp(1.6rem, 3vw, 2.2rem);
