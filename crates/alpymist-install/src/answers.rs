@@ -181,6 +181,11 @@ pub struct Answers {
     /// The fingerprint reader found, by name, when validity-fprintd drives
     /// it: the installed system gets its driver and the Fingerprints window.
     pub fingerprint: Option<String>,
+    /// Whether to take Mesa from the guest repository, which has the driver
+    /// for a virtual machine's 3D. `None` on a machine it is not for, where
+    /// it is not offered; in a virtual machine with virtio-gpu it is offered,
+    /// on, and the person may turn it off (ADR 0018).
+    pub guest_graphics: Option<bool>,
 }
 
 /// The longest a Linux login name may be.
@@ -213,6 +218,7 @@ impl std::fmt::Debug for Answers {
             .field("firmware", &self.firmware)
             .field("hyprland", &self.hyprland)
             .field("fingerprint", &self.fingerprint)
+            .field("guest_graphics", &self.guest_graphics)
             .finish_non_exhaustive()
     }
 }

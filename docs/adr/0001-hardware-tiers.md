@@ -99,3 +99,19 @@ post-upgrade script moves `/etc/conf.d/greetd` on from `alpymist-full.toml`.
 
 The other ADRs mention tiers where they were written when there were tiers,
 and are left as the record of what was decided then.
+
+## Addendum, 2026-10-01 — GL ES 3.0 is enough
+
+The decision above says Hyprland hard-requires OpenGL ES 3.2, and the probe
+answered *Unlikely* below it. That was the probe being more cautious than
+Hyprland again. On the dev VM with a Mesa that has the virgl driver
+(ADR 0018), the renderer is the Mac's GPU through ANGLE, which offers GL ES
+3.0 and no more; Hyprland 0.54.3 started on it and ran at 5% of a core where
+llvmpipe took four. `alpymist probe` called that machine *Unlikely* while it
+was running the desktop.
+
+`MIN_GLES` in `alpymist_core::hyprland` is now 3.0. *Unlikely* is still said
+below that, and of a machine with no KMS, only a firmware framebuffer, or no
+EGL. One machine is the evidence, so this may turn out too generous for some
+driver that offers 3.0 and cannot run the compositor's shaders; the answer is
+a warning either way, and nothing refuses on it.

@@ -11,6 +11,7 @@ mod channel;
 pub mod defaults;
 pub mod desktop_entry;
 pub mod firmware;
+pub mod guest;
 pub mod hyprland;
 
 pub use capabilities::{Capabilities, GlesInfo, GpuDevice, Virtualisation};

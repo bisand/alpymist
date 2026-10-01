@@ -654,53 +654,59 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             Some(check) => {
                 let mut rows = vec![Row::note(check.verdict.describe()), Row::gap()];
                 rows.extend(check.reasons.iter().map(|r| Row::note(format!("· {r}"))));
+                rows.extend(guest_rows(a));
                 rows
             }
             None => vec![Row::note("This machine was not probed.")],
         },
-        Step::Confirm => vec![
-            Row::note(format!(
-                "Keyboard    {}",
-                a.keyboard_variant
-                    .as_deref()
-                    .or(a.keyboard.as_deref())
-                    .unwrap_or("-")
-            )),
-            Row::note(format!(
-                "Time        {}",
-                a.timezone.as_deref().unwrap_or("-")
-            )),
-            Row::note(format!("Network     {}", describe_network(a))),
-            Row::note(format!("Disk        {}", describe_disk(a))),
-            Row::note(format!("Account     {} on {}", a.username, a.hostname)),
-            Row::note(format!(
-                "Desktop     Hyprland{}",
-                match a.hyprland.as_ref().map(|c| c.verdict) {
-                    Some(Verdict::Slow) => ", which will run slowly here",
-                    Some(Verdict::Unlikely) => ", which may not start here",
-                    _ => "",
-                }
-            )),
-        ]
-        .into_iter()
-        .chain(
-            a.fingerprint
-                .as_ref()
-                .map(|reader| Row::note(format!("Fingerprint {reader}, with its driver"))),
-        )
-        .chain([
-            // Last, after everything it summarises, so it is the final thing
-            // read before pressing Install.
-            Row::gap(),
-            Row::note(match a.disk.as_ref() {
-                Some(plan) if plan.is_destructive() => format!(
-                    "Everything on {} will be erased when you continue.",
-                    plan.device()
-                ),
-                _ => "No disk will be erased.".into(),
-            }),
-        ])
-        .collect(),
+        Step::Confirm => {
+            vec![
+                Row::note(format!(
+                    "Keyboard    {}",
+                    a.keyboard_variant
+                        .as_deref()
+                        .or(a.keyboard.as_deref())
+                        .unwrap_or("-")
+                )),
+                Row::note(format!(
+                    "Time        {}",
+                    a.timezone.as_deref().unwrap_or("-")
+                )),
+                Row::note(format!("Network     {}", describe_network(a))),
+                Row::note(format!("Disk        {}", describe_disk(a))),
+                Row::note(format!("Account     {} on {}", a.username, a.hostname)),
+                Row::note(format!(
+                    "Desktop     Hyprland{}",
+                    match a.hyprland.as_ref().map(|c| c.verdict) {
+                        Some(Verdict::Slow) => ", which will run slowly here",
+                        Some(Verdict::Unlikely) => ", which may not start here",
+                        _ => "",
+                    }
+                )),
+            ]
+            .into_iter()
+            .chain(
+                a.fingerprint
+                    .as_ref()
+                    .map(|reader| Row::note(format!("Fingerprint {reader}, with its driver"))),
+            )
+            .chain((a.guest_graphics == Some(true)).then(|| {
+                Row::note("Graphics    the host's graphics card, from the guest repository")
+            }))
+            .chain([
+                // Last, after everything it summarises, so it is the final thing
+                // read before pressing Install.
+                Row::gap(),
+                Row::note(match a.disk.as_ref() {
+                    Some(plan) if plan.is_destructive() => format!(
+                        "Everything on {} will be erased when you continue.",
+                        plan.device()
+                    ),
+                    _ => "No disk will be erased.".into(),
+                }),
+            ])
+            .collect()
+        }
         Step::Install => vec![
             Row::note("Partitioning the disk"),
             Row::note("Creating filesystems"),
@@ -714,6 +720,25 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
             Row::note("Sign in with the account you just created."),
         ],
     }
+}
+
+/// In a virtual machine: the offer of the guest repository's Mesa, after
+/// what the probe said. Nothing on a machine it is not for.
+fn guest_rows(a: &Answers) -> Vec<Row> {
+    let Some(on) = a.guest_graphics else {
+        return Vec::new();
+    };
+    vec![
+        Row::gap(),
+        Row::toggle(
+            format!(
+                "[{}] Draw with the host's graphics card in this virtual machine",
+                mark(on)
+            ),
+            on,
+        ),
+        Row::note("  Alpine's Mesa cannot; this takes Mesa from Alpymist's guest repository."),
+    ]
 }
 
 fn mark(on: bool) -> char {
@@ -813,12 +838,15 @@ pub fn choose(step: Step, index: usize, a: &mut Answers) {
                 });
             }
         }
-        Step::Welcome
-        | Step::Account
-        | Step::Desktop
-        | Step::Confirm
-        | Step::Install
-        | Step::Done => {}
+        // The one thing to choose here, where it is offered at all.
+        Step::Desktop => {
+            if let Some(on) = a.guest_graphics
+                && rows[index].kind == RowKind::Toggle
+            {
+                a.guest_graphics = Some(!on);
+            }
+        }
+        Step::Welcome | Step::Account | Step::Confirm | Step::Install | Step::Done => {}
     }
 }
 
@@ -1099,6 +1127,38 @@ mod tests {
         }
         assert_eq!(a, before);
         assert!(selectable(Step::Desktop, &a).is_empty());
+    }
+
+    /// In a virtual machine the Desktop screen has one thing to choose: the
+    /// guest repository's Mesa, on until turned off, and said again on the
+    /// summary only while it is on.
+    #[test]
+    fn a_virtual_machine_is_offered_guest_graphics_and_may_decline() {
+        let mut a = Answers {
+            hyprland: Some(Check {
+                verdict: Verdict::Slow,
+                reasons: vec!["renderer \"llvmpipe\" is a CPU rasteriser".into()],
+            }),
+            guest_graphics: Some(true),
+            ..answers()
+        };
+        let at = selectable(Step::Desktop, &a);
+        assert_eq!(at.len(), 1, "one toggle and nothing else");
+        let said = |a: &Answers| {
+            rows(Step::Confirm, a)
+                .iter()
+                .any(|r| r.text.starts_with("Graphics"))
+        };
+        assert!(rows(Step::Desktop, &a)[at[0]].text.starts_with("[x]"));
+        assert!(said(&a));
+
+        choose(Step::Desktop, at[0], &mut a);
+        assert_eq!(a.guest_graphics, Some(false));
+        assert!(rows(Step::Desktop, &a)[at[0]].text.starts_with("[ ]"));
+        assert!(!said(&a));
+
+        choose(Step::Desktop, at[0], &mut a);
+        assert_eq!(a.guest_graphics, Some(true));
     }
 
     #[test]

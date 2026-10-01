@@ -12,15 +12,16 @@ use serde::{Deserialize, Serialize};
 /// Below this much memory, Hyprland runs but the desktop and a browser
 /// together crowd it. The Asus E200HA, with 2 GiB, runs it.
 const COMFORTABLE_MEMORY_MIB: u64 = 3_072;
-/// Hyprland requires OpenGL ES 3.2 or better.
-const MIN_GLES: (u32, u32) = (3, 2);
+/// Hyprland asks for OpenGL ES 3.2 and settles for 3.0: it started and ran on
+/// virgl over ANGLE, which offers 3.0, on 2026-10-01 (ADR 0018).
+const MIN_GLES: (u32, u32) = (3, 0);
 
 /// How Hyprland will do here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Verdict {
     /// It probably will not start: no display to drive, or no GPU driver
-    /// that can give it GL ES 3.2.
+    /// that can give it GL ES 3.0.
     Unlikely,
     /// It will run, but the processor draws every frame, or memory is short.
     Slow,
@@ -202,10 +203,24 @@ mod tests {
     }
 
     #[test]
-    fn a_gpu_below_gles_3_2_cannot_run_it() {
+    fn a_gpu_below_gles_3_0_cannot_run_it() {
         let r = check(&caps(Some("i915"), Some((2, 0)), 8192));
         assert_eq!(r.verdict, Verdict::Unlikely);
-        assert!(r.reasons.iter().any(|s| s.contains("3.2")));
+        assert!(r.reasons.iter().any(|s| s.contains("3.0")));
+    }
+
+    /// The dev VM under UTM with the guest repository's Mesa: the Mac's GPU
+    /// through ANGLE, which stops at GL ES 3.0, and Hyprland runs on it.
+    #[test]
+    fn virgl_over_angle_at_gles_3_0_runs_it() {
+        let c = caps_with_renderer(
+            Some("virtio-pci"),
+            Some((3, 0)),
+            4096,
+            "virgl (ANGLE (Apple, Apple M5 Pro, OpenGL 4.1 Metal - 91.7))",
+        );
+        let r = check(&c);
+        assert_eq!(r.verdict, Verdict::Runs, "reasons: {:?}", r.reasons);
     }
 
     /// The Asus E200HA: a capable GPU and 2 GiB, and Hyprland runs on it.

@@ -10,6 +10,7 @@ mod channel;
 mod clipboard;
 mod displays;
 mod firmware;
+mod guest;
 mod launch;
 mod root;
 mod secrets;
@@ -93,6 +94,16 @@ enum Command {
         #[arg(long)]
         no_upgrade: bool,
     },
+    /// Show or change whether this system, in a virtual machine, takes Mesa
+    /// from the guest repository: Alpine's with the driver for the host's
+    /// graphics card. Changing it asks for a password and upgrades.
+    Guest {
+        /// on or off. Without it, print which.
+        state: Option<Switch>,
+        /// Only switch; leave the upgrade for later.
+        #[arg(long)]
+        no_upgrade: bool,
+    },
     /// Inspect the machine and report how well it can run Hyprland, and why.
     Probe {
         /// Output format.
@@ -161,6 +172,12 @@ enum FirmwareAction {
     Check,
     /// Follow the kernel log, installing what is missing as drivers ask.
     Watch,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum Switch {
+    On,
+    Off,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -236,6 +253,14 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
             channel: Some(to),
             no_upgrade,
         } => channel::switch(&all, &env, *to, !no_upgrade),
+        Command::Guest {
+            state: None,
+            no_upgrade: _,
+        } => guest::show(&all, &env),
+        Command::Guest {
+            state: Some(state),
+            no_upgrade,
+        } => guest::switch(&all, &env, *state == Switch::On, !no_upgrade),
         Command::Probe { format } => Ok(probe(*format)?),
         Command::Session { desktop, args } => session(&all, &env, *desktop, args),
         Command::Wallpaper => Ok(alpymist_settings::wallpaper::show(&env)?),

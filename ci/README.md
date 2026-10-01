@@ -144,6 +144,23 @@ boots is made of those packages.
 Keep an offline copy of the dev signing key as well, and never put it in
 `/etc/apk/keys` on a machine that should follow only stable.
 
+### The guest repository
+
+A third address, `https://guest.pkgs.alpymist.org/v3.24/guest`, is not a
+channel and is not built here. It carries Alpine's Mesa with the virgl driver,
+for Alpymist in a virtual machine (ADR 0018), and
+[`bisand/alpymist-mesa`](https://github.com/bisand/alpymist-mesa) builds,
+signs and publishes it each night that Alpine's mesa has moved. A system
+follows it beside its channel, when the installer's switch was left on or
+after `doas alpymist guest on`.
+
+What this repository holds of it is the public key, in `alpymist-keys`
+beside dev's and trusted the same way, only on request. The private key is at
+`~/.config/alpymist/keys/alpymist-guest-2026.rsa` and in that repository's
+`guest-channel` environment as `GUEST_CHANNEL_SIGNING_KEY`. The address is a
+`CNAME` from `guest.pkgs.alpymist.org` to `bisand.github.io`, and that
+repository's `DOMAIN` variable, which its publish job writes to the site.
+
 ## Setting up the stable channel's publishing
 
 Done once, on 2026-09-16. The same shape as dev, with the release key:
