@@ -171,7 +171,7 @@ enum Format {
     Json,
 }
 
-#[derive(Clone, Copy, ValueEnum)]
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum Desktop {
     /// Hyprland, through its `start-hyprland` launcher.
     Hyprland,
@@ -271,15 +271,47 @@ fn open(category: &str, args: &[String], print: bool) -> Result<(), Box<dyn std:
     Ok(())
 }
 
+/// Set by `alpymist session` once its output goes to the session log, for the
+/// run of itself it starts under `dbus-run-session`.
+const LOGGED: &str = "ALPYMIST_SESSION_LOGGED";
+
 /// Prepare what the compositor reads, then become it. Whatever goes wrong
 /// preparing, the session still starts: a login that never arrives is worse
 /// than a setting not applied.
+///
+/// Started with no session bus, as greetd starts it, it first becomes
+/// `dbus-run-session` running itself again, with everything's output in the
+/// session log. Started the other way round, the bus daemon and all it
+/// starts — the portals, the accessibility bus — wrote to the console the
+/// login screen and the desktop share, and that text showed between them.
 fn session(
     all: &Settings,
     env: &Env,
     desktop: Desktop,
     args: &[String],
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if desktop == Desktop::Hyprland
+        && std::env::var_os("DBUS_SESSION_BUS_ADDRESS").is_none()
+        && std::env::var_os(LOGGED).is_none()
+        && let Ok(me) = std::env::current_exe()
+    {
+        let mut command = std::process::Command::new("dbus-run-session");
+        command
+            .arg("--")
+            .arg(me)
+            .args(["session", "hyprland"])
+            .args(args)
+            .env(LOGGED, "1");
+        if let Some(log) = session_log()
+            && let Ok(err) = log.try_clone()
+        {
+            command.stdout(log).stderr(err);
+        }
+        let e = command.exec();
+        // Without the bus the desktop still starts, as it did before there
+        // was one; what needs the bus says so in the log.
+        eprintln!("alpymist session: dbus-run-session: {e}");
+    }
     if let Err(e) = all.prepare_session(env) {
         eprintln!("alpymist session: {e}");
     }
@@ -318,7 +350,10 @@ fn session(
         }
         command.envs(vars);
     }
-    if let Some(log) = session_log()
+    // Already in the log when this is the run under the session bus; a
+    // configuration that starts the bus itself has the log made here.
+    if std::env::var_os(LOGGED).is_none()
+        && let Some(log) = session_log()
         && let Ok(err) = log.try_clone()
     {
         command.stdout(log).stderr(err);
