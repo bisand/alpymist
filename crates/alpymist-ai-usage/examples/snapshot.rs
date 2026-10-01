@@ -8,7 +8,7 @@
 
 #![allow(clippy::many_single_char_names)]
 
-use alpymist_ai_usage::popup::{Popup, Reading, Target, sample};
+use alpymist_ai_usage::popup::{Command, Popup, Reading, Reply, Target, sample};
 use alpymist_ai_usage::view::{self, Fonts, Layout};
 use alpymist_widget::{Appearance, Key};
 use denise::{BufferAge, Frame, PixelFormat};
@@ -39,23 +39,53 @@ fn main() {
     let mut scenes: Vec<(&str, Popup)> = Vec::new();
 
     let mut p = with(sample());
-    p.hover_over(Some(Target::Settings));
-    scenes.push(("three", p));
+    p.hover_over(Some(Target::Switch(1)));
+    scenes.push(("overview", p));
 
-    let mut one = sample();
-    one.providers.truncate(1);
-    one.providers[0].lines[1].used = Some(0.31);
-    one.providers[0].lines[1].says = "31% used, resets in 3 days".into();
-    let mut p = with(one);
-    p.key(Key::Tab);
-    scenes.push(("one-focus", p));
-
+    // Turning one on that has no key yet: the field under its row.
     let mut p = with(sample());
-    p.click(Target::Refresh);
-    scenes.push(("asking", p));
+    p.click(Target::Switch(3));
+    p.finished(
+        &Command::TurnOn("openrouter".into()),
+        Reply::NeedsKeys(vec!["api-key".into()]),
+    );
+    for ch in "sk-or-v1-0123456789".chars() {
+        p.text(ch);
+    }
+    scenes.push(("asking-for-a-key", p));
+
+    // Turning one on whose vendor's tool is not installed.
+    let mut p = with(sample());
+    p.click(Target::Switch(1));
+    p.finished(&Command::TurnOn("codex".into()), Reply::NeedsTool);
+    scenes.push(("needs-a-tool", p));
+
+    // The keyring would not take it.
+    let mut p = with(sample());
+    p.click(Target::Keys(2));
+    p.text('x');
+    if let alpymist_ai_usage::popup::Outcome::Run(keep) = p.click(Target::Save) {
+        p.finished(
+            &keep,
+            Reply::Failed(
+                "The keyring is locked. It opens when you log in with your password.".into(),
+            ),
+        );
+    }
+    scenes.push(("refused", p));
+
+    let mut off = sample();
+    for provider in &mut off.providers {
+        provider.on = false;
+        provider.lines.clear();
+        provider.notes.clear();
+        provider.plan = None;
+    }
+    let mut p = with(off);
+    p.key(Key::Tab);
+    scenes.push(("all-off-focus", p));
 
     scenes.push(("nothing", with(Reading::default())));
-    scenes.push(("unread", Popup::new()));
 
     for (name, popup) in scenes {
         let layout = Layout::new(&appearance, &popup, scale);

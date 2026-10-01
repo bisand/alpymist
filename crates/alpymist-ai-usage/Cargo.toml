@@ -18,7 +18,7 @@ default = ["bar", "popup"]
 # Settings uses.
 bar = ["dep:alpymist-widget"]
 # The popup under the bar and its drawing.
-popup = ["bar", "dep:denise", "dep:denise-render"]
+popup = ["bar", "dep:alpymist-core", "dep:denise", "dep:denise-render"]
 
 # The bar's module and the command line.
 [[bin]]
@@ -41,6 +41,8 @@ path = "src/bin/provider.rs"
 # The bar's line, and the popup: its host, its one-click toggle, and the
 # controls it draws, in the menu's appearance.
 alpymist-widget = { workspace = true, optional = true }
+# The terminal a vendor's installer is run in.
+alpymist-core = { workspace = true, optional = true }
 denise = { workspace = true, optional = true }
 denise-render = { workspace = true, optional = true }
 serde = { workspace = true }

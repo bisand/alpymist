@@ -684,6 +684,9 @@ impl<W: Widget> Host<W> {
                 self.exit = true;
                 return;
             }
+            // Paste, as typing: a key or a passphrase is long to type.
+            Keysym::v if ctrl => return self.paste(),
+            Keysym::Insert if self.modifiers.shift => return self.paste(),
             _ => None,
         };
         if let Some(key) = key {
@@ -703,12 +706,37 @@ impl<W: Widget> Host<W> {
         }
     }
 
+    /// Hand the widget the clipboard's first line as if it were typed. The
+    /// clipboard is read through `wl-paste`, as Alpymist's clipboard history
+    /// is: a widget with nowhere for text ignores it, as it does typing.
+    fn paste(&mut self) {
+        let Ok(output) = std::process::Command::new("wl-paste")
+            .args(["--no-newline", "--type", "text"])
+            .stderr(std::process::Stdio::null())
+            .output()
+        else {
+            return;
+        };
+        if !output.status.success() {
+            return;
+        }
+        let text = String::from_utf8_lossy(&output.stdout);
+        let mut outcome = Outcome::Unchanged;
+        for ch in text.lines().next().unwrap_or("").chars().take(PASTE_MOST) {
+            outcome = outcome.and(self.widget.text(ch));
+        }
+        self.apply(outcome);
+    }
+
     fn physical(&self, (x, y): (f64, f64)) -> Point {
         let s = f64::from(self.scale);
         #[allow(clippy::cast_possible_truncation)]
         Point::new((x * s) as i32, (y * s) as i32)
     }
 }
+
+/// The most characters taken from one paste.
+const PASTE_MOST: usize = 4096;
 
 /// The program's name, for the log.
 fn program() -> String {

@@ -139,3 +139,30 @@ writing them:
 
 `docs/ai-usage-providers.md` has the fields, and says which of the three
 have been run against a live answer.
+
+## Addendum — 2026-10-01: the popup is where a provider is set up
+
+The popup shipped earlier the same day showed figures and two buttons, and
+setting a provider up meant a terminal that nothing pointed to. That was
+not what was wanted: the Wi-Fi popup is the model, where joining a network
+is where its passphrase is asked.
+
+- **Every provider installed has a row and a switch**, on or off. Turning
+  one on is where it is set up.
+- **A key is typed in the popup**, in a field under the provider's row, and
+  goes from there to the keyring. It is never an argument and never in a
+  file, as before. A provider that is on has a button to give its keys
+  again.
+- **A vendor's tool is still installed in a terminal**, from a button under
+  the row. An installer is somebody else's script, and should be seen
+  running; the earlier decision stands.
+- **Popups take a paste.** Ctrl+V and Shift+Insert hand a widget the
+  clipboard's first line as if typed, through `wl-paste`. This is in
+  `alpymist-widget`, so the Wi-Fi popup's passphrase field has it too. A
+  pasted key is in the clipboard history like anything else copied.
+- **Notify and the warning** are in the popup as well as in Settings.
+- **Settings opens the popup** for a provider that needs something
+  (`alpymist-ai-usage setup ID`), where it used to open a terminal.
+
+The bar's icon is still hidden while no provider is on, so the first one is
+turned on from Settings, the menu, or `alpymist-ai-usage`.

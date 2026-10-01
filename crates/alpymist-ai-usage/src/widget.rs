@@ -3,7 +3,7 @@
 //! Keys and clicks go to the [`popup::Popup`], a [`Command`] it asks for goes
 //! to the worker, and readings and finished commands come back as [`Event`]s.
 
-use alpymist_ai_usage::popup::{self, Command, Outcome, Reading};
+use alpymist_ai_usage::popup::{self, Command, Outcome, Reading, Reply};
 use alpymist_ai_usage::view::{self, Fonts, Layout};
 use alpymist_widget::{Appearance, Key, Outcome as AnyOutcome, Widget};
 use denise::Frame;
@@ -15,7 +15,7 @@ pub enum Event {
     /// A fresh reading.
     Reading(Reading),
     /// A command finished.
-    Done(Command),
+    Done(Command, Reply),
 }
 
 /// The AI usage popup, laid out and wired to its worker.
@@ -27,10 +27,24 @@ pub struct UsagePopup {
     worker: Sender<Command>,
 }
 
+/// Start a program, and say so in the log if it would not.
+fn start(line: &[String]) {
+    let Some((program, args)) = line.split_first() else {
+        return;
+    };
+    if let Err(e) = std::process::Command::new(program).args(args).spawn() {
+        eprintln!("alpymist-ai-usage: {program}: {e}");
+    }
+}
+
 impl UsagePopup {
     /// The popup, before anything is read.
-    pub fn new(appearance: Appearance, fonts: Fonts, worker: Sender<Command>) -> Self {
-        let popup = popup::Popup::new();
+    pub fn new(
+        appearance: Appearance,
+        fonts: Fonts,
+        popup: popup::Popup,
+        worker: Sender<Command>,
+    ) -> Self {
         let layout = Layout::new(&appearance, &popup, 1);
         Self {
             appearance,
@@ -49,13 +63,24 @@ impl UsagePopup {
                 let _ = self.worker.send(command);
                 AnyOutcome::Redraw
             }
+            // The vendor's installer, where it can be watched, and whatever
+            // the provider asks after it; the terminal stays until read.
+            Outcome::Install(id) => {
+                let command = [
+                    "sh".to_owned(),
+                    "-c".to_owned(),
+                    format!(
+                        "alpymist-ai-usage enable {id}; printf '\\nPress Enter to close. '; read -r _"
+                    ),
+                ];
+                start(&alpymist_core::defaults::terminal_argv(
+                    &alpymist_core::defaults::Places::current(),
+                    &command,
+                ));
+                AnyOutcome::Close
+            }
             Outcome::Settings => {
-                if let Err(e) = std::process::Command::new("alpymist-settings")
-                    .arg("ai")
-                    .spawn()
-                {
-                    eprintln!("alpymist-ai-usage: alpymist-settings: {e}");
-                }
+                start(&["alpymist-settings".to_owned(), "ai".to_owned()]);
                 AnyOutcome::Close
             }
             Outcome::Close => AnyOutcome::Close,
@@ -86,6 +111,11 @@ impl Widget for UsagePopup {
         self.apply(outcome)
     }
 
+    fn text(&mut self, ch: char) -> AnyOutcome {
+        let outcome = self.popup.text(ch);
+        self.apply(outcome)
+    }
+
     fn pointer(&mut self, at: Option<Point>) -> AnyOutcome {
         let target = at.and_then(|p| self.layout.hit(p));
         let outcome = self.popup.hover_over(target);
@@ -103,7 +133,7 @@ impl Widget for UsagePopup {
     fn event(&mut self, event: Event) -> AnyOutcome {
         let outcome = match event {
             Event::Reading(reading) => self.popup.update(reading),
-            Event::Done(command) => self.popup.finished(command),
+            Event::Done(command, reply) => self.popup.finished(&command, reply),
         };
         self.apply(outcome)
     }
