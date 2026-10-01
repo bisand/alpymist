@@ -176,9 +176,14 @@ fn low_battery(supplies: &Path, floor: u8) -> bool {
 }
 
 /// How many seconds apart `def` is asked: as often as Settings says, and no
-/// more often than its file allows.
+/// more often than its file allows. A provider that only reads this machine
+/// is asked as often as its file allows whatever Settings says: Settings'
+/// figure is how often a vendor is asked, and this asks no one.
 #[must_use]
 pub fn every(def: &Definition, config: &Config) -> i64 {
+    if def.local {
+        return def.refresh;
+    }
     def.refresh.max(config.refresh_minutes.saturating_mul(60))
 }
 
@@ -268,6 +273,19 @@ mod tests {
         assert_eq!(every(&def, &config), 600, "Settings' ten minutes");
         config.refresh_minutes = 1;
         assert_eq!(every(&def, &config), 300, "the provider's five");
+    }
+
+    /// Claude's limits are a file Claude Code's status line keeps. Held to
+    /// Settings' ten minutes, the bar said "Claude Code has not said yet"
+    /// for ten minutes after it had.
+    #[test]
+    fn a_provider_that_reads_this_machine_is_not_held_to_settings_interval() {
+        let mut def = provider("true");
+        def.local = true;
+        let mut config = Config::default();
+        assert_eq!(every(&def, &config), 300, "its own, not Settings' ten");
+        config.refresh_minutes = 60;
+        assert_eq!(every(&def, &config), 300);
     }
 
     #[test]

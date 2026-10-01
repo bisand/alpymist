@@ -26,6 +26,19 @@ fn shipped() -> Vec<Definition> {
     found
 }
 
+/// Only a provider that reaches no one may be asked more often than Settings
+/// says. Claude's reads the file its status line keeps; every other one
+/// calls its vendor.
+#[test]
+fn only_the_provider_that_reads_a_file_is_asked_regardless_of_settings() {
+    let local: Vec<String> = shipped()
+        .into_iter()
+        .filter(|d| d.local)
+        .map(|d| d.id)
+        .collect();
+    assert_eq!(local, ["claude"]);
+}
+
 #[test]
 fn every_shipped_provider_names_a_program_that_answers_to_it() {
     let program = include_str!("../src/bin/provider.rs");

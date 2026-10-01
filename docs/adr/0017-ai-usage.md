@@ -198,3 +198,21 @@ is.
   tool is removed.
 - A tool is started with `~/.local/bin` on its `PATH`, where two of the
   three installers put it and where the desktop's own `PATH` does not look.
+
+## Addendum — 2026-10-01: a provider that reads this machine is asked every minute
+
+Turning Claude on and then using Claude Code left the bar saying "Claude Code
+has not said yet" for ten minutes after it had. The limits were in the file
+the status line keeps within seconds; the bar did not read it, because a
+provider is asked no more often than Settings' *refresh every*, ten minutes by
+default, and the first asking, at the moment it was turned on, had found
+nothing.
+
+That interval is there to spare a vendor's service and a laptop's radio.
+Reading a file spares neither. A provider's file may now say `local = true`:
+asking it reaches no one, and it is asked as often as its own `refresh`
+allows, whatever Settings says. Claude's does, with `refresh = 60`. No other
+shipped provider does, and `tests/definitions.rs` holds that: one that calls
+its vendor and says `local` would be asked every minute.
+
+The locked screen and the low battery still stop it, as they stop everything.
