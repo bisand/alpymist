@@ -12,17 +12,23 @@ name = "alpymist_ai_usage"
 path = "src/lib.rs"
 
 [features]
-default = ["bar"]
+default = ["bar", "popup"]
 # The bar's line, which is alpymist-widget's and so brings Wayland with it.
 # Without it the crate is the providers, the settings and the keyring: what
 # Settings uses.
 bar = ["dep:alpymist-widget"]
+# The popup under the bar and its drawing.
+popup = ["bar", "dep:denise", "dep:denise-render"]
 
 # The bar's module and the command line.
 [[bin]]
 name = "alpymist-ai-usage"
 path = "src/main.rs"
-required-features = ["bar"]
+required-features = ["popup"]
+
+[[example]]
+name = "snapshot"
+required-features = ["popup"]
 
 # The providers Alpymist ships, one program answering to several names. A
 # provider is whatever a file in /usr/share/alpymist/ai-usage names; these
@@ -32,11 +38,17 @@ name = "alpymist-ai-provider"
 path = "src/bin/provider.rs"
 
 [dependencies]
-# The bar's line.
+# The bar's line, and the popup: its host, its one-click toggle, and the
+# controls it draws, in the menu's appearance.
 alpymist-widget = { workspace = true, optional = true }
+denise = { workspace = true, optional = true }
+denise-render = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { version = "0.9", default-features = false, features = ["parse", "display", "serde", "std"] }
+
+[dev-dependencies]
+png = "0.17"
 
 [lints]
 workspace = true

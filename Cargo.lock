@@ -68,6 +68,9 @@ name = "alpymist-ai-usage"
 version = "0.2.0"
 dependencies = [
  "alpymist-widget",
+ "denise",
+ "denise-render",
+ "png",
  "serde",
  "serde_json",
  "toml",

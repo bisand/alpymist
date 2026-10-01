@@ -59,6 +59,22 @@ pub fn class(entries: &[Entry<'_>], config: &Config) -> &'static str {
     }
 }
 
+/// What to say under a provider's meters, where there is anything: how old
+/// its answer is, and why there is no newer one.
+#[must_use]
+pub fn notes(entry: &Entry<'_>, now: i64) -> Vec<String> {
+    let kept = entry.kept;
+    let age = kept.fetched_at.map(|at| now - at);
+    let old = |age: i64| format!("Last known, {} old.", when::span(age));
+    match (&kept.error, age) {
+        (Some(why), Some(age)) => vec![old(age), why.clone()],
+        (Some(why), None) => vec![why.clone()],
+        (None, Some(age)) if age > entry.every * STALE_AFTER => vec![old(age)],
+        (None, None) => vec!["Not asked yet.".into()],
+        (None, Some(_)) => Vec::new(),
+    }
+}
+
 /// Everything turned on, a few lines each: the tooltip, and what `status`
 /// prints.
 #[must_use]
@@ -80,19 +96,8 @@ pub fn summary(entries: &[Entry<'_>], now: i64) -> String {
         for meter in kept.report.iter().flat_map(|r| &r.meters) {
             let _ = write!(out, "\n  {}: {}", meter.label(), meter.says(now));
         }
-        let age = kept.fetched_at.map(|at| now - at);
-        match (&kept.error, age) {
-            (Some(why), Some(age)) => {
-                let _ = write!(out, "\n  Last known, {} old. {why}", when::span(age));
-            }
-            (Some(why), None) => {
-                let _ = write!(out, "\n  {why}");
-            }
-            (None, Some(age)) if age > entry.every * STALE_AFTER => {
-                let _ = write!(out, "\n  Last known, {} old.", when::span(age));
-            }
-            (None, None) => out.push_str("\n  Not asked yet."),
-            (None, Some(_)) => {}
+        for line in notes(entry, now) {
+            let _ = write!(out, "\n  {line}");
         }
     }
     out
@@ -191,7 +196,7 @@ mod tests {
             summary(&entries, 1000),
             "Claude · Max\n  5-hour limit: 42% used, resets in 1 h\n\
              OpenRouter · Max\n  5-hour limit: 86% used, resets in 1 h\n\
-             OpenAI API\n  This month: $3.50 spent\n  Last known, 10 min old. could not reach it: no network"
+             OpenAI API\n  This month: $3.50 spent\n  Last known, 10 min old.\n  could not reach it: no network"
         );
     }
 

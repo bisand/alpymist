@@ -2,7 +2,8 @@
 //! left, from the bar or the command line.
 //!
 //! ```text
-//! alpymist-ai-usage                 what every provider turned on says
+//! alpymist-ai-usage                 open the popup (run again to close it)
+//! alpymist-ai-usage status          what every provider turned on says
 //! alpymist-ai-usage list            the providers there are, and which are on
 //! alpymist-ai-usage enable ID       turn one on: its tool, its key, its setup
 //! alpymist-ai-usage disable ID      turn it off
@@ -14,12 +15,16 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(target_os = "linux")]
+mod widget;
+
 use alpymist_ai_usage::bar::{self, Entry};
 use alpymist_ai_usage::config::Config;
 use alpymist_ai_usage::definition::{self, Credential, Definition};
 use alpymist_ai_usage::store::{self, Kept};
 use alpymist_ai_usage::{run, secrets, when};
 use std::io::{BufRead as _, IsTerminal as _, Write as _};
+use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use std::time::Duration;
@@ -28,7 +33,8 @@ const USAGE: &str = "\
 usage: alpymist-ai-usage [status | list | enable ID | disable ID | key ID [NAME]
                           | forget ID | refresh | --waybar]
 
-With no command, says what every provider turned on last reported.
+With no command, opens the popup under the bar; run it again to close it.
+  status       what every provider turned on last reported
   list         the providers there are, and which are turned on
   enable ID    turn one on: install its vendor's tool if it needs one, ask
                for its key, and do its setup
@@ -38,6 +44,9 @@ With no command, says what every provider turned on last reported.
   refresh      ask every provider turned on again, now
   --waybar     print a line of JSON for a Waybar custom module at every change";
 
+/// The popup's name: its socket, and its layer surface's namespace.
+const NAME: &str = "alpymist-ai-usage";
+
 /// How often the bar looks: whether anything is due, and whether what is
 /// kept changed under it, as after `refresh` or `enable` elsewhere.
 const LOOK_EVERY: Duration = Duration::from_secs(20);
@@ -46,7 +55,8 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let result = match args.as_slice() {
-        [] | ["status"] => {
+        [] => alpymist_widget::instance::toggle(NAME, open),
+        ["status"] => {
             status();
             Ok(())
         }
@@ -133,15 +143,20 @@ fn entries<'a>(kept: &'a [(Definition, Kept)], config: &Config) -> Vec<Entry<'a>
         .collect()
 }
 
-fn status() {
-    let config = Config::load();
-    let kept: Vec<(Definition, Kept)> = turned_on(&config)
+/// What is kept for every provider turned on, without asking any.
+fn kept(config: &Config) -> Vec<(Definition, Kept)> {
+    turned_on(config)
         .into_iter()
         .map(|def| {
             let kept = store::load(&def.id);
             (def, kept)
         })
-        .collect();
+        .collect()
+}
+
+fn status() {
+    let config = Config::load();
+    let kept = kept(&config);
     println!("{}", bar::summary(&entries(&kept, &config), when::now()));
 }
 
@@ -180,6 +195,70 @@ fn waybar() {
         },
         || std::thread::sleep(LOOK_EVERY),
     );
+}
+
+#[cfg(target_os = "linux")]
+fn open(listener: Option<UnixListener>) -> Result<bool, String> {
+    use alpymist_ai_usage::popup::{Command, Reading};
+    use widget::Event;
+
+    /// How often the popup looks at what is kept: the bar does the asking,
+    /// and the time until a limit resets moves on by itself.
+    const LOOK_EVERY: Duration = Duration::from_secs(5);
+
+    fn reading() -> Reading {
+        let config = Config::load();
+        let kept = kept(&config);
+        Reading::of(&entries(&kept, &config), &config, when::now())
+    }
+
+    let appearance = alpymist_widget::appearance();
+    let fonts = alpymist_ai_usage::view::Fonts::load(&appearance);
+    for problem in &fonts.problems {
+        eprintln!("alpymist-ai-usage: font {problem}");
+    }
+    let (events, channel) = alpymist_widget::host::events::<Event>();
+
+    // The watcher: what is kept, now and every few seconds.
+    {
+        let events = events.clone();
+        std::thread::spawn(move || {
+            while events.send(Event::Reading(reading())).is_ok() {
+                std::thread::sleep(LOOK_EVERY);
+            }
+        });
+    }
+
+    // The worker: one asking at a time, a fresh reading after each.
+    let (commands, queue) = std::sync::mpsc::channel::<Command>();
+    std::thread::spawn(move || {
+        for command in queue {
+            match command {
+                Command::Refresh => drop(refresh_all(true)),
+            }
+            if events.send(Event::Reading(reading())).is_err()
+                || events.send(Event::Done(command)).is_err()
+            {
+                return;
+            }
+        }
+    });
+
+    alpymist_widget::host::run(
+        widget::UsagePopup::new(appearance, fonts, commands),
+        &alpymist_widget::host::Options::new(NAME),
+        channel,
+        listener,
+    )
+}
+
+#[cfg(not(target_os = "linux"))]
+fn open(_: Option<UnixListener>) -> Result<bool, String> {
+    Err(
+        "the popup draws on a Wayland layer surface, which needs Linux.\n\
+         To see it here: cargo run -p alpymist-ai-usage --example snapshot -- out/"
+            .into(),
+    )
 }
 
 /// Whether `program` is there to run: on `PATH`, or where vendors' own

@@ -47,12 +47,14 @@
 
   // AI usage is alpymist-ai-usage: the provider closest to its limit, with
   // every provider turned on in the tooltip. With none turned on it prints
-  // nothing and Waybar hides it. A click asks them all again.
+  // nothing and Waybar hides it. A click opens its popup under the bar, and
+  // a second click closes it; a right click asks them all again.
   "custom/ai": {
     "exec": "alpymist-ai-usage --waybar",
     "return-type": "json",
     "restart-interval": 30,
-    "on-click": "alpymist-ai-usage refresh"
+    "on-click": "alpymist-ai-usage",
+    "on-click-right": "alpymist-ai-usage refresh"
   },
 
   // Wi-Fi is alpymist-wifi: it prints the icon and tooltip whenever iwd

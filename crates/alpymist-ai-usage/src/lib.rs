@@ -1,7 +1,9 @@
 //! How much of an AI subscription or API budget is left.
 //!
 //! An icon in the bar, beside Wi-Fi and the battery, showing the provider
-//! closest to its limit, with every provider turned on in its tooltip.
+//! closest to its limit, with every provider turned on in its tooltip, and
+//! in a popup under the bar at a click: [`popup`] is what the popup knows
+//! and what every key and click does, [`view`] paints it with Denise.
 //!
 //! - **A provider is a program and a file**, as a screensaver is (ADR 0009):
 //!   `/usr/share/alpymist/ai-usage/<id>.toml` names it, says what it needs,
@@ -25,9 +27,13 @@ pub mod config;
 pub mod definition;
 pub mod http;
 pub mod notify;
+#[cfg(feature = "popup")]
+pub mod popup;
 pub mod providers;
 pub mod report;
 pub mod run;
 pub mod secrets;
 pub mod store;
+#[cfg(feature = "popup")]
+pub mod view;
 pub mod when;
