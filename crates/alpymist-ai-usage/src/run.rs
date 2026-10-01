@@ -59,8 +59,17 @@ impl Input {
 /// One it cannot do without is not there, and how to give it.
 pub fn credentials(def: &Definition) -> Result<Input, String> {
     let mut input = Input::default();
+    if def.credentials.is_empty() {
+        return Ok(input);
+    }
+    // Asked once, before any key is looked for: a keyring that is locked or
+    // not there would otherwise look like a key never given, a few seconds
+    // at a time.
+    if let Some(why) = secrets::state().refusal() {
+        return Err(why.into());
+    }
     for credential in &def.credentials {
-        match secrets::lookup(&def.id, &credential.key) {
+        match secrets::lookup(&def.id, &credential.key)? {
             Some(secret) => {
                 input.credentials.insert(credential.key.clone(), secret);
             }
