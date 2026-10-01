@@ -1,0 +1,12 @@
+# GitHub Copilot's allowance, as the bar reads it. See openrouter.toml for
+# what a file like this is.
+#
+# GitHub documents no way for a person to read their own allowance. This asks
+# what GitHub's editors ask, through `gh api`: there is no key here, and the
+# login stays in gh. Log in first with: gh auth login
+
+name = "GitHub Copilot"
+description = "The month's premium requests, what is left of them, and when they start again"
+exec = "alpymist-ai-provider github-copilot"
+refresh = 900
+unofficial = true

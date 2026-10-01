@@ -117,3 +117,25 @@ reads what is kept and asks nobody by being opened; a button asks them all
 again, and another opens Settings. `alpymist-ai-usage` with no command is
 the popup, as `alpymist-wifi` and `alpymist-power` are, and what it used to
 print is `alpymist-ai-usage status`.
+
+## Addendum — 2026-10-01: the undocumented readers
+
+GitHub Copilot, ChatGPT's Codex limits and Gemini CLI's quota ship, marked
+`unofficial = true`, as the decision above allowed. What was settled in
+writing them:
+
+- **They are handed no key and keep none.** Each uses the login its vendor's
+  own tool saved. Copilot's never leaves `gh`: the reader runs `gh api`. The
+  other two read a token from the tool's file and send it to that vendor's
+  own host, in curl's configuration on standard input, as every key here is.
+- **A login is read, never written and never renewed.** Renewing Gemini
+  CLI's takes Google's client secret for Gemini CLI, and renewing Codex's
+  would mean writing Codex's file under it. So Gemini's figures are as fresh
+  as Gemini CLI's last use, within the hour its login lasts, and Codex's
+  stop when its login runs out until Codex is used again. Both say so.
+- **Claude Code's login is still not read.** Anthropic's terms say third
+  parties may not use it; nothing found in the other three vendors' terms
+  says the same of theirs, and that was not a lawyer's reading.
+
+`docs/ai-usage-providers.md` has the fields, and says which of the three
+have been run against a live answer.

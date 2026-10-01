@@ -5,6 +5,9 @@
 //! alpymist-ai-provider anthropic-api   what the Anthropic API cost this month
 //! alpymist-ai-provider openai-api      what the `OpenAI` API cost this month
 //! alpymist-ai-provider claude          a Claude subscription's limits
+//! alpymist-ai-provider github-copilot  GitHub Copilot's allowance
+//! alpymist-ai-provider codex           a ChatGPT plan's Codex limits
+//! alpymist-ai-provider gemini          Gemini CLI's quota
 //! ```
 //!
 //! Each reads its keys as JSON on its standard input, prints a report as
@@ -18,7 +21,7 @@
 
 #![forbid(unsafe_code)]
 
-use alpymist_ai_usage::providers::{anthropic, claude, openai, openrouter};
+use alpymist_ai_usage::providers::{anthropic, claude, codex, copilot, gemini, openai, openrouter};
 use alpymist_ai_usage::report::Report;
 use alpymist_ai_usage::run::Input;
 use alpymist_ai_usage::when;
@@ -27,6 +30,7 @@ use std::process::{Command, ExitCode, Stdio};
 
 const USAGE: &str = "\
 usage: alpymist-ai-provider openrouter | anthropic-api | openai-api | claude
+                            | github-copilot | codex | gemini
 
 Reads {\"credentials\": {…}} on standard input and prints a report as JSON.";
 
@@ -37,6 +41,9 @@ fn main() -> ExitCode {
         Some("anthropic-api") => print(anthropic::fetch(&Input::read())),
         Some("openai-api") => print(openai::fetch(&Input::read())),
         Some("claude") => print(claude_report()),
+        Some("github-copilot") => print(copilot::fetch()),
+        Some("codex") => print(codex::fetch()),
+        Some("gemini") => print(gemini::fetch()),
         Some("claude-statusline") => {
             statusline();
             Ok(())

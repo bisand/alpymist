@@ -363,7 +363,7 @@ pub fn sample() -> Reading {
                 plan: Some("Max".into()),
                 lines: vec![
                     line("5-hour limit", "42% used, resets in 2 h 10 min", Some(0.42)),
-                    line("Weekly limit", "86% used, resets in 3 d", Some(0.86)),
+                    line("Weekly limit", "86% used, resets in 3 days", Some(0.86)),
                 ],
                 ..Provider::default()
             },

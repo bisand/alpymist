@@ -7,6 +7,9 @@
 use alpymist_ai_usage::definition::{Definition, discover_in};
 use std::path::PathBuf;
 
+/// The shipped providers that read what their vendor does not document.
+const UNDOCUMENTED: [&str; 3] = ["codex", "gemini", "github-copilot"];
+
 fn shipped() -> Vec<Definition> {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../desktop/ai-usage");
     let found = discover_in(std::slice::from_ref(&dir));
@@ -29,7 +32,15 @@ fn every_shipped_provider_names_a_program_that_answers_to_it() {
     let found = shipped();
     assert_eq!(
         found.iter().map(|d| d.id.as_str()).collect::<Vec<_>>(),
-        ["anthropic-api", "claude", "openai-api", "openrouter"]
+        [
+            "anthropic-api",
+            "claude",
+            "codex",
+            "gemini",
+            "github-copilot",
+            "openai-api",
+            "openrouter"
+        ]
     );
     for def in found {
         let mut lines = vec![def.exec.clone()];
@@ -45,9 +56,13 @@ fn every_shipped_provider_names_a_program_that_answers_to_it() {
                 argv[1]
             );
         }
+        // The ones that read what a vendor does not document say so, and
+        // are handed no key: the login they use stays the vendor's tool's.
+        let undocumented = UNDOCUMENTED.contains(&def.id.as_str());
+        assert_eq!(def.unofficial, undocumented, "{}", def.id);
         assert!(
-            !def.unofficial,
-            "{}: only documented ways are shipped here",
+            !undocumented || def.credentials.is_empty(),
+            "{}: takes a key",
             def.id
         );
     }

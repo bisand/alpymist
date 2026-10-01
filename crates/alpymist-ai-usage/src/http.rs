@@ -40,12 +40,35 @@ pub fn request(url: &str, headers: &[(&str, &str)]) -> String {
     config
 }
 
+/// The configuration for a POST of `body`, as JSON, to `url`.
+#[must_use]
+pub fn request_with(url: &str, headers: &[(&str, &str)], body: &str) -> String {
+    let mut config = request(url, headers);
+    let _ = writeln!(config, "header = \"Content-Type: application/json\"");
+    let _ = writeln!(config, "data = {}", quoted(body));
+    config
+}
+
 /// GET `url` with `headers`, and its body when the answer is a success.
 ///
 /// # Errors
 /// curl is missing, the provider could not be reached, or it answered with
 /// an error: its status and the start of what it said.
 pub fn get(url: &str, headers: &[(&str, &str)]) -> Result<String, String> {
+    send(&request(url, headers))
+}
+
+/// POST `body`, as JSON, to `url` with `headers`, and the answer's body
+/// when it is a success.
+///
+/// # Errors
+/// As [`get`].
+pub fn post(url: &str, headers: &[(&str, &str)], body: &str) -> Result<String, String> {
+    send(&request_with(url, headers, body))
+}
+
+/// Run curl over a configuration.
+fn send(config: &str) -> Result<String, String> {
     let mut child = Command::new("curl")
         .args([
             "--silent",
@@ -67,7 +90,7 @@ pub fn get(url: &str, headers: &[(&str, &str)]) -> Result<String, String> {
         .map_err(|e| format!("curl: {e}"))?;
     if let Some(mut input) = child.stdin.take() {
         input
-            .write_all(request(url, headers).as_bytes())
+            .write_all(config.as_bytes())
             .map_err(|e| format!("curl: {e}"))?;
     }
     let output = child.wait_with_output().map_err(|e| format!("curl: {e}"))?;
@@ -111,7 +134,7 @@ fn brief(body: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{answer, request};
+    use super::{answer, request, request_with};
 
     #[test]
     fn a_request_is_curls_configuration_with_everything_quoted() {
@@ -123,6 +146,16 @@ mod tests {
             "url = \"https://example.org/v1/key?a=1\"\n\
              header = \"Authorization: Bearer sk-\\\"x\\\"\\\\y\"\n\
              header = \"x-version: 1\"\n"
+        );
+    }
+
+    #[test]
+    fn a_post_carries_its_body_quoted_too() {
+        assert_eq!(
+            request_with("https://example.org/v1:ask", &[], "{\"project\": \"a\"}"),
+            "url = \"https://example.org/v1:ask\"\n\
+             header = \"Content-Type: application/json\"\n\
+             data = \"{\\\"project\\\": \\\"a\\\"}\"\n"
         );
     }
 
