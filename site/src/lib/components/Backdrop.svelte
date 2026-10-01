@@ -1,6 +1,15 @@
 <script lang="ts">
 	import { HEIGHT, WIDTH, palette, scene } from '$lib/scenery';
 
+	import milkyWay from '$lib/assets/milky-way.webp';
+
+	// With `picture`, Alpymist's own picture — the one the boot menus, the
+	// splash, the login screen and the lock show — is laid over the drawn
+	// mountains, which stay underneath for as long as it takes to arrive, or if
+	// it never does. The desktop's screens fall back the same way.
+	// lib/assets/milky-way.webp is brand/wallpapers/milky-way.jpg, recompressed.
+	let { picture = false }: { picture?: boolean } = $props();
+
 	const layers = scene();
 </script>
 
@@ -39,6 +48,10 @@
 		{/if}
 	{/each}
 </svg>
+{#if picture}
+	<img class="backdrop picture" src={milkyWay} alt="" width="1920" height="1080" />
+	<div class="backdrop shade"></div>
+{/if}
 
 <style>
 	.backdrop {
@@ -47,6 +60,23 @@
 		width: 100%;
 		height: 100%;
 		display: block;
+	}
+
+	.picture {
+		object-fit: cover;
+		object-position: 62% 50%;
+	}
+
+	/* Keeps the words on the left readable, and lets the picture's foot sink
+	   into the page instead of ending at an edge. */
+	.shade {
+		background:
+			linear-gradient(to top, var(--sky-high), transparent 22%),
+			linear-gradient(
+				to right,
+				color-mix(in srgb, var(--sky-high) 72%, transparent),
+				transparent 62%
+			);
 	}
 
 	.mist {

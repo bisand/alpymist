@@ -8,7 +8,7 @@ screen and the lock show, as `/usr/share/alpymist/picture.jpg`.
 | File | Picture | Used as |
 | --- | --- | --- |
 | `blue-hour.jpg` | Teal night sky over a green valley and its peaks. | The desktop, on every tier, for new accounts. |
-| `milky-way.jpg` | The Milky Way over a dark ridge and a grassy crest. | Alpymist's own picture: the syslinux and GRUB menus, the splash, the login screen and the lock. |
+| `milky-way.jpg` | The Milky Way over a dark ridge and a grassy crest. | Alpymist's own picture: the syslinux and GRUB menus, the splash, the login screen and the lock. Also behind the front page of alpymist.org, from a recompressed copy in `site/src/lib/assets/`. |
 | `morning-haze.jpg` | Blue ranges in haze under a peach sky, a wooded hill in front. | — |
 | `red-sun.jpg` | A peak in silhouette against a low red sun. | — |
 | `cloud-sea.jpg` | A lit summit above a sea of cloud. | — |

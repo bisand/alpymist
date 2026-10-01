@@ -1,8 +1,8 @@
 # Alpymist
 
-An opinionated, curated desktop on top of Alpine Linux — Wayland first, with a
-software-rendered path for hardware that cannot do better, and an X11 fallback
-for hardware that cannot do Wayland at all.
+An opinionated, curated desktop on top of Alpine Linux: Hyprland on Wayland,
+configured once and kept in focus, secure by default, and shipped as nothing
+but signed packages.
 
 The name is Alpine plus mist — the haze on the mountains — and a pun on
 *alchemist*, which is roughly what turning a fifteen-year-old laptop back into
@@ -55,11 +55,13 @@ cargo run -p alpymist -- probe
 
 | Path             | Contents                                              |
 |------------------|-------------------------------------------------------|
-| `crates/`        | Rust workspace: domain model, probes, CLI             |
+| `crates/`        | Rust workspace: CLI and settings, probes, installer, the desktop's own programs |
 | `aports/`        | `APKBUILD`s for Alpymist packages                          |
+| `desktop/`       | What the desktop package installs: configuration, PAM and polkit rules |
 | `profiles/`      | `mkimage` profiles and `genapkovl` overlays            |
 | `builder/`       | The Alpine container everything is built in            |
-| `xtask/`         | Build and test orchestration (Rust)                    |
+| `ci/`            | Package and image build scripts, and [how publishing works](ci/README.md) |
+| `xtask/`         | Version, smoke-test and publish orchestration (Rust)   |
 | `docs/adr/`      | Architecture decision records                          |
 | `site/`          | [alpymist.org](https://alpymist.org), in SvelteKit     |
 
