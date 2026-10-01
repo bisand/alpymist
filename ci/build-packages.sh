@@ -71,10 +71,24 @@ TARGET=/tmp/cargo-target
 # tried with an hour later. So dev is not byte for byte what stable ships;
 # Release builds the full profile, and the image it boots in the smoke test is
 # made of those.
+#
+# It has to be said in abuild's own configuration: abuild exports
+# CARGO_PROFILE_RELEASE_LTO, _CODEGEN_UNITS and _OPT_LEVEL from its
+# default.conf as it starts, over whatever the environment had, and reads the
+# user's file after that. QUICK names a user file of the dev channel's, which
+# is the ordinary one and then these two; it is given to the workspace's own
+# packages only, so squint and validity-fprintd, whose built packages are kept
+# and shared with stable, are built as stable builds them.
 QUICK=()
-if [ "$CHANNEL" = dev ]; then
-	QUICK=(CARGO_PROFILE_RELEASE_LTO=off CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16)
-fi
+quick_profile() {
+	[ "$CHANNEL" = dev ] || return 0
+	cat > ~/.abuild/dev.conf <<-'EOF'
+		. ~/.abuild/abuild.conf
+		export CARGO_PROFILE_RELEASE_LTO=off
+		export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+	EOF
+	QUICK=(ABUILD_USERCONF="$HOME/.abuild/dev.conf")
+}
 
 case "$CHANNEL" in
 stable | dev) ;;
@@ -104,6 +118,7 @@ stamp() {
 if [ ! -e ~/.abuild/abuild.conf ]; then
 	abuild-keygen -a -i -n >/dev/null 2>&1
 fi
+quick_profile
 mkdir -p "$KEYS"
 cp ~/.abuild/*.rsa.pub "$KEYS"/
 
