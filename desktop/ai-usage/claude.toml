@@ -1,0 +1,23 @@
+# A Claude subscription's limits, as the bar reads them. See openrouter.toml
+# for what a file like this is.
+#
+# Claude Code tells its status line command how much of the 5-hour and weekly
+# limits is used. Turning this on makes Alpymist's the status line command,
+# which keeps those figures and then runs whatever status line was there
+# before; turning it off puts that one back. There is no key: the login Claude
+# Code keeps is never read.
+
+name = "Claude"
+description = "A Pro or Max subscription's 5-hour and weekly limits, as fresh as Claude Code's last use"
+exec = "alpymist-ai-provider claude"
+# Reading a file: as often as the bar looks.
+refresh = 60
+enable = "alpymist-ai-provider claude-enable"
+disable = "alpymist-ai-provider claude-disable"
+
+# Claude Code is Anthropic's, installed Anthropic's way into the account's
+# own ~/.local/bin when this is turned on, and never shipped by Alpymist.
+[requires]
+program = "claude"
+about = "Claude Code, Anthropic's command-line tool"
+install = "curl -fsSL https://claude.ai/install.sh | bash"

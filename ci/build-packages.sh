@@ -120,7 +120,7 @@ if [ -n "${PREBUILT:-}" ]; then
 	cp "$PREBUILT"/*.apk "$REPO"/
 	reindex
 else
-	for pkg in alpymist-keys alpymist alpymist-install alpymist-menu alpymist-about alpymist-wifi alpymist-auth alpymist-splash alpymist-lock alpymist-power alpymist-thunderbolt alpymist-settings alpymist-screensaver alpymist-saver-mountains alpymist-saver-starfield alpymist-store alpymist-greeter alpymist-fingerprint squint validity-fprintd alpymist-desktop; do
+	for pkg in alpymist-keys alpymist alpymist-install alpymist-menu alpymist-about alpymist-wifi alpymist-auth alpymist-splash alpymist-lock alpymist-power alpymist-thunderbolt alpymist-settings alpymist-screensaver alpymist-saver-mountains alpymist-saver-starfield alpymist-store alpymist-greeter alpymist-fingerprint alpymist-ai-usage squint validity-fprintd alpymist-desktop; do
 		mkdir -p ~/ap/"$pkg"
 		cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
 		if [[ "$INDEPENDENT" != *" $pkg "* ]]; then

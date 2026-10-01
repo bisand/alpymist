@@ -1,0 +1,56 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-ai-usage
+pkgver=0.2.0
+pkgrel=0
+pkgdesc="Alpymist's AI usage: how much of a subscription or API budget is left, in the bar"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+# The bar's module and the providers it ships. A provider asks its vendor
+# through curl, which takes a key from its standard input and not as an
+# argument, and keeps keys in the keyring through libsecret's secret-tool
+# (ADR 0013, ADR 0017). The icon is a Nerd Font glyph.
+#
+# A vendor's own tool is never a dependency: Claude Code is installed by
+# Anthropic's installer, into the account's own ~/.local/bin, when the Claude
+# provider is turned on. What that tool needs from Alpine on musl is here
+# instead, since its installer cannot add packages: libgcc, libstdc++ and
+# ripgrep, as Anthropic's documentation asks of Alpine.
+makedepends="cargo"
+depends="curl font-nerd-fonts-symbols libgcc libsecret libstdc++ ripgrep"
+options="!check"  # the test suite runs in CI, not in the package build
+source=""
+builddir="$srcdir"
+
+# Where cargo leaves what it builds. build-packages.sh points every package at
+# one directory, so a dependency compiled for one is not compiled again for the
+# next; each still builds only its own crates with their own features.
+_release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
+
+prepare() {
+	# Same as alpymist: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	cargo build --release --locked -p alpymist-ai-usage
+}
+
+package() {
+	install -Dm755 "$_release"/alpymist-ai-usage \
+		"$pkgdir"/usr/bin/alpymist-ai-usage
+	install -Dm755 "$_release"/alpymist-ai-provider \
+		"$pkgdir"/usr/bin/alpymist-ai-provider
+	# Every provider there is a file for: a new one is not forgotten here.
+	install -Dm644 -t "$pkgdir"/usr/share/alpymist/ai-usage \
+		"$builddir"/desktop/ai-usage/*.toml
+}
+
+# Filled in by `abuild checksum` at build time; see alpymist-install.
+sha512sums=""

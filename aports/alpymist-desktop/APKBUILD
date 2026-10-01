@@ -64,6 +64,7 @@ depends="
 	adwaita-icon-theme
 	alpymist
 	alpymist-about
+	alpymist-ai-usage
 	alpymist-auth
 	alpymist-greeter
 	alpymist-keys

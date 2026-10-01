@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/alpymist",
     "crates/alpymist-about",
+    "crates/alpymist-ai-usage",
     "crates/alpymist-auth",
     "crates/alpymist-clipboard",
     "crates/alpymist-core",

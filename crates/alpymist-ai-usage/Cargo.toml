@@ -1,0 +1,34 @@
+[package]
+name = "alpymist-ai-usage"
+description = "How much of an AI subscription or API budget is left, in the bar: providers as programs that report, a keyring for their keys, and the last answer kept."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "alpymist_ai_usage"
+path = "src/lib.rs"
+
+# The bar's module and the command line.
+[[bin]]
+name = "alpymist-ai-usage"
+path = "src/main.rs"
+
+# The providers Alpymist ships, one program answering to several names. A
+# provider is whatever a file in /usr/share/alpymist/ai-usage names; these
+# are no more special than anyone else's.
+[[bin]]
+name = "alpymist-ai-provider"
+path = "src/bin/provider.rs"
+
+[dependencies]
+# The bar's line.
+alpymist-widget = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { version = "0.9", default-features = false, features = ["parse", "display", "serde", "std"] }
+
+[lints]
+workspace = true
