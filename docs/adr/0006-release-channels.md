@@ -80,3 +80,19 @@ should know that.
 - Rotating the dev key follows the stable key's procedure: ship the new public
   key in `alpymist-keys`, with `alpymistctl` copying it on the next switch, before
   signing with it.
+
+## Addendum — 2026-10-01: dev is built without link-time optimisation
+
+Dev was built exactly as stable is, with the release profile's full LTO. That
+profile has every program optimise all of its dependencies again as it links,
+and with twenty programs it was most of the twelve minutes between a merge and
+a package. Measured on one machine, twelve of the packages took 508 s with it
+and 233 s without.
+
+So the dev channel now builds with LTO off and sixteen codegen units, and
+stable is unchanged. What that gives up: a dev package is no longer byte for
+byte what the next release ships. Its programs are about two thirds bigger,
+and a fault that only full LTO brings out would first be seen in a Release
+build, not on dev. Release still builds the full profile, and its smoke test
+boots an image made of those packages, which is where such a fault would show
+before anything is published to stable.

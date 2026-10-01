@@ -105,6 +105,13 @@ Dev packages are versioned `<pkgver>_git<UTC time of their last commit>`, which
 apk sorts after the pkgver and before the next one, so dev stays ahead of the
 release it follows and meets the next one when it arrives.
 
+Dev packages are also built without link-time optimisation, which stable's
+have (`QUICK` in `ci/build-packages.sh`). Full LTO was most of the build's
+time, and what it buys is size: dev's programs are about two thirds bigger.
+So a dev package is the same source as the release that follows it and not
+the same bytes. Release builds the full profile, and the image its smoke test
+boots is made of those packages.
+
 ### Setting up the dev channel (once)
 
 1. Create `bisand/alpymist-packages-dev`, public, empty. In Settings → Pages,

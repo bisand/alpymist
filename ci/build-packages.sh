@@ -62,6 +62,20 @@ export CARGO_HOME=/tmp/cargo
 # builds as upstream wrote it, in its own tree.
 TARGET=/tmp/cargo-target
 
+# The dev channel builds without link-time optimisation, and stable with it.
+# The release profile's full LTO has every program optimise all of its
+# dependencies again as it links, and with twenty programs that is most of the
+# build: twelve packages took 508 s with it and 233 s without, on the same
+# machine. What it buys is size — the programs are about two thirds bigger
+# without — which matters for what people install, not for what a commit is
+# tried with an hour later. So dev is not byte for byte what stable ships;
+# Release builds the full profile, and the image it boots in the smoke test is
+# made of those.
+QUICK=()
+if [ "$CHANNEL" = dev ]; then
+	QUICK=(CARGO_PROFILE_RELEASE_LTO=off CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16)
+fi
+
 case "$CHANNEL" in
 stable | dev) ;;
 *)
@@ -162,7 +176,7 @@ else
 		# run over them. abuild checks the sums itself while fetching, and stops
 		# if they disagree.
 		shared=()
-		[[ "$INDEPENDENT" == *" $pkg "* ]] || shared=(env CARGO_TARGET_DIR="$TARGET")
+		[[ "$INDEPENDENT" == *" $pkg "* ]] || shared=(env CARGO_TARGET_DIR="$TARGET" "${QUICK[@]}")
 		( cd ~/ap/"$pkg" \
 			&& { [[ "$FETCHED" == *" $pkg "* ]] || abuild checksum >/dev/null; } \
 			&& "${shared[@]}" abuild -r >/dev/null )
