@@ -118,7 +118,7 @@
 		</p>
 		<div class="actions">
 			<a class="button primary" href="/download/">Get Alpymist</a>
-			<a class="button" href="/docs/">Read the docs</a>
+			<a class="button" href="/manual/">Read the manual</a>
 		</div>
 	</div>
 </section>
@@ -148,8 +148,8 @@
 		<h2>What is in it</h2>
 		<p>
 			A login screen, a bar, a menu on Super+Space and a Settings app, with a terminal, a browser
-			and Flatpak behind them. These are the parts Alpymist wrote itself, and each has a record
-			of why it is the way it is.
+			and Flatpak behind them. These are the parts Alpymist wrote itself. Each is in the manual,
+			and each has a record of why it is the way it is.
 		</p>
 	</div>
 	<div class="leads">
@@ -179,10 +179,12 @@
 	<ul class="feature-list">
 		{#each features as f (f.adr)}
 			<li>
-				<a href="/docs/adr/{f.adr}/">
-					<h3>{f.title}</h3>
-					<p>{f.body}</p>
-				</a>
+				<h3><a href={f.manual}>{f.title}</a></h3>
+				<p>{f.body}</p>
+				<p class="links">
+					<a href={f.manual}>How to use it</a>
+					<a href="/docs/adr/{f.adr}/">Why it is this way</a>
+				</p>
 			</li>
 		{/each}
 	</ul>
@@ -425,13 +427,9 @@
 		gap: 0 3rem;
 	}
 
-	.feature-list a {
-		display: block;
-		height: 100%;
+	.feature-list li {
 		padding: 1.1rem 0;
 		border-top: 1px solid var(--line);
-		color: inherit;
-		text-decoration: none;
 	}
 
 	.feature-list h3 {
@@ -439,7 +437,12 @@
 		margin: 0 0 0.3rem;
 	}
 
-	.feature-list a:hover h3 {
+	.feature-list h3 a {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.feature-list h3 a:hover {
 		color: var(--accent);
 	}
 
@@ -447,6 +450,14 @@
 		margin: 0;
 		font-size: 0.93rem;
 		color: var(--ink-dim);
+	}
+
+	.feature-list .links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 1.25rem;
+		margin-top: 0.5rem;
+		font-size: 0.85rem;
 	}
 
 	.ahead {

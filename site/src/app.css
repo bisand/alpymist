@@ -231,3 +231,16 @@ hr {
 		transition: none !important;
 	}
 }
+
+/* A key, in the manual's hotkey tables and wherever a key is named. */
+kbd {
+	font-family: var(--mono);
+	font-size: 0.82em;
+	padding: 0.1em 0.45em;
+	border: 1px solid var(--line-strong);
+	border-bottom-width: 2px;
+	border-radius: 5px;
+	background: var(--surface);
+	color: var(--ink);
+	white-space: nowrap;
+}

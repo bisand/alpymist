@@ -1,0 +1,71 @@
+# Default applications and startup
+<!-- group: Software -->
+
+## Default applications
+
+Settings › Default applications says which program opens each kind of thing.
+Each list offers the installed applications that can open that kind.
+
+| Setting | Opens | As shipped |
+|---|---|---|
+| Web browser | Links and web pages | LibreWolf |
+| Mail | Email addresses and messages | Nothing installed |
+| File manager | Folders | Nothing installed |
+| Text editor | Text files, configuration and code | squint |
+| Terminal | Commands, and programs that run in one | foot |
+| Images | Pictures and photos | Nothing installed |
+| PDF | PDF documents | Not chosen; LibreWolf can open them |
+| Video | Films and clips | Nothing installed |
+| Music | Songs and sound files | Nothing installed |
+| Archives | Zip files, tarballs | Nothing installed |
+| Calendar | Calendar files and subscriptions | Nothing installed |
+
+The right-hand column is a system with nothing added, and yours shows what
+you have installed. Where nothing installed opens a kind, the page says so; the Store has
+applications that do, and once one is installed it appears in the list.
+
+```sh
+alpymist list default.browser            # what could be chosen
+alpymist set default.browser com.vivaldi.Vivaldi
+alpymist set default.terminal foot
+```
+
+<kbd>Super</kbd>+<kbd>B</kbd> and <kbd>Super</kbd>+<kbd>Return</kbd> follow
+the browser and the terminal chosen here.
+
+### alpymist open
+
+`alpymist open` starts whatever is chosen for a category, which makes it the
+thing to put in a keybinding or a script:
+
+```sh
+alpymist open browser https://alpinelinux.org
+alpymist open editor ~/notes.md
+alpymist open files ~/Downloads
+alpymist open terminal -- htop
+alpymist open browser --print      # show the command, start nothing
+```
+
+The categories are `browser`, `mail`, `files`, `editor`, `terminal`,
+`images`, `pdf`, `video`, `music`, `archives` and `calendar`.
+
+## Programs that start at login
+
+Settings › Startup lists the programs that start when you log in: those a
+package installed to start, each with a switch, and those you add.
+
+- **Add a program** offers every installed application. Choose one and it
+  starts at every login.
+- Switch one off and it no longer starts. Nothing is uninstalled.
+
+```sh
+alpymist list startup
+alpymist autostart --dry-run       # what would be started
+```
+
+Changes apply at the next login. For a command that is not an installed
+application, add a line to your own `~/.config/hypr/hyprland.conf`:
+
+```
+exec-once = syncthing --no-browser
+```

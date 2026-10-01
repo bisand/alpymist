@@ -13,6 +13,7 @@
 		['builder/', 'The Alpine container everything is built in'],
 		['ci/', 'The scripts CI and make run to build packages and images, and how publishing works'],
 		['xtask/', 'Version, smoke-test and publish orchestration, in Rust'],
+		['docs/manual/', 'The manual, one file a chapter'],
 		['docs/adr/', 'Architecture decision records'],
 		['site/', 'This web site']
 	];

@@ -3,12 +3,12 @@
 </script>
 
 <svelte:head>
-	<title>Documentation — Alpymist</title>
+	<title>Decisions — Alpymist</title>
 	<meta name="description" content="How Alpymist is built, and the decisions behind it." />
 </svelte:head>
 
 <article class="prose">
-	<p class="eyebrow">Documentation</p>
+	<p class="eyebrow">Decisions</p>
 	<h1>How Alpymist works, and why</h1>
 	<p class="lede">
 		Alpymist writes its reasoning down. Each foundational choice is an architecture decision record:
@@ -18,6 +18,12 @@
 
 	<h2>Start here</h2>
 	<ul class="cards">
+		<li>
+			<a href="/manual/">
+				<strong>The manual</strong>
+				<span>How to install it, use it, and change everything that can be changed.</span>
+			</a>
+		</li>
 		<li>
 			<a href="/download/">
 				<strong>Install</strong>
