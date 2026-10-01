@@ -46,8 +46,8 @@
   },
 
   // AI usage is alpymist-ai-usage: the provider closest to its limit, with
-  // every provider turned on in the tooltip. With none turned on it prints
-  // nothing and Waybar hides it. A click opens its popup under the bar, and
+  // every provider turned on in the tooltip. With none turned on it is
+  // the icon alone, dimmed. A click opens its popup under the bar, and
   // a second click closes it; a right click asks them all again.
   "custom/ai": {
     "exec": "alpymist-ai-usage --waybar",

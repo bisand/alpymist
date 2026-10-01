@@ -166,3 +166,13 @@ is where its passphrase is asked.
 
 The bar's icon is still hidden while no provider is on, so the first one is
 turned on from Settings, the menu, or `alpymist-ai-usage`.
+
+## Addendum — 2026-10-01: the icon is always in the bar
+
+The decision said that with no provider turned on the bar's module prints
+nothing and is hidden, and the addendum above left it so. That made the
+popup, which is now where a provider is turned on, unreachable from the bar
+until one already was. The icon is now always shown, dimmed while nothing is
+on, with a tooltip saying a click turns one on. What that gave up: everyone
+with the desktop installed has an icon in the bar for something they may
+never use. Removing `custom/ai` from the bar's modules takes it away.
