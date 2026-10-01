@@ -73,7 +73,7 @@ impl UsagePopup {
                         "alpymist-ai-usage enable {id}; printf '\\nPress Enter to close. '; read -r _"
                     ),
                 ];
-                start(&alpymist_core::defaults::terminal_argv(
+                start(&alpymist_core::defaults::task_argv(
                     &alpymist_core::defaults::Places::current(),
                     &command,
                 ));

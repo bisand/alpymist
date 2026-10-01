@@ -249,6 +249,9 @@ package() {
 	# file.
 	install -Dm644 "$builddir"/desktop/hypr/hyprland-security.conf \
 		"$pkgdir"/usr/share/alpymist/hyprland-security.conf
+	# Which windows float as dialogs, which hyprland-security.conf sources.
+	install -Dm644 "$builddir"/desktop/hypr/hyprland-windows.conf \
+		"$pkgdir"/usr/share/alpymist/hyprland-windows.conf
 	_skel desktop "$pkgdir"
 }
 

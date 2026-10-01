@@ -271,6 +271,41 @@ pub fn terminal_prefix(places: &Places) -> Vec<String> {
         .unwrap_or_else(|| vec![FALLBACK_TERMINAL.to_owned()])
 }
 
+/// What the window of a terminal opened for one task is called: an
+/// installer, `passwd`, a menu entry that waits to be read. The desktop's
+/// window rules float it in the middle of the screen, over whatever is
+/// tiled, since it is a dialog and not somebody's terminal.
+pub const TASK_APP_ID: &str = "alpymist-task";
+
+/// `argv`, a terminal's command line, with the terminal told to give its
+/// window the app id `app_id`, where it is a terminal known to take one.
+/// Any other is left as it is, and its window is an ordinary one.
+#[must_use]
+pub fn named(mut argv: Vec<String>, app_id: &str) -> Vec<String> {
+    let program = argv
+        .first()
+        .and_then(|p| Path::new(p).file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+    let flag: &[String] = &match program {
+        "foot" | "footclient" => vec![format!("--app-id={app_id}")],
+        "ghostty" => vec![format!("--class={app_id}")],
+        "alacritty" | "kitty" => vec!["--class".to_owned(), app_id.to_owned()],
+        _ => Vec::new(),
+    };
+    if !argv.is_empty() {
+        argv.splice(1..1, flag.iter().cloned());
+    }
+    argv
+}
+
+/// The whole command line to run `command`, one task, in the terminal
+/// chosen here, its window called [`TASK_APP_ID`].
+#[must_use]
+pub fn task_argv(places: &Places, command: &[String]) -> Vec<String> {
+    named(terminal_argv(places, command), TASK_APP_ID)
+}
+
 /// The whole command line to run `command` in the terminal chosen here, or
 /// to open one with no command. foot when nothing installed says it is a
 /// terminal.
@@ -288,7 +323,7 @@ pub fn terminal_argv(places: &Places, command: &[String]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Places, default_for, in_terminal, listed_terminals, terminal};
+    use super::{Places, default_for, in_terminal, listed_terminals, named, terminal};
     use crate::desktop_entry::Entry;
     use std::path::{Path, PathBuf};
 
@@ -390,6 +425,25 @@ mod tests {
         assert!(!super::is_terminal_window("librewolf", &apps));
         assert!(!super::is_terminal_window("", &apps));
         std::fs::remove_dir_all(d).ok();
+    }
+
+    #[test]
+    fn a_terminal_that_takes_an_app_id_is_given_one() {
+        let line = |words: &[&str]| words.iter().map(|w| (*w).to_owned()).collect::<Vec<_>>();
+        assert_eq!(
+            named(line(&["foot", "passwd"]), "alpymist-task"),
+            ["foot", "--app-id=alpymist-task", "passwd"]
+        );
+        assert_eq!(
+            named(line(&["/usr/bin/kitty", "-e", "passwd"]), "alpymist-task"),
+            ["/usr/bin/kitty", "--class", "alpymist-task", "-e", "passwd"]
+        );
+        assert_eq!(
+            named(line(&["xterm", "-e", "passwd"]), "alpymist-task"),
+            ["xterm", "-e", "passwd"],
+            "one that is not known is left alone"
+        );
+        assert!(named(Vec::new(), "alpymist-task").is_empty());
     }
 
     #[test]
