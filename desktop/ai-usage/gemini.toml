@@ -20,3 +20,6 @@ unofficial = true
 program = "gemini"
 about = "Gemini CLI, Google's command-line tool"
 install = "doas apk add npm && npm install -g --prefix ~/.local @google/gemini-cli"
+# npm stays: something else may use it. ~/.gemini, the login and settings, is
+# left.
+remove = "npm uninstall -g --prefix ~/.local @google/gemini-cli"

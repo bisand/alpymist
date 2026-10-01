@@ -1,0 +1,35 @@
+# The AI tools in the menu: starting them, and installing and removing them.
+# From alpymist-ai-usage, as /usr/share/alpymist/menu.d/ai-usage.toml.
+#
+# Each is its vendor's own command-line tool, installed its vendor's way and
+# never shipped by Alpymist: the provider files beside this one say how, and
+# `alpymist-ai-usage tool` does it. Starting one that is not installed offers
+# to install it first.
+
+[menu.root]
+items = [
+    { name = "AI", icon = "\U000F06A9", menu = "ai", keywords = ["assistant", "claude", "codex", "chatgpt", "gemini", "agent", "llm"] },
+]
+
+[menu.ai]
+title = "AI"
+items = [
+    { name = "Claude Code", icon = "\U000F06A9", exec = "alpymist-ai-usage tool run claude", terminal = true, detail = "Anthropic", keywords = ["claude", "anthropic", "agent"] },
+    { name = "Codex", icon = "\U000F06A9", exec = "alpymist-ai-usage tool run codex", terminal = true, detail = "OpenAI", keywords = ["chatgpt", "openai", "agent"] },
+    { name = "Gemini CLI", icon = "\U000F06A9", exec = "alpymist-ai-usage tool run gemini", terminal = true, detail = "Google", keywords = ["google", "agent"] },
+    { name = "Usage and keys", icon = "\U000F029A", exec = "alpymist-ai-usage", detail = "Limits, providers", keywords = ["limits", "quota", "api key", "providers", "spend"] },
+]
+
+[menu.install]
+items = [
+    { name = "Claude Code", icon = "\U000F06A9", exec = "alpymist-ai-usage tool install claude", terminal = true, hold = true, detail = "Anthropic's AI tool", keywords = ["claude", "anthropic", "ai", "agent", "update"] },
+    { name = "Codex", icon = "\U000F06A9", exec = "alpymist-ai-usage tool install codex", terminal = true, hold = true, detail = "OpenAI's AI tool", keywords = ["chatgpt", "openai", "ai", "agent", "update"] },
+    { name = "Gemini CLI", icon = "\U000F06A9", exec = "alpymist-ai-usage tool install gemini", terminal = true, hold = true, detail = "Google's AI tool", keywords = ["google", "ai", "agent", "update"] },
+]
+
+[menu.remove]
+items = [
+    { name = "Claude Code", icon = "\U000F06A9", exec = "alpymist-ai-usage tool remove claude", terminal = true, hold = true, detail = "Anthropic's AI tool", keywords = ["claude", "anthropic", "ai", "uninstall"] },
+    { name = "Codex", icon = "\U000F06A9", exec = "alpymist-ai-usage tool remove codex", terminal = true, hold = true, detail = "OpenAI's AI tool", keywords = ["chatgpt", "openai", "ai", "uninstall"] },
+    { name = "Gemini CLI", icon = "\U000F06A9", exec = "alpymist-ai-usage tool remove gemini", terminal = true, hold = true, detail = "Google's AI tool", keywords = ["google", "ai", "uninstall"] },
+]
