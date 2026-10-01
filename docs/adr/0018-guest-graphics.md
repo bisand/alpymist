@@ -101,6 +101,10 @@ saying so.
   night's build is out, and a guest draws on the processor again for those
   hours. Nothing breaks. Stable and dev are alike in this: the repository is
   published on its own, not with a release.
+- A system that follows it needs it to answer. apk stops an upgrade when any
+  repository it follows cannot be reached, so with the guest repository's
+  site down, `apk upgrade` on a guest fails until it is back or the switch is
+  turned off. The same is already true of the channel's.
 - Turning it off has to pass `--available` to apk, as leaving dev does: the
   guest Mesa is versioned above Alpine's and would otherwise stay.
 - The installer's second step needs the network. Offline, the system still
