@@ -53,14 +53,17 @@ INDEPENDENT=" squint validity-fprintd alpymist-keys "
 # Fetched from upstream, their committed sha512sums the pin.
 FETCHED=" squint validity-fprintd "
 
-export CARGO_HOME=/tmp/cargo
+# Kept from one dev run to the next, when the workflow gives it somewhere:
+# what cargo downloaded, and what it compiled of other people's crates.
+KEPT="${CARGO_KEPT:-}"
+export CARGO_HOME="${KEPT:-/tmp}/cargo"
 # Where the first-party packages build, one directory for all of them. Each
 # copies the workspace into a directory of its own and builds only its own
 # crates, with its own features, so what one package gets never depends on
 # another's; but a dependency built once with the same features is not built
 # again, and without this each package compiled every one from scratch. squint
 # builds as upstream wrote it, in its own tree.
-TARGET=/tmp/cargo-target
+TARGET="${KEPT:-/tmp}/cargo-target"
 
 # The dev channel builds without link-time optimisation, and stable with it.
 # The release profile's full LTO has every program optimise all of its
@@ -209,6 +212,17 @@ else
 			touch "$CACHE/$pkg/$key"
 		fi
 	done
+fi
+
+# What is kept for the next dev run is other people's crates only. The
+# workspace's own are compiled again every run, from a fresh copy of the tree
+# whose path and times differ, so theirs would only be dead weight in the
+# cache, a little more of it each time the cache is saved.
+if [ -n "$KEPT" ] && [ -d "$TARGET/release" ]; then
+	rm -rf "$TARGET"/release/incremental "$TARGET"/release/.fingerprint/alpymist* \
+		"$TARGET"/release/build/alpymist*
+	find "$TARGET"/release -maxdepth 1 -type f -delete
+	find "$TARGET"/release/deps -maxdepth 1 \( -name 'alpymist*' -o -name 'libalpymist*' \) -delete
 fi
 
 if [ -n "$OUT" ]; then
