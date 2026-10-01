@@ -219,11 +219,65 @@ pub fn publish(channel: Channel, packages: &Packages, key: &Path, push: bool) ->
     ] {
         run_tool(Command::new("git").arg("-C").arg(&site).args(args))?;
     }
-    println!(
-        "pushed; GitHub Pages serves it at https://{}/ within a minute or two",
-        target.domain()
-    );
+    println!("pushed; waiting for GitHub Pages to serve it");
+    if wait_until_served(&target, &site) {
+        println!("https://{}/ serves the new index", target.domain());
+    } else {
+        // Published all the same: Pages is only being slow about it.
+        println!(
+            "https://{}/ is not serving the new index yet; it will within a few minutes",
+            target.domain()
+        );
+    }
     Ok(())
+}
+
+/// How long to wait for Pages to deploy what was pushed. It takes about half
+/// a minute.
+const SERVED_WITHIN: std::time::Duration = std::time::Duration::from_mins(5);
+
+/// Wait until the site serves the index that was just pushed, for every
+/// architecture. Returns whether it did in time.
+///
+/// Pages deploys a push some seconds after it, and serves everything with
+/// `max-age=600`, which nothing here can change or purge. So anything that
+/// fetches the index between the push and the deployment gets the old one,
+/// and leaves it in the edge's cache for ten minutes: a machine upgraded the
+/// moment this finished saw nothing new until then. Waiting here makes
+/// "published" mean "installable", and what waits on this run fetch only
+/// what is new.
+///
+/// The index is asked for with a query string nobody else uses, so the edge
+/// fetches it from Pages itself, and the plain address — the one apk asks
+/// for — is not touched until the new index is what it would get.
+fn wait_until_served(target: &Target, site: &Path) -> bool {
+    let deadline = std::time::Instant::now() + SERVED_WITHIN;
+    let nonce = std::process::id();
+    let mut attempt = 0u32;
+    loop {
+        let all = ARCHES.iter().all(|arch| {
+            let index = format!("{ALPINE_VERSION}/{REPOSITORY}/{arch}/APKINDEX.tar.gz");
+            let Ok(pushed) = std::fs::read(site.join(&index)) else {
+                return false;
+            };
+            let url = format!(
+                "https://{}/{index}?published={nonce}-{attempt}",
+                target.domain()
+            );
+            Command::new("curl")
+                .args(["--silent", "--fail", "--max-time", "20", &url])
+                .output()
+                .is_ok_and(|served| served.status.success() && served.stdout == pushed)
+        });
+        if all {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        attempt += 1;
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    }
 }
 
 /// Lay out the site: each architecture's packages, the key, and the page.
