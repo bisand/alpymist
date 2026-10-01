@@ -12,7 +12,7 @@ pkgname=validity-fprintd
 # here (ADR 0008): nothing in this workspace decides it, so neither the release
 # version nor the build number is stamped onto it. Moving to a new release is
 # this line and its sha512 below.
-pkgver=0.1.2
+pkgver=0.1.3
 pkgrel=0
 pkgdesc="Fingerprint driver and fprintd-compatible daemon for Synaptics/Validity match-on-chip sensors"
 url="https://github.com/bisand/validity-fprintd"
@@ -79,5 +79,5 @@ openrc() {
 # `abuild checksum` over it, so a tarball that is not the one this was
 # written against fails the build.
 sha512sums="
-e4722b9c46395ea37c069aec8ca9c8bac87f9b534c69c746aee17b4f890faf8ecc16a4ace9109eaa1aae8b34311ed009f2737a628a1bda25e22fd8bbb417be4c  validity-fprintd-0.1.2.tar.gz
+14043aae1feb2e8108c5023f6f5bfc562be4cc21a2b78d1a9f8548f3224862b2f99b7e1889a46f67699857af882627d337c1c9f987f410b215540af1a5a2c6c7  validity-fprintd-0.1.3.tar.gz
 "
