@@ -82,6 +82,9 @@ profile_alpymist() {
 	apks="$apks linux-firmware-ath9k_htc linux-firmware-ath10k linux-firmware-i915"
 	# The desktop, so the installer can put it on a machine with no network.
 	apks="$apks alpymist-desktop"
+	# The fingerprint driver and window, which the installer adds where it
+	# finds a reader validity-fprintd drives (alpymist-install's fingerprint).
+	apks="$apks validity-fprintd validity-fprintd-openrc alpymist-fingerprint"
 	case "$ARCH" in
 		x86*) apks="$apks grub-bios";;
 	esac

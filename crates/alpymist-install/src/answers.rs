@@ -178,6 +178,9 @@ pub struct Answers {
     pub typed_by_os: bool,
     /// What the probe made of this machine, if it ran: how Hyprland will do.
     pub hyprland: Option<Check>,
+    /// The fingerprint reader found, by name, when validity-fprintd drives
+    /// it: the installed system gets its driver and the Fingerprints window.
+    pub fingerprint: Option<String>,
 }
 
 /// The longest a Linux login name may be.
@@ -209,6 +212,7 @@ impl std::fmt::Debug for Answers {
             .field("hostname", &self.hostname)
             .field("firmware", &self.firmware)
             .field("hyprland", &self.hyprland)
+            .field("fingerprint", &self.fingerprint)
             .finish_non_exhaustive()
     }
 }

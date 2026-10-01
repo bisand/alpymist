@@ -18,6 +18,7 @@ pub use alpymist_core::catalog;
 pub mod disks;
 pub mod editing;
 pub mod execute;
+pub mod fingerprint;
 pub mod firmware;
 pub mod plan;
 pub mod pointer;

@@ -600,6 +600,38 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         .may_fail(),
     );
 
+    // A fingerprint reader validity-fprintd drives: the driver, its service
+    // and the Fingerprints window, from the medium as the desktop is. Nothing
+    // it installs lets a finger in; that is an enrolled finger and a switch
+    // in Settings away (ADR 0016). Allowed to fail: the password still works.
+    if a.fingerprint.is_some() {
+        let mut add = vec![
+            "apk",
+            "add",
+            "--root",
+            ROOT,
+            "--repositories-file",
+            "/etc/apk/repositories",
+            "--no-progress",
+        ];
+        add.extend(crate::fingerprint::PACKAGES);
+        steps.push(Step::new("Installing the fingerprint reader's driver", &add).may_fail());
+        steps.push(
+            Step::new(
+                "Starting the fingerprint reader's driver at boot",
+                &[
+                    "chroot",
+                    ROOT,
+                    "rc-update",
+                    "add",
+                    crate::fingerprint::SERVICE,
+                    "default",
+                ],
+            )
+            .may_fail(),
+        );
+    }
+
     // zsh is in the image's world, not the desktop's, so it is installed even
     // when the desktop is not: a login shell that does not exist is a login
     // that does not work.
@@ -985,6 +1017,7 @@ mod tests {
                     || title.starts_with("Showing the splash at boot")
                     || *title == "Installing the desktop"
                     || *title == "Installing the tools"
+                    || *title == "Installing the fingerprint reader's driver"
                     || *title == "Choosing the desktop session",
                 "{title} may fail but is not desktop setup"
             );
@@ -995,6 +1028,59 @@ mod tests {
             .position(|s| s == "Installing the desktop")
             .unwrap();
         assert!(desktop > t.iter().position(|s| s.contains("passphrase")).unwrap());
+    }
+
+    /// A reader validity-fprintd drives gets it, from the medium; a machine
+    /// without one gets nothing of it.
+    #[test]
+    fn a_fingerprint_reader_gets_its_driver_and_nothing_else_does() {
+        let none = titles(&answers());
+        assert!(!none.iter().any(|t| t.contains("fingerprint")), "{none:?}");
+
+        let a = Answers {
+            fingerprint: Some("Synaptics Metallica MIS".into()),
+            ..answers()
+        };
+        let plan = build(&a).unwrap();
+        let add = step(&plan, "Installing the fingerprint reader's driver");
+        assert!(add.may_fail, "the password still works without it");
+        assert!(add.argv.windows(2).any(|w| w == ["--root", "/mnt"]));
+        for package in crate::fingerprint::PACKAGES {
+            assert!(add.argv.iter().any(|a| a == package), "{package}");
+        }
+        let service = step(&plan, "fingerprint reader's driver at boot");
+        assert_eq!(
+            service.argv,
+            [
+                "chroot",
+                "/mnt",
+                "rc-update",
+                "add",
+                "validity-fprintd",
+                "default"
+            ]
+        );
+        let t = titles(&a);
+        let at = |n: &str| t.iter().position(|s| s.contains(n)).unwrap();
+        assert!(at("fingerprint reader's driver") > at("Installing the desktop"));
+    }
+
+    /// Offline, the medium is all there is: what the installer adds for a
+    /// reader has to be on it.
+    #[test]
+    fn the_image_carries_the_fingerprint_packages() {
+        let profile = include_str!("../../../profiles/mkimg.alpymist.sh");
+        for package in crate::fingerprint::PACKAGES {
+            assert!(
+                profile
+                    .lines()
+                    .filter(|l| l.trim_start().starts_with("apks="))
+                    .any(|l| l
+                        .split(|c: char| c.is_whitespace() || c == '"')
+                        .any(|w| w == package)),
+                "profiles/mkimg.alpymist.sh does not put {package} on the image"
+            );
+        }
     }
 
     /// adduser copies /etc/skel, where the desktop's configuration is.
