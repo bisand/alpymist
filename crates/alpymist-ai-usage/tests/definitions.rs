@@ -86,3 +86,32 @@ fn the_package_installs_every_provider_file() {
         }
     }
 }
+
+/// An installer is run by `sh -c`, and a line that pipes into another
+/// shell needs that shell to be there: Alpine has no bash of its own, and
+/// Claude Code's installer is written in it.
+#[test]
+fn every_installer_has_the_shell_it_is_piped_into() {
+    let apkbuild = include_str!("../../../aports/alpymist-ai-usage/APKBUILD");
+    let depends = apkbuild
+        .lines()
+        .find_map(|line| line.strip_prefix("depends=\""))
+        .expect("a depends line");
+    for def in shipped() {
+        let Some(requires) = def.requires else {
+            continue;
+        };
+        if requires
+            .install
+            .split('|')
+            .skip(1)
+            .any(|part| part.trim() == "bash")
+        {
+            assert!(
+                depends.split_whitespace().any(|package| package == "bash"),
+                "{}: its installer is piped into bash, which the package does not bring",
+                def.id
+            );
+        }
+    }
+}
