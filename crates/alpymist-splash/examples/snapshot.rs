@@ -8,7 +8,7 @@
 //! Useful for reviewing the design without a display, and for a CI check that
 //! the splash still draws something sane on the sizes we care about.
 
-use alpymist_splash_scene::{PICTURE, Scene};
+use alpymist_splash_scene::{PICTURE, Scene, Shown};
 use alpymist_ui::picture::Picture;
 use alpymist_ui::typeface;
 use denise::PixelFormat;
@@ -41,12 +41,13 @@ fn main() {
     )
     .expect("buffer large enough for the requested size");
 
-    let scene = Scene::new(width, height, picture.as_ref());
-    scene.paint_background(&mut canvas);
-
     let mut face = typeface::load();
     eprintln!("{}", face.status.describe());
+    let scene = Scene::new(width, height, picture.as_ref(), &mut face);
+    scene.paint_background(&mut canvas);
     scene.paint_marks(&mut canvas, &mut face);
+    // Part of the way through a boot.
+    scene.paint_bar(&mut canvas, Shown::Fraction(0.6));
 
     // ARGB8888 words out, RGBA bytes in.
     let mut rgba = Vec::with_capacity(pixels.len() * 4);

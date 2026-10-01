@@ -204,8 +204,11 @@ pub const GREETD_SERVICE: &str = "# Written by the Alpymist installer: the deskt
 /// adds itself. `quiet` is its own default. `intel_iommu=on` because Alpine's
 /// kernel leaves Intel's IOMMU off unless asked (AMD's is on wherever it
 /// exists): without it, a Thunderbolt or USB4 device let in can read and write
-/// all of memory by DMA. See ADR 0012.
-pub const KERNELOPTS: &str = "quiet intel_iommu=on";
+/// all of memory by DMA. See ADR 0012. `loglevel=3` as the live image has
+/// it: only errors reach the console, which `quiet` alone still lets warnings
+/// do until `OpenRC`'s dmesg service turns it down, and those showed through
+/// between the boot splash and the login screen.
+pub const KERNELOPTS: &str = "quiet loglevel=3 intel_iommu=on";
 
 /// The device-mapper name of the unlocked root, which `setup-disk` expects.
 const CRYPT_NAME: &str = "root";
@@ -1275,6 +1278,10 @@ mod tests {
             "{opts}"
         );
         assert!(opts.split_whitespace().any(|o| o == "quiet"), "{opts}");
+        assert!(
+            opts.split_whitespace().any(|o| o == "loglevel=3"),
+            "as the live image boots: {opts}"
+        );
     }
 
     /// The live image's root has an empty password and its /etc is copied.

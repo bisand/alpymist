@@ -4,7 +4,7 @@
 //! after a successful login:
 //!
 //! ```sh
-//! alpymist-greeter --cmd 'dbus-run-session start-hyprland'
+//! alpymist-greeter --cmd 'alpymist session hyprland'
 //! ```
 //!
 //! The command is split on whitespace, not parsed as shell: greetd already runs
@@ -203,8 +203,12 @@ mod console {
         // the VT from also receiving the password as terminal input — which,
         // left unmuted, is exactly the garbage a TUI greeter shows.
         let mut console = Console::open_if_present();
+        blank_terminal();
         take_console(&mut console)?;
         let result = run(cmd, &mut console);
+        // Empty before it is shown again, on the way to the desktop and
+        // after it, when this console is in text mode with nobody drawing.
+        blank_terminal();
         // Always hand the VT back before exiting: greetd starts the session
         // on this same terminal, and a compositor inheriting a muted keyboard
         // in graphics mode is a desktop nobody can type into.
@@ -212,6 +216,20 @@ mod console {
             let _ = console.restore();
         }
         result
+    }
+
+    /// Clear this console and hide its cursor.
+    ///
+    /// The console greetd gives the login screen is the one the desktop then
+    /// runs on, and whenever neither is drawing — the moment between them, and
+    /// after a logout until this is back — the console shows through: what
+    /// was written to it, and a blinking cursor. The cursor stays hidden on
+    /// this console from here, until something shows it again.
+    fn blank_terminal() {
+        use std::io::Write as _;
+        if let Ok(mut tty) = std::fs::OpenOptions::new().write(true).open("/dev/tty") {
+            let _ = tty.write_all(b"\x1b[?25l\x1b[H\x1b[2J\x1b[3J");
+        }
     }
 
     /// Run a restart or power off, saying whether doas let it.

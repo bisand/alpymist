@@ -20,12 +20,15 @@
 // Only the DRM build hands over; the window build has nothing to watch for.
 #[cfg_attr(not(feature = "drm"), allow(dead_code))]
 mod handover;
+// Only the DRM build has a boot to follow.
+#[cfg_attr(not(feature = "drm"), allow(dead_code))]
+mod progress;
 mod scene;
 
 use alpymist_ui::picture::Picture;
 use alpymist_ui::typeface::{self, Typeface};
 use denise_render::Canvas;
-use scene::Scene;
+use scene::{Scene, Shown};
 use std::path::Path;
 
 /// The splash application.
@@ -41,20 +44,26 @@ impl Splash {
         let picture = Picture::load(picture)
             .map_err(|e| eprintln!("splash: no picture, drawing the mountains ({e})"))
             .ok();
+        let mut face = typeface::load();
         Self {
-            scene: Scene::new(width, height, picture.as_ref()),
+            scene: Scene::new(width, height, picture.as_ref(), &mut face),
             picture,
-            face: typeface::load(),
+            face,
         }
     }
 
-    /// Draw the whole splash into `canvas`.
-    fn draw(&mut self, canvas: &mut Canvas<'_>) {
+    /// Draw the whole splash into `canvas`, the bar showing `shown`.
+    fn draw(&mut self, canvas: &mut Canvas<'_>, shown: Shown) {
         let size = canvas.size();
-        self.scene
-            .resize(size.width, size.height, self.picture.as_ref());
+        self.scene.resize(
+            size.width,
+            size.height,
+            self.picture.as_ref(),
+            &mut self.face,
+        );
         self.scene.paint_background(canvas);
         self.scene.paint_marks(canvas, &mut self.face);
+        self.scene.paint_bar(canvas, shown);
     }
 }
 
@@ -72,7 +81,8 @@ mod window {
         fn render(&mut self, frame: &mut Frame<'_>, _damage: &[Rect]) {
             let mut canvas = Canvas::new(frame);
             canvas.clear(Color::rgb(0, 0, 0));
-            self.draw(&mut canvas);
+            // Somewhere along, to see it by: there is no boot to follow here.
+            self.draw(&mut canvas, crate::scene::Shown::Fraction(0.6));
         }
     }
 
@@ -102,7 +112,8 @@ mod window {
 mod console {
     use super::Splash;
     use crate::handover::{self, Reason};
-    use crate::scene::PICTURE;
+    use crate::progress::{self, Progress};
+    use crate::scene::{PICTURE, Shown as Bar};
     use alpymist_ui::display::Screen;
     use denise_evdev::Console;
     use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
@@ -119,9 +130,12 @@ mod console {
 
     /// A display the splash has drawn on, and which device node it was.
     struct Shown {
-        /// Held, not read: dropping it gives the display up.
-        _screen: Screen,
+        /// Dropping it gives the display up.
+        screen: Screen,
         node: Option<(PathBuf, u64)>,
+        /// What the bar on it shows, so it is drawn again only when that
+        /// changes by a pixel.
+        bar: Bar,
     }
 
     impl Shown {
@@ -138,7 +152,29 @@ mod console {
         }
     }
 
-    fn show(splash: &mut Splash) -> Option<Shown> {
+    /// Draw the bar again on `shown`, if `bar` looks any different from what
+    /// it shows: the bar's rectangle and nothing else is painted and copied.
+    fn advance(splash: &Splash, shown: &mut Shown, bar: Bar) {
+        let Some(area) = splash.scene.layout.bar else {
+            return;
+        };
+        let pixels = |b: Bar| match b {
+            Bar::Fraction(f) => (crate::scene::filled(area.width, f), 0),
+            Bar::Waiting(step) => (-1, step),
+        };
+        if pixels(bar) == pixels(shown.bar) {
+            return;
+        }
+        if shown
+            .screen
+            .present_area(area, |canvas| splash.scene.paint_bar(canvas, bar))
+            .is_ok()
+        {
+            shown.bar = bar;
+        }
+    }
+
+    fn show(splash: &mut Splash, bar: Bar) -> Option<Shown> {
         // Through a Screen: the splash draws once per display device, but that
         // one paint costs about four times as much straight into the scanout
         // mapping as it does into memory that is then copied over, and this
@@ -150,7 +186,9 @@ mod console {
                 .ok()
                 .map(|m| (path.to_path_buf(), m.ino()))
         });
-        screen.present_with(|canvas| splash.draw(canvas)).ok()?;
+        screen
+            .present_with(|canvas| splash.draw(canvas, bar))
+            .ok()?;
         eprintln!(
             "splash: {}x{} on {}",
             size.width,
@@ -158,10 +196,7 @@ mod console {
             node.as_ref()
                 .map_or("an unnamed device".into(), |(p, _)| p.display().to_string())
         );
-        Some(Shown {
-            _screen: screen,
-            node,
-        })
+        Some(Shown { screen, node, bar })
     }
 
     pub fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -180,6 +215,8 @@ mod console {
 
         let started = Instant::now();
         let run = Path::new("/run/openrc");
+        let mut progress = Progress::new(progress::expected(Path::new(progress::RUNLEVEL_DIR)));
+        let mut bar = Bar::Fraction(0.0);
         let mut splash: Option<Splash> = None;
         let mut shown: Option<Shown> = None;
 
@@ -208,15 +245,29 @@ mod console {
                 eprintln!("splash: the display device changed; drawing again");
                 shown = None;
             }
+            // Every other look is often enough for a bar, and half the
+            // copies on the slowest machines.
+            if looks.is_multiple_of(2) {
+                bar = progress.update(&progress::started(run));
+            }
             if shown.is_none() {
                 // Composed once the size is known, which is once there is a
                 // display; loading the font and decoding the picture are the
                 // slow parts on old machines.
                 let splash = splash.get_or_insert_with(|| Splash::new(1, 1, Path::new(PICTURE)));
-                shown = show(splash);
+                shown = show(splash, bar);
+            } else if let (Some(splash), Some(shown)) = (splash.as_ref(), shown.as_mut()) {
+                advance(splash, shown, bar);
             }
             std::thread::sleep(LOOK_EVERY);
         };
+        // Full on the way to the next screen, so the step to it is the end
+        // of the bar and not a jump from somewhere short of it.
+        if reason.blanks_console()
+            && let (Some(splash), Some(shown)) = (splash.as_ref(), shown.as_mut())
+        {
+            advance(splash, shown, Bar::Fraction(1.0));
+        }
         eprintln!(
             "splash: leaving after {:.1}s ({reason:?})",
             started.elapsed().as_secs_f32()

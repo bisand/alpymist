@@ -5,6 +5,7 @@
 //! in that moment finds it still taken; failing then would stop the installer
 //! or the login screen over a wait of a few hundred milliseconds.
 
+use denise::DamageTracker;
 use denise::geom::{Rect, Size};
 use denise::pixels::PixelView;
 use denise::surface::{PixelFormat, Surface, SurfaceError, required_words};
@@ -77,6 +78,10 @@ pub struct Screen {
     shadow: Vec<u32>,
     /// The surface's size, which DRM does not change under us.
     size: Size,
+    /// What each buffer in the swapchain has missed, so a frame that changes
+    /// a little copies a little: a buffer shown two frames ago needs this
+    /// frame's change and the last one's.
+    damage: DamageTracker,
 }
 
 impl Screen {
@@ -110,6 +115,7 @@ impl Screen {
             surface,
             shadow: vec![0u32; len],
             size,
+            damage: DamageTracker::new(size),
         }
     }
 
@@ -141,15 +147,41 @@ impl Screen {
     where
         F: FnOnce(&mut Canvas<'_>),
     {
+        self.damage.add_full();
+        self.present(paint)
+    }
+
+    /// Draw only `area` with `paint`, and put it on the screen.
+    ///
+    /// For something small that moves over a picture that does not, like the
+    /// splash's progress bar: the rest of the frame is what the last one left,
+    /// and only `area` — with whatever else the buffer being drawn into missed
+    /// since it was last shown — is copied. `paint` gets the whole canvas,
+    /// with the last frame in it, and should change nothing outside `area`.
+    ///
+    /// # Errors
+    /// As [`Screen::present_with`].
+    pub fn present_area<F>(&mut self, area: Rect, paint: F) -> Result<(), SurfaceError>
+    where
+        F: FnOnce(&mut Canvas<'_>),
+    {
+        self.damage.add(area);
+        self.present(paint)
+    }
+
+    fn present<F>(&mut self, paint: F) -> Result<(), SurfaceError>
+    where
+        F: FnOnce(&mut Canvas<'_>),
+    {
         // Split the borrows: the frame borrows the surface, the view borrows
         // the shadow, and they have to be alive at the same time to copy.
         let Self {
             surface,
             shadow,
             size,
+            damage,
         } = self;
         let size = *size;
-        let whole = [Rect::from_size(size)];
 
         {
             let Some(mut canvas) = Canvas::from_pixels(
@@ -167,12 +199,16 @@ impl Screen {
             paint(&mut canvas);
         }
 
-        {
+        let copied = {
             let mut frame = surface.acquire()?;
+            let copied = damage.resolve(frame.age()).to_vec();
             if let Some(view) = PixelView::new(shadow.as_slice(), size, size.width) {
-                Canvas::new(&mut frame).copy_from(&view, &whole);
+                Canvas::new(&mut frame).copy_from(&view, &copied);
             }
-        }
-        surface.present(&whole)
+            copied
+        };
+        let presented = surface.present(&copied);
+        damage.end_frame();
+        presented
     }
 }
