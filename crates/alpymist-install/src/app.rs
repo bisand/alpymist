@@ -25,6 +25,7 @@ use denise::theme::Theme;
 use denise_render::Canvas;
 use denise_ui::cursor::Cursor;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
+use std::time::{Duration, Instant};
 
 /// Translate an input event into an action, or ignore it.
 ///
@@ -163,6 +164,31 @@ struct Running {
     at: Option<(usize, usize)>,
     /// Set when the plan finished, with whether it succeeded.
     outcome: Option<bool>,
+    /// When the plan was started.
+    started: Instant,
+    /// How long it took, once it has finished: the clock stops there.
+    took: Option<Duration>,
+    /// The second the screen last showed, so a clock that has moved on is a
+    /// reason to repaint when nothing else is.
+    shown: u64,
+}
+
+impl Running {
+    /// How long the install has been running, or ran.
+    fn elapsed(&self) -> Duration {
+        self.took.unwrap_or_else(|| self.started.elapsed())
+    }
+}
+
+/// A length of time as a clock reads it: `0:07`, `4:12`, `1:02:03`.
+fn clock(time: Duration) -> String {
+    let seconds = time.as_secs();
+    let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    } else {
+        format!("{minutes}:{seconds:02}")
+    }
 }
 
 /// The installer's interactive state.
@@ -713,6 +739,9 @@ impl App {
             lines: Vec::new(),
             at: None,
             outcome: None,
+            started: Instant::now(),
+            took: None,
+            shown: 0,
         });
     }
 
@@ -775,13 +804,20 @@ impl App {
                         .extend(reasons.into_iter().map(|r| format!("   {r}")));
                 }
                 Ok(Progress::Done { ok }) => {
-                    eprintln!("install: {}", if ok { "finished" } else { "stopped" });
+                    let took = running.started.elapsed();
+                    eprintln!(
+                        "install: {} after {}",
+                        if ok { "finished" } else { "stopped" },
+                        clock(took)
+                    );
+                    running.took = Some(took);
                     running.outcome = Some(ok);
                 }
                 Err(TryRecvError::Empty) => break,
                 // The thread finished and dropped the sender.
                 Err(TryRecvError::Disconnected) => {
                     if running.outcome.is_none() {
+                        running.took = Some(running.started.elapsed());
                         running.outcome = Some(false);
                         moved = true;
                     }
@@ -789,7 +825,19 @@ impl App {
                 }
             }
         }
+        // The clock on the screen, which moves when nothing else does.
+        let second = running.elapsed().as_secs();
+        if second != running.shown {
+            running.shown = second;
+            moved = true;
+        }
         moved
+    }
+
+    /// How long the install took, once it has finished.
+    #[must_use]
+    pub fn install_took(&self) -> Option<Duration> {
+        self.install.as_ref().and_then(|r| r.took)
     }
 
     /// How the install ended, once it has.
@@ -811,19 +859,26 @@ impl App {
             None => vec!["Preparing".into()],
             Some(running) => {
                 let mut lines = Vec::new();
-                if let Some((index, total)) = running.at {
-                    lines.push(format!("Step {} of {total}", index + 1));
+                let time = clock(running.elapsed());
+                match running.at {
+                    Some((index, total)) => {
+                        lines.push(format!("Step {} of {total}  ·  {time}", index + 1));
+                    }
+                    None => lines.push(time.clone()),
                 }
                 // Only the tail fits, and the tail is what matters. Two rows
-                // are kept for the step counter and the final outcome.
+                // are kept for the step counter, with its clock, and the final
+                // outcome.
                 let room = usize::try_from(self.chrome.body_rows() - 2)
                     .unwrap_or(1)
                     .max(1);
                 let shown = running.lines.len().saturating_sub(room);
                 lines.extend(running.lines[shown..].iter().cloned());
                 match running.outcome {
-                    Some(true) => lines.push("Finished.".into()),
-                    Some(false) => lines.push("Stopped. Nothing further was done.".into()),
+                    Some(true) => lines.push(format!("Finished in {time}.")),
+                    Some(false) => {
+                        lines.push(format!("Stopped after {time}. Nothing further was done."));
+                    }
                     None => {}
                 }
                 lines
@@ -938,7 +993,15 @@ impl App {
                 .map(Row::progress)
                 .collect()
         } else {
-            screens::rows(self.wizard.step(), &self.wizard.answers)
+            let mut rows = screens::rows(self.wizard.step(), &self.wizard.answers);
+            // The last thing the installer has to say: how long it took.
+            if self.wizard.step() == Step::Done
+                && let Some(took) = self.install_took()
+            {
+                rows.push(Row::progress(""));
+                rows.push(Row::progress(format!("Installed in {}.", clock(took))));
+            }
+            rows
         };
 
         for (index, row) in rows.iter().enumerate() {
@@ -1044,6 +1107,7 @@ mod tests {
     use crate::wizard::Step;
     use denise::geom::Point;
     use denise::input::{ElementState, InputEvent, KeyCode, Modifiers};
+    use std::time::{Duration, Instant};
 
     fn app() -> App {
         App::new(
@@ -1809,6 +1873,79 @@ mod tests {
         a
     }
 
+    /// An install that started `ago`, with nothing reported yet.
+    fn running(
+        events: std::sync::mpsc::Receiver<crate::execute::Progress>,
+        ago: Duration,
+    ) -> super::Running {
+        super::Running {
+            events,
+            lines: Vec::new(),
+            at: None,
+            outcome: None,
+            started: Instant::now().checked_sub(ago).unwrap(),
+            took: None,
+            shown: 0,
+        }
+    }
+
+    #[test]
+    fn a_length_of_time_reads_as_a_clock() {
+        for (seconds, text) in [
+            (0, "0:00"),
+            (7, "0:07"),
+            (252, "4:12"),
+            (3599, "59:59"),
+            (3723, "1:02:03"),
+        ] {
+            assert_eq!(super::clock(Duration::from_secs(seconds)), text);
+        }
+    }
+
+    /// The clock is on the screen from the start, moves on its own, and a
+    /// second gone by is a reason to repaint when the install said nothing.
+    #[test]
+    fn the_install_shows_a_clock_that_runs_without_being_told_to() {
+        let mut a = at_confirm();
+        a.act(Action::Advance);
+        let (tx, events) = std::sync::mpsc::channel();
+        a.install = Some(running(events, Duration::from_secs(75)));
+        assert_eq!(a.install_lines()[0], "1:15");
+        assert!(a.tick(), "the clock moved, so the screen has to");
+        assert!(!a.tick(), "and not again within the same second");
+
+        tx.send(crate::execute::Progress::Starting {
+            index: 2,
+            total: 40,
+            title: "Creating filesystems".into(),
+            command: "mkfs".into(),
+        })
+        .unwrap();
+        a.tick();
+        assert_eq!(a.install_lines()[0], "Step 3 of 40  ·  1:15");
+        assert_eq!(a.install_took(), None);
+    }
+
+    /// When the install ends the clock stops, and the time it stopped at is
+    /// what the Install screen and the log say from then on.
+    #[test]
+    fn the_clock_stops_when_the_install_does() {
+        for (ok, said) in [(true, "Finished in 2:05."), (false, "Stopped after 2:05.")] {
+            let mut a = at_confirm();
+            a.act(Action::Advance);
+            let (tx, events) = std::sync::mpsc::channel();
+            a.install = Some(running(events, Duration::from_secs(125)));
+            tx.send(crate::execute::Progress::Done { ok }).unwrap();
+            a.tick();
+            let took = a.install_took().expect("it has finished");
+            assert_eq!(took.as_secs(), 125);
+            std::thread::sleep(Duration::from_millis(20));
+            assert_eq!(a.install_took(), Some(took), "a stopped clock stays");
+            let last = a.install_lines().pop().unwrap();
+            assert!(last.starts_with(said), "{last}");
+        }
+    }
+
     #[test]
     fn reaching_the_install_step_starts_the_install() {
         let mut a = at_confirm();
@@ -1866,12 +2003,7 @@ mod tests {
             assert_eq!(a.wizard.step(), Step::Install);
         }
         let (tx, events) = std::sync::mpsc::channel();
-        a.install = Some(super::Running {
-            events,
-            lines: Vec::new(),
-            at: None,
-            outcome: None,
-        });
+        a.install = Some(running(events, Duration::ZERO));
         tx.send(crate::execute::Progress::Output(
             "first\nsecond\n\nthird".into(),
         ))
