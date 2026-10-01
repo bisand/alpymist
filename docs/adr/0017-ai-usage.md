@@ -86,3 +86,28 @@ a threshold with nothing charging it.
   process per asking, a few times an hour.
 - Thresholds with notifications, a popup under the bar, and a page in
   Settings are not here yet. The settings file has the fields they will use.
+
+## Addendum — 2026-10-01: a page in Settings, a notification, and one asker
+
+The last consequence above listed what was not there yet. Two of the three
+now are.
+
+**Settings › AI usage** has a switch for each provider installed, read from
+the same files, and when to warn, whether to notify, and how often to ask. A
+provider with everything it needs is turned on by its switch. One that needs a
+key, or its vendor's tool installed, opens a terminal on
+`alpymist-ai-usage enable`, which asks: a key is never a setting's value,
+because that would be an argument any process could read, and an installer
+should be seen running.
+
+**A notification** is sent when a provider passes the warning, and one more
+when it is nearly used up. What was last said is kept with the provider's
+report, so it is said once for each crossing, and again only after the
+provider has been back under.
+
+**Only one process asks a provider at a time.** The bar runs once for every
+screen, and each of them finds the same provider due at the same moment. A
+lock file beside the kept report decides which one asks and notifies; the
+others show what it kept.
+
+The popup under the bar is still to come.

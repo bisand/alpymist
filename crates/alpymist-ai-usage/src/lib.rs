@@ -24,6 +24,7 @@ pub mod bar;
 pub mod config;
 pub mod definition;
 pub mod http;
+pub mod notify;
 pub mod providers;
 pub mod report;
 pub mod run;

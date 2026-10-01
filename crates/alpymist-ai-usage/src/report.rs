@@ -156,6 +156,16 @@ impl Report {
             })
     }
 
+    /// The meter closest to its limit, where any has one.
+    #[must_use]
+    pub fn worst_meter(&self) -> Option<&Meter> {
+        self.meters
+            .iter()
+            .filter_map(|m| Some((m, m.used()?)))
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(m, _)| m)
+    }
+
     /// Read a provider's output.
     ///
     /// # Errors

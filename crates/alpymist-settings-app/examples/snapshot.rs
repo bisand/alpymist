@@ -98,8 +98,11 @@ fn main() {
     // A screensaver's own area opens the Screensaver page with that
     // screensaver's dialog over it, which is the only place it is drawn — so
     // point XDG_DATA_HOME at a directory of definition files to see one.
-    let scenes: [(&str, Scheme, &str, &str); 12] = [
+    let scenes: [(&str, Scheme, &str, &str); 13] = [
         ("displays", Scheme::Dark, "displays", ""),
+        // The providers are whatever ALPYMIST_AI_USAGE_DIR holds, or what is
+        // installed: point it at desktop/ai-usage to see the shipped four.
+        ("ai", Scheme::Dark, "ai", ""),
         ("touchpad", Scheme::Dark, "touchpad", ""),
         ("keyboard", Scheme::Dark, "keyboard.layout", ""),
         ("search", Scheme::Dark, "", "scroll"),

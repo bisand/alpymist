@@ -10,6 +10,8 @@ repository.workspace = true
 [dependencies]
 # The release channel and the keyboard layouts.
 alpymist-core = { workspace = true }
+# ai-usage.toml and the providers installed, without the bar.
+alpymist-ai-usage = { workspace = true }
 # clipboard.toml, and the history's own limits.
 alpymist-clipboard = { workspace = true }
 # displays.toml: what a closed lid does, kept beside the layouts.
