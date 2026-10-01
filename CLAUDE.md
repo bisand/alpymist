@@ -63,6 +63,14 @@ any screensaver, and adding a name to either is the wrong fix for anything.
 reads it drifting apart. See [ADR 0009](docs/adr/0009-screensaver-and-idle.md)
 and its addendum.
 
+**An AI usage provider is a package too.** A program that prints a report,
+and a `/usr/share/alpymist/ai-usage/<id>.toml` naming it and the keys it
+needs. Nothing in `alpymist-ai-usage`'s bar or command line names a provider,
+keys go to a provider on its standard input and to the keyring, never into an
+argument or a file, and a vendor's own tool is installed the vendor's way and
+never added to `depends`. `crates/alpymist-ai-usage/tests/definitions.rs`
+holds the shipped files to that. See [ADR 0017](docs/adr/0017-ai-usage.md).
+
 **squint's and validity-fprintd's `sha512sums` are real pins.** They are the
 aports fetched from upstream, named in `FETCHED` in `ci/build-packages.sh`,
 which deliberately does *not* run `abuild checksum` over them — that

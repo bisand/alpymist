@@ -1,0 +1,14 @@
+# The Anthropic API's cost, as the bar reads it. See openrouter.toml for what
+# a file like this is.
+
+name = "Anthropic API"
+description = "What the organisation's API use has cost this month"
+exec = "alpymist-ai-provider anthropic-api"
+# Anthropic asks for no more than once a minute, and the figures are about
+# five minutes behind.
+refresh = 600
+
+[[credential]]
+key = "admin-key"
+title = "Admin API key"
+description = "An Admin key (sk-ant-admin…), which an organisation's administrator makes in the Console. An individual account has none, and an ordinary API key will not do."

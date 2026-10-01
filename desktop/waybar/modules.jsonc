@@ -15,7 +15,7 @@
   "spacing": 0,
 
   "modules-center": ["clock"],
-  "modules-right": ["group/tray-drawer", "bluetooth", "custom/wifi", "network", "pulseaudio", "cpu", "memory", "custom/battery", "custom/session"],
+  "modules-right": ["group/tray-drawer", "custom/ai", "bluetooth", "custom/wifi", "network", "pulseaudio", "cpu", "memory", "custom/battery", "custom/session"],
 
   "clock": {
     "format": "{:%a %H:%M}",
@@ -43,6 +43,16 @@
     // applications. The icon is only there while Bluetooth is on: Settings ›
     // Bluetooth turns it on.
     "on-click": "alpymist open terminal -- bluetuith"
+  },
+
+  // AI usage is alpymist-ai-usage: the provider closest to its limit, with
+  // every provider turned on in the tooltip. With none turned on it prints
+  // nothing and Waybar hides it. A click asks them all again.
+  "custom/ai": {
+    "exec": "alpymist-ai-usage --waybar",
+    "return-type": "json",
+    "restart-interval": 30,
+    "on-click": "alpymist-ai-usage refresh"
   },
 
   // Wi-Fi is alpymist-wifi: it prints the icon and tooltip whenever iwd

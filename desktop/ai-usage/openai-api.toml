@@ -1,0 +1,12 @@
+# The OpenAI API's cost, as the bar reads it. See openrouter.toml for what a
+# file like this is.
+
+name = "OpenAI API"
+description = "What the organisation's API use has cost this month"
+exec = "alpymist-ai-provider openai-api"
+refresh = 600
+
+[[credential]]
+key = "admin-key"
+title = "admin key"
+description = "An admin key, from https://platform.openai.com/settings/organization/admin-keys. An ordinary API key will not do."

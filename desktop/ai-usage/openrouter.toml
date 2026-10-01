@@ -1,0 +1,23 @@
+# OpenRouter, as the bar reads it.
+#
+# Anything that ships a file like this, and the program it names, is a
+# provider `alpymist-ai-usage` offers: no rebuild, and nothing in Alpymist
+# has to know it exists. The program is handed the credentials declared here
+# as JSON on its standard input, and prints a report.
+
+name = "OpenRouter"
+description = "What this key has spent this month, its limit, and the credits left"
+exec = "alpymist-ai-provider openrouter"
+# Documented, and with no limit of its own on asking: five minutes is plenty.
+refresh = 300
+
+[[credential]]
+key = "api-key"
+title = "API key"
+description = "An ordinary OpenRouter key, from https://openrouter.ai/settings/keys"
+
+[[credential]]
+key = "management-key"
+title = "management key"
+description = "Only for the account's credit balance, which an ordinary key may not read. From https://openrouter.ai/settings/management-keys"
+optional = true
