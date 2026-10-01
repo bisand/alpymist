@@ -304,10 +304,8 @@ fn change_password() -> Result<(), String> {
         "-c".to_owned(),
         "passwd; printf '\\nPress Enter to close. '; read -r _".to_owned(),
     ];
-    let argv = alpymist_core::defaults::terminal_argv(
-        &alpymist_core::defaults::Places::current(),
-        &command,
-    );
+    let argv =
+        alpymist_core::defaults::task_argv(&alpymist_core::defaults::Places::current(), &command);
     std::process::Command::new(&argv[0])
         .args(&argv[1..])
         .spawn()

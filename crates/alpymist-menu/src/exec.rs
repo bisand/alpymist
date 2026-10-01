@@ -53,7 +53,16 @@ impl Launch {
                 } else {
                     command.clone()
                 };
-                let mut argv = terminal.to_vec();
+                // One that waits to be read is a task, not somebody's
+                // terminal: its window is named, and the desktop floats it.
+                let mut argv = if *hold {
+                    alpymist_core::defaults::named(
+                        terminal.to_vec(),
+                        alpymist_core::defaults::TASK_APP_ID,
+                    )
+                } else {
+                    terminal.to_vec()
+                };
                 argv.extend(["/bin/sh".into(), "-c".into(), script]);
                 argv
             }
