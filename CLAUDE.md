@@ -71,6 +71,14 @@ argument or a file, and a vendor's own tool is installed the vendor's way and
 never added to `depends`. `crates/alpymist-ai-usage/tests/definitions.rs`
 holds the shipped files to that. See [ADR 0017](docs/adr/0017-ai-usage.md).
 
+**The manual's "Every setting" page is made, not written.**
+`docs/manual/26-every-setting.md` is what `crates/alpymist/tests/every_setting.rs`
+makes from `alpymist list --json`, and that test fails when the two differ. A
+setting added, renamed or given another default or description means writing
+the page again, with `ALPYMIST_BLESS=1 cargo test -p alpymist --test
+every_setting`, and committing it. Editing the page by hand only fails the
+test; its wording lives in the test.
+
 **Mesa is not built here, and the guest key is trusted only on request.**
 The Mesa with the virgl driver comes from `bisand/alpymist-mesa`'s own
 repository, which a system follows only when asked (`alpymist guest on`, or

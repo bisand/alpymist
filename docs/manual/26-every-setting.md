@@ -11,13 +11,13 @@ alpymist reset power.lid
 alpymist list power.lid      # its value, and what it can be
 ```
 
-**System** in the tables marks a setting that changes the machine for
-everyone and asks for an administrator's password; the rest are your
-account's own. Where a change does not apply at once, the table says when.
+**System** marks a setting that changes the machine for everyone and asks for
+an administrator's password; the rest are your account's own. Where a change
+does not apply at once, the setting says when.
 
-This page is made from `alpymist list --json` on a system following the dev
-channel on 1 October 2026. `alpymist list` on your own system is always the
-last word, and shows settings that packages you installed have added.
+This page is made from the settings themselves, and a test keeps it so: it
+is what `alpymist list` prints on a system with nothing added. Yours also
+lists the settings that packages you installed have added.
 
 ## Appearance
 
@@ -48,7 +48,7 @@ last word, and shows settings that packages you installed have added.
 | Setting | Values | Default |
 |---|---|---|
 | **Language**<br>The language programs speak, and how they write dates and numbers.<br>`language.language` · Next login | The languages there are | `C.UTF-8` |
-| **Translations**<br>Install every program's translations, about 30 MB, so programs can speak the language above.<br>`language.translations` · System, Next login | `true`, `false` | `false` |
+| **Translations**<br>Install every program's translations, about 30 MB, so programs can speak the language above.<br>`language.translations` · System · Next login | `true`, `false` | `false` |
 
 ## Touchpad
 
@@ -152,16 +152,16 @@ shipped.
 | Setting | Values | Default |
 |---|---|---|
 | **Web browser**<br>Opens links and web pages.<br>`default.browser` | The applications that open these |  |
-| **Mail**<br>Opens email addresses and messages. Nothing installed opens these yet; the store has applications that do.<br>`default.mail` | The applications that open these |  |
+| **Mail**<br>Opens email addresses and messages.<br>`default.mail` | The applications that open these |  |
 | **File manager**<br>Opens folders.<br>`default.files` | The applications that open these |  |
 | **Text editor**<br>Opens text files, configuration and code.<br>`default.editor` | The applications that open these |  |
 | **Terminal**<br>Runs commands, and the programs that run in one.<br>`default.terminal` | The applications that open these |  |
 | **Images**<br>Opens pictures and photos.<br>`default.images` | The applications that open these |  |
 | **PDF**<br>Opens PDF documents.<br>`default.pdf` | The applications that open these |  |
-| **Video**<br>Plays films and clips. Nothing installed opens these yet; the store has applications that do.<br>`default.video` | The applications that open these |  |
-| **Music**<br>Plays songs and sound files. Nothing installed opens these yet; the store has applications that do.<br>`default.music` | The applications that open these |  |
-| **Archives**<br>Opens zip files, tarballs and other archives. Nothing installed opens these yet; the store has applications that do.<br>`default.archives` | The applications that open these |  |
-| **Calendar**<br>Opens calendar files and subscriptions. Nothing installed opens these yet; the store has applications that do.<br>`default.calendar` | The applications that open these |  |
+| **Video**<br>Plays films and clips.<br>`default.video` | The applications that open these |  |
+| **Music**<br>Plays songs and sound files.<br>`default.music` | The applications that open these |  |
+| **Archives**<br>Opens zip files, tarballs and other archives.<br>`default.archives` | The applications that open these |  |
+| **Calendar**<br>Opens calendar files and subscriptions.<br>`default.calendar` | The applications that open these |  |
 
 ## Startup
 
@@ -211,7 +211,7 @@ here, named `startup.<program>`.
 
 | Setting | Values | Default |
 |---|---|---|
-| **Time zone**<br>The time zone the clock shows, for everyone on this computer.<br>`datetime.timezone` · System, Next login | Every time zone | `UTC` |
+| **Time zone**<br>The time zone the clock shows, for everyone on this computer.<br>`datetime.timezone` · System · Next login | Every time zone | `UTC` |
 | **Set the time from the network**<br>Keep the clock right by asking time servers on the internet.<br>`datetime.network-time` · System | `true`, `false` | `false` |
 | **24-hour clock**<br>14:30 rather than 2:30 PM, in the top bar and on the login and lock screens.<br>`datetime.24-hour` · System | `true`, `false` | `true` |
 
@@ -219,7 +219,8 @@ here, named `startup.<program>`.
 
 | Setting | Values | Default |
 |---|---|---|
-| **Release channel**<br>Stable is released packages; dev is every change to main, and may break.<br>`updates.channel` · System, Next update | `stable`, `dev` | `stable` |
+| **Release channel**<br>Stable is released packages; dev is every change to main, and may break.<br>`updates.channel` · System · Next update | `stable`, `dev` | `stable` |
+| **Graphics for a virtual machine**<br>In a virtual machine, draw with the host's graphics card: a second build of Mesa, from a repository of its own.<br>`updates.guest-graphics` · System · Next update | `true`, `false` | `false` |
 
 ## System
 
@@ -227,11 +228,5 @@ here, named `startup.<program>`.
 |---|---|---|
 | **Computer name**<br>What this computer is called on the network, in the terminal's prompt and on the login screen.<br>`system.hostname` · System | Text, up to 64 characters | `alpymist` |
 | **Password**<br>Change the password this account logs in and unlocks with, in a terminal that asks for the old one first.<br>`system.password` | An action |  |
-| **Administrator**<br>Let this account change settings for everyone and install software. The last administrator cannot be turned off.<br>`system.administrator` · System, Next login | `true`, `false` | `false` |
+| **Administrator**<br>Let this account change settings for everyone and install software. The last administrator cannot be turned off.<br>`system.administrator` · System · Next login | `true`, `false` | `false` |
 | **Unlock with a fingerprint**<br>Let an enrolled finger unlock the screen and answer administrator prompts, beside the password. Logging in still takes the password. Fingers are added in Fingerprints.<br>`system.fingerprint` · System | `true`, `false` | `false` |
-
-## In a virtual machine
-
-One more setting appears in Settings › Updates on a machine whose display is
-virtio-gpu: `updates.guest-graphics`, which is what `alpymist guest on` and
-`off` change. See [Updates and channels](21-updates-and-channels.md).
