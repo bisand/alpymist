@@ -62,6 +62,7 @@ cargo run -p alpymist -- probe
 | `builder/`       | The Alpine container everything is built in            |
 | `ci/`            | Package and image build scripts, and [how publishing works](ci/README.md) |
 | `xtask/`         | Version, smoke-test and publish orchestration (Rust)   |
+| `docs/manual/`   | [The manual](https://alpymist.org/manual/), one file a chapter |
 | `docs/adr/`      | Architecture decision records                          |
 | `site/`          | [alpymist.org](https://alpymist.org), in SvelteKit     |
 

@@ -15,7 +15,8 @@
 		</div>
 		<ul>
 			<li><a href="/download/">Download</a></li>
-			<li><a href="/docs/">Documentation</a></li>
+			<li><a href="/manual/">Manual</a></li>
+			<li><a href="/docs/">Decisions</a></li>
 			<li><a href={PKGS}>Package repository</a></li>
 			<li><a href={REPO}>Source</a></li>
 			<li><a href="{REPO}/blob/main/SECURITY.md">Security</a></li>
