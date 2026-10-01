@@ -1,0 +1,22 @@
+# Gemini CLI's quota, as the bar reads it. See openrouter.toml for what a
+# file like this is.
+#
+# Google documents no way to read this. This asks what Gemini CLI asks for
+# its own /stats, with the Google login it keeps in ~/.gemini. That login
+# lasts an hour and only Gemini CLI can renew it, so the figures are as fresh
+# as Gemini CLI's last use; and Google's answer is known to be wrong at
+# times, saying nothing is used when something is.
+
+name = "Gemini CLI"
+description = "How much of each Gemini model's allowance is used, as fresh as Gemini CLI's last use"
+exec = "alpymist-ai-provider gemini"
+refresh = 600
+unofficial = true
+
+# Gemini CLI is Google's, installed from npm as Google says, into the
+# account's own ~/.local, and never shipped by Alpymist. npm itself is
+# Alpine's package.
+[requires]
+program = "gemini"
+about = "Gemini CLI, Google's command-line tool"
+install = "doas apk add npm && npm install -g --prefix ~/.local @google/gemini-cli"

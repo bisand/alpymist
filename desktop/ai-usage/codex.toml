@@ -1,0 +1,19 @@
+# A ChatGPT subscription's Codex limits, as the bar reads them. See
+# openrouter.toml for what a file like this is.
+#
+# OpenAI documents no way to read these. This asks what the Codex CLI asks
+# for its own /status, with the login Codex keeps in ~/.codex/auth.json. That
+# login is read and never written: Codex renews it when Codex is used.
+
+name = "ChatGPT (Codex)"
+description = "A ChatGPT plan's 5-hour and weekly Codex limits"
+exec = "alpymist-ai-provider codex"
+refresh = 600
+unofficial = true
+
+# Codex is OpenAI's, installed OpenAI's way when this is turned on, and never
+# shipped by Alpymist. Log in afterwards with: codex login
+[requires]
+program = "codex"
+about = "Codex, OpenAI's command-line tool"
+install = "curl -fsSL https://chatgpt.com/codex/install.sh | sh"

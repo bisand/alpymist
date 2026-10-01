@@ -45,7 +45,7 @@ fn main() {
     let mut one = sample();
     one.providers.truncate(1);
     one.providers[0].lines[1].used = Some(0.31);
-    one.providers[0].lines[1].says = "31% used, resets in 3 d".into();
+    one.providers[0].lines[1].says = "31% used, resets in 3 days".into();
     let mut p = with(one);
     p.key(Key::Tab);
     scenes.push(("one-focus", p));
