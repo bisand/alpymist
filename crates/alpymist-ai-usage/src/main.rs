@@ -288,8 +288,13 @@ fn enable(id: &str) -> Result<(), String> {
             ));
         }
     }
+    if !def.credentials.is_empty()
+        && let Some(why) = secrets::state().refusal()
+    {
+        return Err(why.into());
+    }
     for credential in &def.credentials {
-        let has = secrets::lookup(&def.id, &credential.key).is_some();
+        let has = secrets::lookup(&def.id, &credential.key)?.is_some();
         if has || (credential.optional && !std::io::stdin().is_terminal()) {
             continue;
         }
@@ -334,7 +339,7 @@ fn forget(id: &str) -> Result<(), String> {
     disable(id)?;
     if let Ok(def) = find(id) {
         for credential in &def.credentials {
-            secrets::clear(&def.id, &credential.key);
+            secrets::clear(&def.id, &credential.key)?;
         }
     }
     if let Some(path) = store::path(id) {

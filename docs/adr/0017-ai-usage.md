@@ -34,7 +34,12 @@ is never an argument either.
 
 **Keys live in the keyring**, through `secret-tool`, and nowhere else
 (ADR 0013). The settings file names which providers are on and has no key in
-it. A locked keyring means no asking, and the bar says so.
+it. A locked keyring means no asking, and the bar says so. The keyring is
+asked where it is first, once, without making it ask anyone anything: touching
+a locked keyring puts up a dialog to unlock it, and the bar would do that every
+few minutes with nobody there. A keyring that does not answer at all, as after
+a login that had no password, is said the same way, and every call to it has a
+time limit.
 
 **Nothing is on by default.** With no provider turned on, the bar's module
 prints nothing and is hidden. Turning one on is `alpymist-ai-usage enable`.
