@@ -307,12 +307,14 @@ mod drm_run {
             hyprland,
             disks,
             firmware: Firmware::detect(),
+            fingerprint: alpymist_install::fingerprint::detect().map(str::to_owned),
             keyboard: configured.map(|(layout, _)| layout.to_string()),
             keyboard_variant: configured.map(|(_, variant)| variant.to_string()),
             ..Answers::default()
         }
         .with_defaults();
         eprintln!("firmware: {:?}", answers.firmware);
+        eprintln!("fingerprint reader: {:?}", answers.fingerprint);
         Answers {
             wired_interface: alpymist_install::wifi::wired_interface(),
             wifi: alpymist_install::wifi::Wifi {

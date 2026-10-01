@@ -681,6 +681,14 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
                     _ => "",
                 }
             )),
+        ]
+        .into_iter()
+        .chain(
+            a.fingerprint
+                .as_ref()
+                .map(|reader| Row::note(format!("Fingerprint {reader}, with its driver"))),
+        )
+        .chain([
             // Last, after everything it summarises, so it is the final thing
             // read before pressing Install.
             Row::gap(),
@@ -691,7 +699,8 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
                 ),
                 _ => "No disk will be erased.".into(),
             }),
-        ],
+        ])
+        .collect(),
         Step::Install => vec![
             Row::note("Partitioning the disk"),
             Row::note("Creating filesystems"),
