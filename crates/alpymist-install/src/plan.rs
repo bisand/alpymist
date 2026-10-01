@@ -225,6 +225,9 @@ const REPOSITORIES: [&str; 2] = ["main", "community"];
 /// `alpymist-keys`, which the desktop depends on; `cargo xtask publish` fills it.
 /// New systems follow stable; `alpymist channel` changes that.
 const ALPYMIST_REPOSITORY: &str = alpymist_core::Channel::Stable.repository();
+/// What is upgraded from the guest repository: every Mesa package installed
+/// depends on exactly this one's version, so they all follow it.
+const GUEST_MESA: &str = "mesa";
 /// The login shell for the account the installer creates.
 const LOGIN_SHELL: &str = "/bin/zsh";
 /// The session environment the login's PAM service loads.
@@ -602,6 +605,39 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
         )
         .may_fail(),
     );
+
+    // In a virtual machine, when asked for: Mesa from the guest repository,
+    // which has the driver for the host's 3D that Alpine's leaves out
+    // (ADR 0018). `alpymist guest on` in the new system adds the repository
+    // and trusts its key, which alpymist-keys brought with the desktop; the
+    // upgrade is Mesa alone, and from the network, which is the only place
+    // that Mesa is. Allowed to fail: offline the system follows the
+    // repository all the same and the next `apk upgrade` brings it, and
+    // until then it draws on the processor as it would have.
+    if a.guest_graphics == Some(true) {
+        steps.push(
+            Step::new(
+                "Choosing graphics for a virtual machine",
+                &["chroot", ROOT, "alpymist", "guest", "on", "--no-upgrade"],
+            )
+            .may_fail(),
+        );
+        steps.push(
+            Step::new(
+                "Installing graphics for a virtual machine",
+                &[
+                    "apk",
+                    "upgrade",
+                    "--root",
+                    ROOT,
+                    "--update-cache",
+                    "--no-progress",
+                    GUEST_MESA,
+                ],
+            )
+            .may_fail(),
+        );
+    }
 
     // A fingerprint reader validity-fprintd drives: the driver, its service
     // and the Fingerprints window, from the medium as the desktop is. Nothing
@@ -1021,6 +1057,7 @@ mod tests {
                     || *title == "Installing the desktop"
                     || *title == "Installing the tools"
                     || *title == "Installing the fingerprint reader's driver"
+                    || title.ends_with("graphics for a virtual machine")
                     || *title == "Choosing the desktop session",
                 "{title} may fail but is not desktop setup"
             );
@@ -1031,6 +1068,48 @@ mod tests {
             .position(|s| s == "Installing the desktop")
             .unwrap();
         assert!(desktop > t.iter().position(|s| s.contains("passphrase")).unwrap());
+    }
+
+    /// Guest graphics is the person's choice in a virtual machine and nothing
+    /// anywhere else: the repository is followed only when it was asked for,
+    /// from inside the new system, once the desktop has brought `alpymist`
+    /// and the key.
+    #[test]
+    fn guest_graphics_is_set_up_only_when_asked_for() {
+        for not in [None, Some(false)] {
+            let t = titles(&Answers {
+                guest_graphics: not,
+                ..encrypted()
+            });
+            assert!(!t.iter().any(|t| t.contains("virtual machine")), "{t:?}");
+        }
+        let a = Answers {
+            guest_graphics: Some(true),
+            ..encrypted()
+        };
+        let plan = build(&a).unwrap();
+        let follow = step(&plan, "Choosing graphics for a virtual machine");
+        assert_eq!(
+            follow.argv,
+            ["chroot", "/mnt", "alpymist", "guest", "on", "--no-upgrade"]
+        );
+        let upgrade = step(&plan, "Installing graphics for a virtual machine");
+        assert_eq!(upgrade.argv[..4], ["apk", "upgrade", "--root", "/mnt"]);
+        assert_eq!(upgrade.argv.last().map(String::as_str), Some("mesa"));
+        assert!(
+            follow.may_fail && upgrade.may_fail,
+            "offline, it still boots"
+        );
+        let t = titles(&a);
+        let at = |what: &str| t.iter().position(|s| s.contains(what)).unwrap();
+        assert!(at("Choosing graphics") > at("Installing the desktop"));
+        assert!(at("Installing graphics") > at("Choosing graphics"));
+        // Nothing of it is written with the other repositories: that file is
+        // the same whatever was chosen.
+        let Some(Input::Text(repositories)) = &step(&plan, "package repositories").stdin else {
+            panic!("no repositories written");
+        };
+        assert!(!repositories.contains(alpymist_core::guest::REPOSITORY));
     }
 
     /// A reader validity-fprintd drives gets it, from the medium; a machine

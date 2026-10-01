@@ -202,9 +202,9 @@ pub const AREAS: &[Area] = &[
     Area {
         id: "updates",
         title: "Updates",
-        description: "The release channel Alpymist follows",
+        description: "The release channel Alpymist follows, and graphics in a virtual machine",
         icon: "\u{f06b0}",
-        keywords: &["upgrade", "channel", "packages"],
+        keywords: &["upgrade", "channel", "packages", "virtual machine"],
     },
     Area {
         id: "system",
@@ -302,7 +302,7 @@ pub fn get(env: &Env, s: &Setting) -> Result<Value, String> {
         "startup" => startup::get(env, s),
         a if a == "screensaver" || screensaver::owns(a) => screensaver::get(env, s),
         "datetime" => datetime::get(env, s),
-        "updates" => updates::get(env),
+        "updates" => updates::get(env, s),
         "system" => system::get(env, s),
         other => Err(format!("no area `{other}`")),
     }
@@ -335,7 +335,7 @@ pub fn set(
         "startup" => none(startup::set(env, s, value)),
         a if a == "screensaver" || screensaver::owns(a) => none(screensaver::set(env, s, value)),
         "datetime" => none(datetime::set(env, s, value, force)),
-        "updates" => none(updates::set(env, value)),
+        "updates" => none(updates::set(env, s, value)),
         "system" => none(system::set(env, s, value)),
         other => Err(format!("no area `{other}`")),
     }

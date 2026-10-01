@@ -70,7 +70,7 @@ mod run {
 
         // Probing needs Linux; on a development machine there is nothing to
         // probe, and the Desktop screen says so.
-        let hyprland = probe();
+        let (hyprland, guest_graphics) = probe();
         // A development machine may have no /sys/block, or disks nobody wants
         // offered; the preview shows stand-ins rather than an empty screen.
         let mut disks = alpymist_install::disks::discover(&alpymist_install::safety::gather());
@@ -79,6 +79,7 @@ mod run {
         }
         let answers = Answers {
             hyprland: hyprland.clone(),
+            guest_graphics,
             disks,
             // A window system has already applied the keyboard layout.
             typed_by_os: true,
@@ -104,10 +105,17 @@ mod run {
     }
 
     /// Ask the hardware how Hyprland will do, where that is possible.
-    fn probe() -> Option<Check> {
-        alpymist_hwprobe::probe()
-            .ok()
-            .map(|caps| alpymist_core::hyprland::check(&caps))
+    ///
+    /// And whether this is a virtual machine the guest repository's Mesa is
+    /// for: offered, and on, where it is (ADR 0018).
+    fn probe() -> (Option<Check>, Option<bool>) {
+        match alpymist_hwprobe::probe() {
+            Ok(caps) => (
+                Some(alpymist_core::hyprland::check(&caps)),
+                alpymist_core::guest::offered(&caps).then_some(true),
+            ),
+            Err(_) => (None, None),
+        }
     }
 }
 
@@ -284,7 +292,7 @@ mod drm_run {
     /// What the machine already says about itself, before anyone is asked:
     /// how Hyprland will do, the disks, the keyboard, the firmware, the network.
     fn detect() -> Answers {
-        let hyprland = probe();
+        let (hyprland, guest_graphics) = probe();
         let disks = alpymist_install::disks::discover(&alpymist_install::safety::gather());
         eprintln!(
             "disks: {}",
@@ -305,6 +313,7 @@ mod drm_run {
             .and_then(|text| typing::configured_keymap(&text));
         let answers = Answers {
             hyprland,
+            guest_graphics,
             disks,
             firmware: Firmware::detect(),
             fingerprint: alpymist_install::fingerprint::detect().map(str::to_owned),
@@ -315,6 +324,7 @@ mod drm_run {
         .with_defaults();
         eprintln!("firmware: {:?}", answers.firmware);
         eprintln!("fingerprint reader: {:?}", answers.fingerprint);
+        eprintln!("guest graphics: {:?}", answers.guest_graphics);
         Answers {
             wired_interface: alpymist_install::wifi::wired_interface(),
             wifi: alpymist_install::wifi::Wifi {
@@ -363,10 +373,17 @@ mod drm_run {
     }
 
     /// Ask the hardware how Hyprland will do.
-    fn probe() -> Option<Check> {
-        alpymist_hwprobe::probe()
-            .ok()
-            .map(|caps| alpymist_core::hyprland::check(&caps))
+    ///
+    /// And whether this is a virtual machine the guest repository's Mesa is
+    /// for: offered, and on, where it is (ADR 0018).
+    fn probe() -> (Option<Check>, Option<bool>) {
+        match alpymist_hwprobe::probe() {
+            Ok(caps) => (
+                Some(alpymist_core::hyprland::check(&caps)),
+                alpymist_core::guest::offered(&caps).then_some(true),
+            ),
+            Err(_) => (None, None),
+        }
     }
 }
 

@@ -13,15 +13,19 @@
 # repository, so `alpymist channel dev` copies it there only for a system
 # that asks to follow dev, and `alpymist channel stable` removes it
 # (ADR 0006).
+#
+# The guest repository's key is kept the same way: a second Mesa, for virtual
+# machines, signed by its own CI, which `alpymist guest on` trusts and
+# `alpymist guest off` distrusts (ADR 0018).
 pkgname=alpymist-keys
 pkgver=2026
-pkgrel=1
+pkgrel=2
 pkgdesc="Public keys for the Alpymist package repositories"
 url="https://github.com/bisand/alpymist"
 arch="noarch"
 license="MIT OR Apache-2.0"
 options="!check"  # nothing to test
-source="alpymist-2026.rsa.pub alpymist-dev-2026.rsa.pub"
+source="alpymist-2026.rsa.pub alpymist-dev-2026.rsa.pub alpymist-guest-2026.rsa.pub"
 builddir="$srcdir"
 
 package() {
@@ -29,4 +33,6 @@ package() {
 		"$pkgdir"/etc/apk/keys/alpymist-2026.rsa.pub
 	install -Dm644 "$srcdir"/alpymist-dev-2026.rsa.pub \
 		"$pkgdir"/usr/share/alpymist/keys/alpymist-dev-2026.rsa.pub
+	install -Dm644 "$srcdir"/alpymist-guest-2026.rsa.pub \
+		"$pkgdir"/usr/share/alpymist/keys/alpymist-guest-2026.rsa.pub
 }

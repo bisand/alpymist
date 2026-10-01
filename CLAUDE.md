@@ -71,6 +71,15 @@ argument or a file, and a vendor's own tool is installed the vendor's way and
 never added to `depends`. `crates/alpymist-ai-usage/tests/definitions.rs`
 holds the shipped files to that. See [ADR 0017](docs/adr/0017-ai-usage.md).
 
+**Mesa is not built here, and the guest key is trusted only on request.**
+The Mesa with the virgl driver comes from `bisand/alpymist-mesa`'s own
+repository, which a system follows only when asked (`alpymist guest on`, or
+the installer's switch in a virtual machine). Putting a Mesa in `aports/`
+would install it on every machine at the next upgrade, and installing
+`alpymist-guest-2026.rsa.pub` to `/etc/apk/keys` in `alpymist-keys` would have
+every system trust that repository's CI. See
+[ADR 0018](docs/adr/0018-guest-graphics.md).
+
 **squint's and validity-fprintd's `sha512sums` are real pins.** They are the
 aports fetched from upstream, named in `FETCHED` in `ci/build-packages.sh`,
 which deliberately does *not* run `abuild checksum` over them — that
