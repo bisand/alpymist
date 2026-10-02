@@ -691,10 +691,13 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
     // Without a password the account stays locked, as `adduser -D` leaves it.
     // Feeding chpasswd an empty one would instead allow logging in with none.
     if !a.password.is_empty() {
+        // In capitals: the chpasswd in the new system is shadow's, which
+        // alpymist-desktop installs over busybox's, and it takes no other
+        // spelling. busybox's takes either.
         steps.push(
             Step::new(
                 "Setting your password",
-                &["chroot", ROOT, "chpasswd", "-c", "sha512"],
+                &["chroot", ROOT, "chpasswd", "-c", "SHA512"],
             )
             .with_input(Input::Secret(format!("{}:{}\n", a.username, a.password))),
         );
@@ -1598,6 +1601,15 @@ mod tests {
         a.password.clear();
         assert!(!titles(&a).iter().any(|t| t.contains("password")));
         assert!(titles(&answers()).iter().any(|t| t.contains("password")));
+    }
+
+    /// shadow's chpasswd, the one in the installed system, refuses `sha512`
+    /// with its usage text and stops the install. 0.3.0 shipped that.
+    #[test]
+    fn the_password_hash_is_named_as_shadow_spells_it() {
+        let plan = build(&answers()).unwrap();
+        let argv = &step(&plan, "Setting your password").argv;
+        assert_eq!(argv[argv.len() - 2..], ["-c", "SHA512"]);
     }
 
     #[test]
