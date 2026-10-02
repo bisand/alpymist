@@ -57,6 +57,11 @@ first five, and any others in use, at its left end.
 |---|---|
 | <kbd>Super</kbd>+<kbd>1</kbd> … <kbd>9</kbd> | Goes to that workspace. |
 | <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd> … <kbd>9</kbd> | Takes the focused window there. |
+| <kbd>Super</kbd>+<kbd>Tab</kbd> | Shows all nine side by side. |
+
+<kbd>Super</kbd>+<kbd>Tab</kbd> is for when you have forgotten where the
+browser went: the nine workspaces as they are now, small, three by three.
+Click one to go to it, or press the key again to stay where you were.
 
 A click on a workspace in the bar goes to it. With more than one screen,
 each screen has its own nine, and the keys act on the screen the pointer is

@@ -109,7 +109,10 @@ alpymist-thunderbolt forget UUID
   portal that browsers and Flatpak applications share a screen through, which
   asks you first. Nothing else may.
 - **Typing as if it were a keyboard** is denied to every program.
-- **Hyprland plugins** are denied.
+- **Hyprland plugins** are denied, all but one: hyprexpo, the overview that
+  <kbd>Super</kbd>+<kbd>Tab</kbd> opens, which is Hyprland's own and comes
+  from Alpine's package. It is allowed by the file it is,
+  `/usr/lib/libhyprexpo.so`, which only root can change.
 - **Flatpak applications** run in a sandbox, with access to what each
   declares.
 

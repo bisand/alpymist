@@ -278,6 +278,29 @@ pub fn focused_id(n: u32, monitors: &[Monitor], layouts: &Layouts) -> i32 {
     block.map_or(plain, |b| workspaces::id(b, n))
 }
 
+/// Super+Tab: every workspace of the screen with the focus, side by side on
+/// it, to pick one from; again, and it goes. hyprexpo draws it, and is told
+/// first which workspace its grid starts at: the screen's own first, since
+/// it knows nothing of each screen having its own.
+///
+/// # Errors
+/// Hyprland could not be asked, or has no overview: a session that began
+/// before the package that brought it was installed.
+pub fn overview() -> Result<(), String> {
+    let monitors = screen::parse(&hypr::request("j/monitors all")?)?;
+    let layouts = Layouts::load(&layout::path());
+    let first = focused_id(1, &monitors, &layouts);
+    hypr::request(&format!(
+        "keyword plugin:hyprexpo:workspace_method first {first}"
+    ))?;
+    let answer = hypr::request("dispatch hyprexpo:expo toggle")?;
+    if answer == b"ok" {
+        Ok(())
+    } else {
+        Err("the overview starts with the desktop: log out and in again".into())
+    }
+}
+
 /// What of `layout` the screens did not take, as Hyprland has them now: a
 /// mode a screen refused, which Hyprland answers by keeping the one it had,
 /// or a scale it would not use. Said for a person, one sentence a screen.

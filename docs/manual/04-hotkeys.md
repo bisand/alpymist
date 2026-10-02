@@ -38,6 +38,7 @@ applications.
 |---|---|
 | <kbd>Super</kbd>+<kbd>1</kbd> … <kbd>9</kbd> | Go to workspace 1 to 9 of this screen |
 | <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd> … <kbd>9</kbd> | Take the window there |
+| <kbd>Super</kbd>+<kbd>Tab</kbd> | Show every workspace of this screen, to pick one from |
 
 ## Copy, paste and screenshots
 

@@ -13,6 +13,9 @@
 //! Super+Shift and an arrow take the window to the screen on that side. An
 //! account made before those keys is given them the same way, after its
 //! Super+arrow lines, unless it has put something of its own on one of them.
+//!
+//! Super+Tab is the overview of a screen's workspaces, and is given likewise,
+//! after the Super+number lines, to an account with nothing on that key.
 
 use super::clipboard::chord;
 use crate::env::Env;
@@ -55,6 +58,14 @@ const SCREEN_KEYS: [(&str, &str); 4] = [
         "bind = SUPER SHIFT, down, movewindow, mon:d",
     ),
 ];
+
+/// The last of the Super+number lines, which the overview's key goes after.
+const MOVE_NINE: &str = "bind = SUPER SHIFT, 9, exec, alpymist displays move 9";
+/// Super+Tab: its chord, and its line.
+const OVERVIEW_KEY: (&str, &str) = (
+    "SUPER|TAB",
+    "bind = SUPER, Tab, exec, alpymist displays overview",
+);
 
 /// The settings.
 pub fn settings() -> Vec<Setting> {
@@ -122,8 +133,8 @@ pub fn live(env: &Env) -> Result<(), String> {
 
 /// Give an older account's `hyprland.conf` the keys that go through
 /// `alpymist displays`, where it still has Hyprland's own as every account
-/// started with, and the ones that take a window to another screen, where it
-/// has none. Says what it did.
+/// started with, and the ones that take a window to another screen and show
+/// the overview, where it has none. Says what it did.
 fn take_over(env: &Env) -> Vec<String> {
     let path = env.account(HYPRLAND);
     let Ok(text) = std::fs::read_to_string(&path) else {
@@ -141,6 +152,10 @@ fn take_over(env: &Env) -> Vec<String> {
     if let Some(keys) = with_screen_keys(&new) {
         new = keys;
         what.push("Super+Shift and an arrow now take the window to the screen on that side");
+    }
+    if let Some(keys) = with_overview_key(&new) {
+        new = keys;
+        what.push("Super+Tab now shows every workspace of the screen the pointer is on");
     }
     if what.is_empty() {
         return Vec::new();
@@ -218,9 +233,35 @@ fn with_screen_keys(conf: &str) -> Option<String> {
     Some(out)
 }
 
+/// `hyprland.conf` with Super+Tab showing the overview, after the Super+number
+/// lines; `None` when the last of those is not as shipped, or Super+Tab is
+/// already bound, by the account or by having been given it before.
+fn with_overview_key(conf: &str) -> Option<String> {
+    let lines: Vec<&str> = conf.lines().collect();
+    let at = lines.iter().position(|l| l.trim() == MOVE_NINE)?;
+    if lines
+        .iter()
+        .filter_map(|l| chord(l))
+        .any(|c| c == OVERVIEW_KEY.0)
+    {
+        return None;
+    }
+    let mut out = String::with_capacity(conf.len() + 60);
+    for (i, line) in lines.iter().enumerate() {
+        let _ = writeln!(out, "{line}");
+        if i == at {
+            let _ = writeln!(out, "{}", OVERVIEW_KEY.1);
+        }
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{FOCUS_DOWN, LID, WORKSPACES, get, set, settings, with_keys, with_screen_keys};
+    use super::{
+        FOCUS_DOWN, LID, MOVE_NINE, OVERVIEW_KEY, WORKSPACES, get, set, settings, with_keys,
+        with_overview_key, with_screen_keys,
+    };
     use crate::env::Env;
     use crate::model::Value;
     use std::sync::Mutex;
@@ -292,6 +333,25 @@ mod tests {
     }
 
     #[test]
+    fn an_older_account_is_given_the_overview_key_once_and_its_own_kept() {
+        let old = format!("{MOVE_NINE}\nbindm = SUPER, mouse:272, movewindow\n");
+        let new = with_overview_key(&old).unwrap();
+        assert_eq!(
+            new,
+            format!(
+                "{MOVE_NINE}\n{}\nbindm = SUPER, mouse:272, movewindow\n",
+                OVERVIEW_KEY.1
+            )
+        );
+        assert_eq!(with_overview_key(&new), None, "once is enough");
+        // Super+Tab the account's own: nothing is touched.
+        let own = format!("{MOVE_NINE}\nbind = SUPER, TAB, cyclenext\n");
+        assert_eq!(with_overview_key(&own), None);
+        // Its Super+number lines still Hyprland's, or changed by hand.
+        assert_eq!(with_overview_key("bind = SUPER, Q, killactive\n"), None);
+    }
+
+    #[test]
     fn the_skeleton_already_has_every_key_an_older_account_is_given() {
         let skel = include_str!("../../../../desktop/skel/desktop/.config/hypr/hyprland.conf");
         assert!(skel.contains(FOCUS_DOWN));
@@ -300,5 +360,7 @@ mod tests {
         }
         assert_eq!(with_keys(skel), None);
         assert_eq!(with_screen_keys(skel), None);
+        assert!(skel.lines().any(|l| l == OVERVIEW_KEY.1));
+        assert_eq!(with_overview_key(skel), None);
     }
 }

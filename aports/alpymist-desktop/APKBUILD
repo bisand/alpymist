@@ -57,9 +57,11 @@ license="MIT OR Apache-2.0"
 # it; alpymist-saver-mountains and alpymist-saver-starfield are the screensavers
 # Alpymist ships, and are named separately because they are packages like any
 # other. alpymist-lock is what Super+L, the menu's Lock and a lid set to lock
-# all run (ADR 0010). alpymist-thunderbolt asks before a Thunderbolt or USB4
-# dock is let in. Hyprland's own wallpaper and idle daemons are not packaged
-# for Alpine 3.24; swaybg and swayidle work under it.
+# all run (ADR 0010). hyprland-plugins-hyprexpo is the overview Super+Tab
+# opens, Alpine's build of Hyprland's own plugin and the one plugin
+# hyprland-security.conf lets in (ADR 0015). alpymist-thunderbolt asks before a
+# Thunderbolt or USB4 dock is let in. Hyprland's own wallpaper and idle daemons
+# are not packaged for Alpine 3.24; swaybg and swayidle work under it.
 depends="
 	adwaita-icon-theme
 	alpymist
@@ -100,6 +102,7 @@ depends="
 	grim
 	gsettings-desktop-schemas
 	hyprland
+	hyprland-plugins-hyprexpo
 	impala
 	iwd
 	librewolf

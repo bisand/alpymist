@@ -42,6 +42,13 @@ to the screen on that side, onto the workspace that screen is showing. An
 account made before these keys is given them the next time either setting
 below is changed, unless it already uses one of the four for something else.
 
+<kbd>Super</kbd>+<kbd>Tab</kbd> shows the nine workspaces of the screen the
+pointer is on, on that screen; move the pointer to another screen and press it
+again for that one's. An account made before the key is given it the same way,
+unless it already uses <kbd>Super</kbd>+<kbd>Tab</kbd>. The overview is loaded
+when the desktop starts, so the first time after the upgrade that brought it,
+log out and in.
+
 When a screen goes away its workspaces move to the screens that are left, and
 when it comes back they go home.
 
@@ -73,6 +80,7 @@ alpymist displays set DP-5 --on false
 alpymist displays save      # remember the screens as they are now
 alpymist displays apply     # put the remembered layout in place
 alpymist displays forget    # forget it: the screens are extended again
+alpymist displays overview  # what Super+Tab does
 ```
 
 A screen is named by its connector, as `list` shows it, or by part of its

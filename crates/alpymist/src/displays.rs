@@ -61,6 +61,9 @@ pub enum Action {
         /// 1 to 9.
         n: u32,
     },
+    /// Show every workspace of the screen with the focus, to pick one from
+    /// (Super+Tab); again, and the overview goes.
+    Overview,
     /// Follow screens as they come and go. Hyprland runs this at login.
     #[command(hide = true)]
     Watch,
@@ -76,6 +79,7 @@ pub fn run(action: &Action) -> Result<(), Box<dyn std::error::Error>> {
         Action::Watch => Ok(watch::run()?),
         Action::Workspace { n } => Ok(alpymist_displays::switch(*n, false)?),
         Action::Move { n } => Ok(alpymist_displays::switch(*n, true)?),
+        Action::Overview => Ok(alpymist_displays::overview()?),
         Action::Apply => {
             let plan = alpymist_displays::apply()?;
             if plan.new {

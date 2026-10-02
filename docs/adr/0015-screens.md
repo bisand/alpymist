@@ -183,3 +183,39 @@ the laptop's, behind a closed lid — or one that is itself a mirror, it shows
 a picture of its own instead, so a screen is never left showing nothing.
 Hyprland reports what a screen mirrors by the other's monitor number, not
 its connector, and the check that a layout took reads it that way.
+
+## Addendum — 2026-10-02: an overview of the workspaces, and the one plugin let in
+
+With nine workspaces on each of three screens there was no way to see where
+a window had been left but to go through them. Hyprland has no overview of
+its own; the one its authors maintain is a plugin, hyprexpo, which draws a
+screen's workspaces side by side on it and goes to the one clicked. Alpine
+packages it, built against the Hyprland beside it in the same repository.
+
+The addendum of 2026-09-30 said plugins stay denied. That is reversed for
+this one, and only this one: `hyprland-security.conf` allows
+`/usr/lib/libhyprexpo.so` by name, above the rule that denies every other,
+and loads it. What that gives up is said plainly. A plugin is code inside
+the compositor, able to see every window and every key, and hyprexpo is now
+trusted as Hyprland itself is, on the grounds that it has the same authors
+and comes signed from the same repository; a fault in it is a fault in the
+compositor. What is kept: a program still cannot have Hyprland load a
+plugin of its choosing, since the rule names one file and only root can
+write it. A plugin must also match its Hyprland exactly, so an upgrade of
+one without the other would leave the overview not loading; both come from
+Alpine's community repository, which rebuilds them together.
+
+hyprexpo knows nothing of each screen having its own workspaces: its grid
+is a run of numbers from wherever it is told to start. So Super+Tab runs
+`alpymist displays overview`, which asks which screen has the focus, tells
+hyprexpo to start at that screen's first — 1, 11, 21 — and opens it, three
+by three: that screen's nine. The key is a line in the account's own
+`hyprland.conf`, given to an account made before it when either Displays
+setting is changed, unless Super+Tab is already bound there. It goes
+through `alpymist` rather than naming the plugin's dispatcher, so a
+configuration read by a session that has not loaded the plugin has no
+error in it.
+
+Hyprland reads permissions once, when it starts. A session that began
+before the upgrade does not load the plugin, and says nothing; the key does
+nothing until the next login.

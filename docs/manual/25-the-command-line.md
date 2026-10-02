@@ -18,7 +18,7 @@ The one command for settings and for the system.
 | `alpymist channel [stable or dev]` | Shows or changes the release channel |
 | `alpymist guest [on or off]` | Shows or changes whether a virtual machine takes its graphics driver from the guest repository |
 | `alpymist open CATEGORY [ARGS]` | Opens something with the application chosen for it |
-| `alpymist displays …` | The screens: `list`, `set`, `save`, `apply`, `forget`, `workspace N`, `move N` |
+| `alpymist displays …` | The screens: `list`, `set`, `save`, `apply`, `forget`, `workspace N`, `move N`, `overview` |
 | `alpymist clipboard …` | `copy`, `cut`, `paste`, and the history: `list`, `restore`, `pin`, `unpin`, `forget`, `clear`, `start`, `stop` |
 | `alpymist wallpaper` | Puts the chosen wallpaper on the screen |
 | `alpymist autostart [--dry-run]` | Starts the programs that start at login |
