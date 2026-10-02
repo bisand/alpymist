@@ -10,9 +10,9 @@
 name = "Claude"
 description = "A Pro or Max subscription's 5-hour and weekly limits, as fresh as Claude Code's last use"
 exec = "alpymist-ai-provider claude"
-# Reading a file, which asks nobody: every minute, whatever Settings says of
-# how often a vendor is asked.
-refresh = 60
+# Reading a file, which asks nobody: every time the bar looks, whatever
+# Settings says of how often a vendor is asked.
+refresh = 10
 local = true
 enable = "alpymist-ai-provider claude-enable"
 disable = "alpymist-ai-provider claude-disable"

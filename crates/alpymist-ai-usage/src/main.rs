@@ -58,8 +58,9 @@ With no command, opens the popup under the bar; run it again to close it.
 const NAME: &str = "alpymist-ai-usage";
 
 /// How often the bar looks: whether anything is due, and whether what is
-/// kept changed under it, as after `refresh` or `enable` elsewhere.
-const LOOK_EVERY: Duration = Duration::from_secs(20);
+/// kept changed under it, as after `refresh` or `enable` elsewhere. No less
+/// often than a provider that reads this machine may be asked.
+const LOOK_EVERY: Duration = Duration::from_secs(10);
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

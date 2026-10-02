@@ -33,6 +33,10 @@ pub const DIRECTORY_ENV: &str = "ALPYMIST_AI_USAGE_DIR";
 /// The least a provider may be asked, whatever its file says: once a minute.
 pub const LEAST_REFRESH: i64 = 60;
 
+/// The least for one that says `local`, which reaches nobody: as often as
+/// the bar looks.
+pub const LEAST_LOCAL_REFRESH: i64 = 10;
+
 /// A secret a provider needs, kept in the keyring.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -152,7 +156,11 @@ impl Definition {
         }) {
             return Err("a credential's key is letters, digits and dashes".into());
         }
-        def.refresh = def.refresh.max(LEAST_REFRESH);
+        def.refresh = def.refresh.max(if def.local {
+            LEAST_LOCAL_REFRESH
+        } else {
+            LEAST_REFRESH
+        });
         Ok(def)
     }
 
@@ -204,7 +212,7 @@ pub fn discover_in(directories: &[PathBuf]) -> Vec<Definition> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Definition, LEAST_REFRESH};
+    use super::{Definition, LEAST_LOCAL_REFRESH, LEAST_REFRESH};
 
     #[test]
     fn a_definition_is_read_and_a_bad_one_is_refused() {
@@ -235,6 +243,13 @@ mod tests {
         assert_eq!(def.credentials[0].key, "api-key");
         assert!(!def.credentials[0].optional && !def.unofficial);
         assert_eq!(def.requires.unwrap().program, "tool");
+
+        let local = "name = \"x\"\ndescription = \"\"\nexec = \"x\"\nrefresh = 1\nlocal = true\n";
+        assert_eq!(
+            Definition::parse("x", local).unwrap().refresh,
+            LEAST_LOCAL_REFRESH,
+            "one that reads this machine, as often as the bar looks"
+        );
 
         let no_exec = "name = \"x\"\ndescription = \"\"\nexec = \" \"\n";
         assert!(Definition::parse("x", no_exec).is_err());

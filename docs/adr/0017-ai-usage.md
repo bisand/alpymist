@@ -216,3 +216,16 @@ shipped provider does, and `tests/definitions.rs` holds that: one that calls
 its vendor and says `local` would be asked every minute.
 
 The locked screen and the low battery still stop it, as they stop everything.
+
+## Addendum — 2026-10-02: and as often as the bar looks
+
+A minute was still slow. Claude Code's status line has the limits in its file
+within seconds of an answer, and the bar showed them up to eighty seconds
+later: a minute between askings, and twenty seconds between the bar's looks
+at whether one was due.
+
+A provider that says `local` may now be asked every ten seconds, and Claude's
+file says `refresh = 10`; the bar looks every ten seconds too. One that calls
+its vendor is still held to once a minute at the very least, and to Settings'
+*refresh every* above that. What this costs is a small program run and a file
+read every ten seconds while the screen is unlocked.
