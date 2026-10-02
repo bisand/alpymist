@@ -8,7 +8,11 @@ used.
 
 Settings › Sound has the output device and its volume, and the input device
 and its volume. *Automatic* leaves the choice of device to the system, which
-prefers what it rates best of what is connected.
+prefers what it rates best of what is connected. A dock's sound comes after
+the laptop's own speakers there: a dock cannot tell whether anything is
+plugged into its jack, and sound sent to an empty one is never heard. A
+device you choose, the dock's included, is remembered through restarts and
+used whenever it is connected.
 
 ```sh
 alpymist set sound.volume 60

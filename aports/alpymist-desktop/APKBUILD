@@ -252,6 +252,10 @@ package() {
 	# file.
 	install -Dm644 "$builddir"/desktop/hypr/hyprland-security.conf \
 		"$pkgdir"/usr/share/alpymist/hyprland-security.conf
+	# A dock's sound after the laptop's own when no device is chosen; see the
+	# file. Its own name, beside WirePlumber's files, so no package's clashes.
+	install -Dm644 "$builddir"/desktop/wireplumber/alpymist-docks.conf \
+		"$pkgdir"/usr/share/wireplumber/wireplumber.conf.d/alpymist-docks.conf
 	# Which windows float as dialogs, which hyprland-security.conf sources.
 	install -Dm644 "$builddir"/desktop/hypr/hyprland-windows.conf \
 		"$pkgdir"/usr/share/alpymist/hyprland-windows.conf

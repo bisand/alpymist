@@ -70,6 +70,7 @@ A new account gets them from `/etc/skel`.
 |---|---|
 | `/usr/share/alpymist/hyprland-security.conf` | What programs may do, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Delete</kbd>, and the services the desktop starts |
 | `/usr/share/alpymist/hyprland-windows.conf` | Which windows float as dialogs, and the keys that resize a window |
+| `/usr/share/wireplumber/wireplumber.conf.d/alpymist-docks.conf` | A dock's sound after the laptop's own, when no device is chosen |
 | `/usr/share/alpymist/waybar/` | The bar as shipped |
 | `/usr/share/alpymist/menu.d/` | Menu entries that packages add |
 | `/usr/share/alpymist/screensavers/` | The screensavers installed |
