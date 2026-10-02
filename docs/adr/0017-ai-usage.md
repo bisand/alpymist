@@ -229,3 +229,35 @@ file says `refresh = 10`; the bar looks every ten seconds too. One that calls
 its vendor is still held to once a minute at the very least, and to Settings'
 *refresh every* above that. What this costs is a small program run and a file
 read every ten seconds while the screen is unlocked.
+
+## Addendum — 2026-10-02: a status line for the account that has none
+
+The decision above says Alpymist's status line command "runs whatever status
+line was there before, so nothing on screen changes". For an account with no
+status line that meant Claude Code showed none, and the limits it was handed
+went to the bar and nowhere the person using it was looking.
+
+**Alpymist ships a status line, and an account without one has it.**
+`/usr/share/alpymist/claude-statusline.sh`, from this package: the account,
+the directory, git, the model, how full the context is, the 5-hour and
+weekly limits and the time, in the shape and the colours of the starship
+prompt beside it. It is bash and `jq`, which the package now depends on, and
+it asks nobody anything.
+
+- **A new account starts with it.** `/etc/skel` has a
+  `~/.claude/settings.json` that names it and holds nothing else, so it is
+  there before Claude Code is, however Claude Code is then installed.
+- **Turning the Claude provider on gives it to an account that had none**,
+  as the status line that was there: run after Alpymist's command, and left
+  in place when the provider is turned off. An account that turned the
+  provider on before this, and so has nothing kept, gets it too.
+- **A status line of the account's own is never replaced.** One already in
+  Claude Code's settings is kept and run, as before.
+
+What this changes of the above: something on screen does change now, for an
+account that had no status line. An account that wants none while the
+provider is on has no switch for that; it names a status line of its own
+that prints nothing. An existing account with the provider off and Claude
+Code installed is not touched, and has it by turning the provider on or by
+naming the script in its settings. And a new account has a `~/.claude`
+directory whether or not Claude Code is ever installed: one small file.

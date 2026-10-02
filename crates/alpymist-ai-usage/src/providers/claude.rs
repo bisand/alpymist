@@ -15,6 +15,12 @@
 //!   `~/.claude/settings.json` and takes it out again, the status line that
 //!   was there kept beside Alpymist's own settings meanwhile.
 //!
+//! An account with no status line of its own has Alpymist's, [`DEFAULT`]:
+//! a script in the prompt's colours, which `/etc/skel` names for a new
+//! account and turning this on gives to one that had none. It is a status
+//! line like any other, kept and run after this one, and left in place when
+//! this is turned off.
+//!
 //! What it cannot do: the figures are as fresh as the last time Claude Code
 //! ran on this account, and nothing is known before the first answer of a
 //! session. The login Claude Code keeps is never read: Anthropic's terms
@@ -27,6 +33,15 @@ use std::path::PathBuf;
 
 /// The status line command Claude Code is given.
 pub const COMMAND: &str = "alpymist-ai-provider claude-statusline";
+
+/// The status line Alpymist ships, for an account with none of its own.
+pub const DEFAULT: &str = "/usr/share/alpymist/claude-statusline.sh";
+
+/// [`DEFAULT`], as Claude Code's settings name a status line.
+#[must_use]
+pub fn default_status_line() -> Value {
+    json!({ "type": "command", "command": DEFAULT })
+}
 
 /// The windows Claude Code names, and what to call them.
 const WINDOWS: [(&str, &str); 3] = [
@@ -164,7 +179,9 @@ pub fn before_command(before: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{COMMAND, before_command, capture, disable, enable, report};
+    use super::{
+        COMMAND, DEFAULT, before_command, capture, default_status_line, disable, enable, report,
+    };
     use serde_json::{Value, json};
 
     /// The `rate_limits` of Claude Code's documented status line example.
@@ -235,5 +252,21 @@ mod tests {
         let mine = json!({ "statusLine": { "type": "command", "command": "mine" } }).to_string();
         assert!(disable(Some(&mine), None).unwrap().contains("mine"));
         assert!(enable(Some("[1, 2]")).is_err());
+    }
+
+    /// An account with none is given Alpymist's as the one that was there:
+    /// it is run after this, and is what turning this off leaves.
+    #[test]
+    fn the_default_is_a_status_line_like_any_other() {
+        let (on, before) = enable(None).unwrap();
+        assert_eq!(before, None);
+        let before = default_status_line();
+        assert_eq!(
+            before_command(&before.to_string()).as_deref(),
+            Some(DEFAULT)
+        );
+        let off = disable(Some(&on), Some(before)).unwrap();
+        let root: Value = serde_json::from_str(&off).unwrap();
+        assert_eq!(root["statusLine"], default_status_line());
     }
 }

@@ -1,0 +1,6 @@
+{
+  "statusLine": {
+    "command": "/usr/share/alpymist/claude-statusline.sh",
+    "type": "command"
+  }
+}

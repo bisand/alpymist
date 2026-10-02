@@ -103,6 +103,46 @@ fn the_package_installs_every_provider_file() {
 /// An installer is run by `sh -c`, and a line that pipes into another
 /// shell needs that shell to be there: Alpine has no bash of its own, and
 /// Claude Code's installer is written in it.
+/// The status line an account starts with is three things that must agree:
+/// what `/etc/skel` names, what turning the Claude provider on gives, and
+/// where the package puts the script — with what the script runs to hand.
+#[test]
+fn the_status_line_new_accounts_start_with_is_the_one_the_package_installs() {
+    use alpymist_ai_usage::providers::claude;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let skel =
+        std::fs::read_to_string(root.join("desktop/skel/desktop/.claude/settings.json")).unwrap();
+    let skel: serde_json::Value = serde_json::from_str(&skel).unwrap();
+    assert_eq!(skel["statusLine"], claude::default_status_line());
+    assert_eq!(
+        skel.as_object().map(serde_json::Map::len),
+        Some(1),
+        "the rest of Claude Code's settings are the account's to make"
+    );
+
+    let script =
+        std::fs::read_to_string(root.join("desktop/ai-usage/claude-statusline.sh")).unwrap();
+    assert!(script.starts_with("#!/bin/bash\n"));
+    let apkbuild = include_str!("../../../aports/alpymist-ai-usage/APKBUILD");
+    assert!(
+        apkbuild.contains(&format!("\"$pkgdir\"{}", claude::DEFAULT)),
+        "the package does not install {}",
+        claude::DEFAULT
+    );
+    let depends = apkbuild
+        .lines()
+        .find_map(|l| l.strip_prefix("depends=\""))
+        .unwrap();
+    for needs in ["bash", "jq"] {
+        assert!(
+            depends
+                .split_whitespace()
+                .any(|d| d.trim_end_matches('"') == needs),
+            "the status line runs {needs}, and the package does not depend on it"
+        );
+    }
+}
+
 #[test]
 fn every_installer_has_the_shell_it_is_piped_into() {
     let apkbuild = include_str!("../../../aports/alpymist-ai-usage/APKBUILD");

@@ -85,8 +85,9 @@ fn claude_report() -> Result<Report, String> {
 }
 
 /// Claude Code's status line command: keep the limits, then be the status
-/// line that was there before. Never fails, and never prints anything of its
-/// own: a status line that breaks is worse than a figure that is late.
+/// line that was there before, which for an account that had none is
+/// Alpymist's. Never fails, and never prints anything of its own: a status
+/// line that breaks is worse than a figure that is late.
 fn statusline() {
     let mut document = String::new();
     let _ = std::io::stdin().read_to_string(&mut document);
@@ -100,10 +101,15 @@ fn statusline() {
             let _ = std::fs::rename(&tmp, &path);
         }
     }
-    let Some(command) = claude::before_path()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|before| claude::before_command(&before))
-    else {
+    // The one that was there; with none kept, as on an account that turned
+    // this on before Alpymist had a status line to give, Alpymist's.
+    let command = match claude::before_path().and_then(|p| std::fs::read_to_string(p).ok()) {
+        Some(before) => claude::before_command(&before),
+        None => std::path::Path::new(claude::DEFAULT)
+            .exists()
+            .then(|| claude::DEFAULT.to_owned()),
+    };
+    let Some(command) = command else {
         return;
     };
     let Ok(mut child) = Command::new("sh")
@@ -123,6 +129,13 @@ fn claude_enable() -> Result<(), String> {
     let path = claude::settings_path().ok_or("no home directory")?;
     let settings = std::fs::read_to_string(&path).ok();
     let (text, before) = claude::enable(settings.as_deref())?;
+    // An account with no status line has Alpymist's from here on. Not when
+    // one is already kept: turned on twice, the settings name this command
+    // and say nothing of what was there the first time.
+    let kept = claude::before_path().is_some_and(|p| p.exists());
+    let before = before.or_else(|| {
+        (!kept && std::path::Path::new(claude::DEFAULT).exists()).then(claude::default_status_line)
+    });
     if let (Some(before), Some(keep)) = (before, claude::before_path()) {
         if let Some(dir) = keep.parent() {
             std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;

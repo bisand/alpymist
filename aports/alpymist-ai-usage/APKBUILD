@@ -18,10 +18,11 @@ license="MIT OR Apache-2.0"
 # instead, since its installer cannot add packages: libgcc, libstdc++ and
 # ripgrep, as Anthropic's documentation asks of Alpine, and bash, which that
 # installer is written in and Alpine does not otherwise have.
+# jq is the status line's, claude-statusline.sh, which is bash too.
 # libxkbcommon is alpymist-widget's, which the bar's line comes from and the
 # popup will be drawn with.
 makedepends="cargo libxkbcommon-dev"
-depends="bash curl font-nerd-fonts-symbols libgcc libsecret libstdc++ ripgrep"
+depends="bash curl font-nerd-fonts-symbols jq libgcc libsecret libstdc++ ripgrep"
 options="!check"  # the test suite runs in CI, not in the package build
 source=""
 # The workspace: a copy of this package's own, or the one copy a dev build
@@ -57,6 +58,10 @@ package() {
 	# Every provider there is a file for: a new one is not forgotten here.
 	install -Dm644 -t "$pkgdir"/usr/share/alpymist/ai-usage \
 		"$builddir"/desktop/ai-usage/*.toml
+	# Claude Code's status line for an account with none of its own, which
+	# alpymist-desktop's /etc/skel names.
+	install -Dm755 "$builddir"/desktop/ai-usage/claude-statusline.sh \
+		"$pkgdir"/usr/share/alpymist/claude-statusline.sh
 	# The AI menu, and the tools' entries under Install and Remove.
 	install -Dm644 "$builddir"/desktop/ai-usage/menu/ai-usage.toml \
 		"$pkgdir"/usr/share/alpymist/menu.d/ai-usage.toml
