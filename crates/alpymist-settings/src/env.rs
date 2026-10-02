@@ -39,7 +39,7 @@ impl Env {
         Self {
             root: PathBuf::from("/"),
             config,
-            is_root: uid == Some(0),
+            is_root: uid == 0,
             hyprland: std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE")
                 .is_some_and(|s| !s.is_empty()),
             user: account(uid),
@@ -88,22 +88,17 @@ impl Env {
     }
 }
 
-/// This process's user id, from `/proc`.
-fn uid() -> Option<u32> {
-    std::fs::read_to_string("/proc/self/status")
-        .ok()?
-        .lines()
-        .find_map(|l| l.strip_prefix("Uid:"))?
-        .split_whitespace()
-        .next()?
-        .parse()
-        .ok()
+/// This process's user id, asked of the kernel and not read from `/proc`:
+/// the installer runs `alpymist guest on` in the new system before anything
+/// is mounted there, and taking root for someone else sent it to pkexec.
+fn uid() -> u32 {
+    rustix::process::getuid().as_raw()
 }
 
 /// Who a setting about an account is for. As root, only who pkexec or doas
 /// says ran it: both set that themselves, from the caller's real identity,
 /// and clear anything the caller set.
-fn account(uid: Option<u32>) -> Option<String> {
+fn account(uid: u32) -> Option<String> {
     let passwd = std::fs::read_to_string("/etc/passwd").ok()?;
     let name_of = |uid: &str| {
         passwd.lines().find_map(|l| {
@@ -112,7 +107,7 @@ fn account(uid: Option<u32>) -> Option<String> {
             (fields.nth(1)? == uid).then(|| name.to_owned())
         })
     };
-    match uid? {
+    match uid {
         0 => std::env::var("PKEXEC_UID")
             .ok()
             .and_then(|u| name_of(&u))
@@ -126,7 +121,7 @@ fn run(argv: &[&str]) -> Result<String, String> {
     let (program, rest) = argv.split_first().ok_or("nothing to run")?;
     // alpymist-power's helper is reached through pkexec, or its password
     // dialog, exactly as the power popup reaches it; root runs it directly.
-    if *program == alpymist_power::actions::HELPER && uid() != Some(0) {
+    if *program == alpymist_power::actions::HELPER && uid() != 0 {
         return alpymist_power::actions::helper(rest).map(|()| String::new());
     }
     let output = Command::new(program)

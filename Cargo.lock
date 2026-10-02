@@ -280,6 +280,7 @@ dependencies = [
  "alpymist-screensaver",
  "alpymist-theme",
  "alpymist-wifi",
+ "rustix 1.1.5",
  "serde_json",
  "toml",
 ]
