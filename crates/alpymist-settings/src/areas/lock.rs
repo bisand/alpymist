@@ -33,25 +33,35 @@ const NEW_COMMAND: &str = r#"lock = "alpymist-lock -f""#;
 /// # Errors
 /// A file could not be written.
 pub fn prepare_session(env: &Env) -> Result<(), String> {
-    let key = put_right(env, HYPRLAND, OLD_KEY, NEW_KEY);
-    let command = put_right(env, super::power::CONFIG, OLD_COMMAND, NEW_COMMAND);
+    let key = put_right(env, HYPRLAND, OLD_KEY, NEW_KEY).map(|changed| {
+        // A Hyprland already running does not read the file again by itself
+        // once it has been replaced, and would keep the key that does
+        // nothing until the next login. At an upgrade nothing in the
+        // environment says which Hyprland is the account's, so it is asked
+        // for by number; before a login there is none, and this fails, which
+        // is as it should be.
+        if changed {
+            let _ = env.run(&["hyprctl", "-i", "0", "reload"]);
+        }
+    });
+    let command = put_right(env, super::power::CONFIG, OLD_COMMAND, NEW_COMMAND).map(drop);
     key.and(command)
 }
 
 /// Replace each line of the account's `file` that is `old` with `new`,
-/// keeping the file as it was beside it. A file that is missing, or has no
-/// such line, is left alone.
-fn put_right(env: &Env, file: &str, old: &str, new: &str) -> Result<(), String> {
+/// keeping the file as it was beside it, and say whether any was. A file
+/// that is missing, or has no such line, is left alone.
+fn put_right(env: &Env, file: &str, old: &str, new: &str) -> Result<bool, String> {
     let path = env.account(file);
     let Ok(text) = std::fs::read_to_string(&path) else {
-        return Ok(());
+        return Ok(false);
     };
     let Some(right) = with_line(&text, old, new) else {
-        return Ok(());
+        return Ok(false);
     };
     let kept = generated::beside(&path, KEPT);
     std::fs::write(&kept, &text).map_err(|e| format!("{}: {e}", kept.display()))?;
-    generated::replace(&path, &right)
+    generated::replace(&path, &right).map(|()| true)
 }
 
 /// `text` with each line that is `old` now `new`; `None` when there is none.
@@ -73,11 +83,10 @@ mod tests {
     use crate::env::Env;
     use std::sync::Mutex;
 
-    fn account(name: &str) -> (std::path::PathBuf, Env) {
-        static RAN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    fn account(name: &str, ran: &'static Mutex<Vec<String>>) -> (std::path::PathBuf, Env) {
         let dir = std::env::temp_dir().join(format!("alpymist-lock-{name}-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
-        let env = Env::test(&dir, false, &RAN);
+        let env = Env::test(&dir, false, ran);
         for file in [HYPRLAND, CONFIG] {
             std::fs::create_dir_all(env.account(file).parent().unwrap()).unwrap();
         }
@@ -86,7 +95,8 @@ mod tests {
 
     #[test]
     fn the_swaylock_every_account_started_with_becomes_alpymists_lock() {
-        let (dir, env) = account("old");
+        static RAN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+        let (dir, env) = account("old", &RAN);
         let conf = "bind = SUPER, F, fullscreen\nbind = SUPER, L, exec, swaylock -f -c 0b121e\n";
         let power = "[actions]\nlid = \"suspend\"\n\n[commands]\n\
                      lock = \"swaylock -f -c 0b121e\"\nmenu = \"alpymist-menu system\"\n";
@@ -114,12 +124,15 @@ mod tests {
         prepare_session(&env).unwrap();
         let again = format!("{}.bak-lock-2", env.account(HYPRLAND).display());
         assert!(!std::path::Path::new(&again).exists());
+        // And a Hyprland already running is told of its key, the once.
+        assert_eq!(*RAN.lock().unwrap(), ["hyprctl -i 0 reload"]);
         std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
     fn a_lock_somebody_chose_is_theirs_and_a_missing_file_is_no_error() {
-        let (dir, env) = account("own");
+        static RAN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+        let (dir, env) = account("own", &RAN);
         // swaylock still, but not as Alpymist wrote it.
         let conf = "bind = SUPER, L, exec, swaylock -f -c 000000\n";
         std::fs::write(env.account(HYPRLAND), conf).unwrap();
@@ -129,6 +142,7 @@ mod tests {
             conf
         );
         assert!(!env.account(CONFIG).exists(), "no power.toml is made");
+        assert!(RAN.lock().unwrap().is_empty(), "nothing changed");
         std::fs::remove_dir_all(&dir).ok();
     }
 }

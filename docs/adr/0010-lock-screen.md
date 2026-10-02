@@ -204,6 +204,7 @@ only when a Displays setting was changed, and nothing put `power.toml` right.
 `alpymist session prepare`, which runs before every session and for each
 account when the desktop package is upgraded, now changes both lines where
 they are still exactly what Alpymist wrote, and keeps each file as it was
-beside it as `.bak-lock`. Any other lock command, swaylock with other
-arguments included, is somebody's choice and is left alone, as `power.toml`
-accepting any command always meant.
+beside it as `.bak-lock`. A Hyprland already running is told to read its
+configuration again, since it does not notice the file replaced. Any other
+lock command, swaylock with other arguments included, is somebody's choice
+and is left alone, as `power.toml` accepting any command always meant.
