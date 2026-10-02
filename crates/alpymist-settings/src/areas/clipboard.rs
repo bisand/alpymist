@@ -200,7 +200,7 @@ fn take_over(env: &Env) -> Vec<String> {
 
 /// A bind's modifiers and key, as `SHIFT SUPER|V`: the same whatever order
 /// and case they were written in.
-fn chord(line: &str) -> Option<String> {
+pub(super) fn chord(line: &str) -> Option<String> {
     let rest = line.trim().strip_prefix("bind")?;
     let rest = rest.trim_start_matches(|c: char| c.is_ascii_alphabetic());
     let rest = rest.trim_start().strip_prefix('=')?;

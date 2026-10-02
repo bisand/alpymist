@@ -37,6 +37,11 @@ Each screen has its own workspaces 1 to 9. <kbd>Super</kbd>+<kbd>1</kbd> to
 <kbd>9</kbd> switch between the workspaces of the screen the pointer is on,
 and each screen's bar shows its own.
 
+<kbd>Super</kbd>+<kbd>Shift</kbd> and an arrow take the window with the focus
+to the screen on that side, onto the workspace that screen is showing. An
+account made before these keys is given them the next time either setting
+below is changed, unless it already uses one of the four for something else.
+
 When a screen goes away its workspaces move to the screens that are left, and
 when it comes back they go home.
 

@@ -9,7 +9,12 @@
 //! own `workspace` binds in its `hyprland.conf`; changing either setting takes
 //! those lines over, as the theme does (ADR 0007), and keeps the file as it
 //! was beside it.
+//!
+//! Super+Shift and an arrow take the window to the screen on that side. An
+//! account made before those keys is given them the same way, after its
+//! Super+arrow lines, unless it has put something of its own on one of them.
 
+use super::clipboard::chord;
 use crate::env::Env;
 use crate::model::{Applies, Kind, Scope, Setting, Value};
 use alpymist_displays::layout::{FILE, Layouts};
@@ -28,6 +33,28 @@ pub const KEPT: &str = ".bak-workspaces";
 const OLD_LOCK: &str = "bind = SUPER, L, exec, swaylock -f -c 0b121e";
 /// Super+L as it is now.
 const NEW_LOCK: &str = "bind = SUPER, L, exec, alpymist-lock";
+/// The last of the Super+arrow lines every account started with, which the
+/// keys that take a window to another screen go after.
+const FOCUS_DOWN: &str = "bind = SUPER, down, movefocus, d";
+/// Super+Shift and an arrow: each chord, and its line.
+const SCREEN_KEYS: [(&str, &str); 4] = [
+    (
+        "SHIFT SUPER|LEFT",
+        "bind = SUPER SHIFT, left, movewindow, mon:l",
+    ),
+    (
+        "SHIFT SUPER|RIGHT",
+        "bind = SUPER SHIFT, right, movewindow, mon:r",
+    ),
+    (
+        "SHIFT SUPER|UP",
+        "bind = SUPER SHIFT, up, movewindow, mon:u",
+    ),
+    (
+        "SHIFT SUPER|DOWN",
+        "bind = SUPER SHIFT, down, movewindow, mon:d",
+    ),
+];
 
 /// The settings.
 pub fn settings() -> Vec<Setting> {
@@ -95,15 +122,29 @@ pub fn live(env: &Env) -> Result<(), String> {
 
 /// Give an older account's `hyprland.conf` the keys that go through
 /// `alpymist displays`, where it still has Hyprland's own as every account
-/// started with. Says what it did.
+/// started with, and the ones that take a window to another screen, where it
+/// has none. Says what it did.
 fn take_over(env: &Env) -> Vec<String> {
     let path = env.account(HYPRLAND);
     let Ok(text) = std::fs::read_to_string(&path) else {
         return Vec::new();
     };
-    let Some(new) = with_keys(&text) else {
+    let mut what = Vec::new();
+    let mut new = text.clone();
+    if let Some(keys) = with_keys(&new) {
+        new = keys;
+        what.push(
+            "Super+1 to Super+9 now follow the screen the pointer is on, and Super+L \
+             locks with Alpymist's lock",
+        );
+    }
+    if let Some(keys) = with_screen_keys(&new) {
+        new = keys;
+        what.push("Super+Shift and an arrow now take the window to the screen on that side");
+    }
+    if what.is_empty() {
         return Vec::new();
-    };
+    }
     let kept = crate::generated::beside(&path, KEPT);
     if std::fs::write(&kept, &text).is_err() || crate::generated::replace(&path, &new).is_err() {
         return Vec::new();
@@ -112,8 +153,8 @@ fn take_over(env: &Env) -> Vec<String> {
         let _ = env.run(&["hyprctl", "reload"]);
     }
     vec![format!(
-        "Super+1 to Super+9 now follow the screen the pointer is on, and Super+L \
-         locks with Alpymist's lock ({} as it was).",
+        "{} ({} as it was).",
+        what.join(". "),
         kept.display()
     )]
 }
@@ -151,9 +192,35 @@ fn with_keys(conf: &str) -> Option<String> {
     changed.then_some(out)
 }
 
+/// `hyprland.conf` with Super+Shift and an arrow taking the window to the
+/// screen on that side, after the Super+arrow lines every account started
+/// with; `None` when those are not as shipped, or any of the four is already
+/// bound, by the account or by having been given them before.
+fn with_screen_keys(conf: &str) -> Option<String> {
+    let lines: Vec<&str> = conf.lines().collect();
+    let at = lines.iter().position(|l| l.trim() == FOCUS_DOWN)?;
+    if lines
+        .iter()
+        .filter_map(|l| chord(l))
+        .any(|c| SCREEN_KEYS.iter().any(|(k, _)| *k == c))
+    {
+        return None;
+    }
+    let mut out = String::with_capacity(conf.len() + 200);
+    for (i, line) in lines.iter().enumerate() {
+        let _ = writeln!(out, "{line}");
+        if i == at {
+            for (_, key) in SCREEN_KEYS {
+                let _ = writeln!(out, "{key}");
+            }
+        }
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{LID, WORKSPACES, get, set, settings, with_keys};
+    use super::{FOCUS_DOWN, LID, WORKSPACES, get, set, settings, with_keys, with_screen_keys};
     use crate::env::Env;
     use crate::model::Value;
     use std::sync::Mutex;
@@ -199,5 +266,39 @@ mod tests {
             Some("bind = SUPER, L, exec, alpymist-lock\n"),
             "swaylock is gone"
         );
+    }
+
+    #[test]
+    fn an_older_account_is_given_the_screen_keys_once_and_its_own_kept() {
+        let old = format!("{FOCUS_DOWN}\nbind = SUPER, Q, killactive\n");
+        let new = with_screen_keys(&old).unwrap();
+        assert_eq!(
+            new,
+            format!(
+                "{FOCUS_DOWN}\n\
+                 bind = SUPER SHIFT, left, movewindow, mon:l\n\
+                 bind = SUPER SHIFT, right, movewindow, mon:r\n\
+                 bind = SUPER SHIFT, up, movewindow, mon:u\n\
+                 bind = SUPER SHIFT, down, movewindow, mon:d\n\
+                 bind = SUPER, Q, killactive\n"
+            )
+        );
+        assert_eq!(with_screen_keys(&new), None, "once is enough");
+        // One of the four the account's own: nothing is touched.
+        let own = format!("{FOCUS_DOWN}\nbind = SHIFT SUPER, Left, exec, mine\n");
+        assert_eq!(with_screen_keys(&own), None);
+        // Its Super+arrow lines changed by hand: there is nowhere to put them.
+        assert_eq!(with_screen_keys("bind = SUPER, down, movefocus, u\n"), None);
+    }
+
+    #[test]
+    fn the_skeleton_already_has_every_key_an_older_account_is_given() {
+        let skel = include_str!("../../../../desktop/skel/desktop/.config/hypr/hyprland.conf");
+        assert!(skel.contains(FOCUS_DOWN));
+        for (_, key) in super::SCREEN_KEYS {
+            assert!(skel.lines().any(|l| l == key), "{key}");
+        }
+        assert_eq!(with_keys(skel), None);
+        assert_eq!(with_screen_keys(skel), None);
     }
 }
