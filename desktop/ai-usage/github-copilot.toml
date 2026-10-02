@@ -8,5 +8,5 @@
 name = "GitHub Copilot"
 description = "The month's premium requests, what is left of them, and when they start again"
 exec = "alpymist-ai-provider github-copilot"
-refresh = 900
+refresh = 300
 unofficial = true
