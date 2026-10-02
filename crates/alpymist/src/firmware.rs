@@ -347,6 +347,24 @@ fn read_all(reader: impl BufRead, mut each: impl FnMut(Missing) -> bool) {
     }
 }
 
+/// What drivers have asked for and not found since the boot, for `alpymist
+/// report`: `None` where the kernel log may not be read, which on a system
+/// that restricts it is anyone but root.
+#[must_use]
+pub fn missing_so_far() -> Option<BTreeSet<Missing>> {
+    let kmsg = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(O_NONBLOCK)
+        .open(KMSG)
+        .ok()?;
+    let mut missing = BTreeSet::new();
+    read_all(BufReader::new(kmsg), |m| {
+        missing.insert(m);
+        true
+    });
+    Some(missing)
+}
+
 /// One pass over the kernel log so far.
 ///
 /// # Errors

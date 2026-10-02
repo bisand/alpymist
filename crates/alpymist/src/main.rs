@@ -12,6 +12,7 @@ mod displays;
 mod firmware;
 mod guest;
 mod launch;
+mod report;
 mod root;
 mod secrets;
 mod settings;
@@ -109,6 +110,18 @@ enum Command {
         /// Output format.
         #[arg(long, value_enum, default_value_t = Format::Human)]
         format: Format,
+    },
+    /// Describe this machine's hardware and the drivers that have it, for
+    /// telling Alpymist's developers what does not work. Prints it, and
+    /// sends nothing: it holds no serial number, address or name.
+    Report {
+        /// Write the report to this file and do not print it.
+        #[arg(long, value_name = "FILE")]
+        save: Option<PathBuf>,
+        /// Show the report, then offer to open a GitHub issue holding it in
+        /// the browser. Nothing is posted until it is submitted there.
+        #[arg(long)]
+        issue: bool,
     },
     /// Start a desktop session: prepare the files it reads, then run it.
     /// greetd's configuration runs this.
@@ -250,6 +263,10 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     if let Command::Displays { action } = &cli.command {
         return displays::run(action);
     }
+    // What the machine is made of: none of the registry either.
+    if let Command::Report { save, issue } = &cli.command {
+        return report::run(save.as_deref(), *issue);
+    }
     if let Command::Open {
         print,
         category,
@@ -297,6 +314,7 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Open { .. }
         | Command::Clipboard { .. }
         | Command::Displays { .. }
+        | Command::Report { .. }
         | Command::Watchdog { .. } => {
             unreachable!("handled above")
         }

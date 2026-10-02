@@ -15,6 +15,7 @@ The one command for settings and for the system.
 | `alpymist set ID VALUE` | Changes a setting. A system setting asks for an administrator's password. `--force` replaces a generated file that was edited by hand. |
 | `alpymist reset ID` | Puts a setting back to its default |
 | `alpymist probe` | Says how well this machine can run Hyprland, and why |
+| `alpymist report [--save FILE] [--issue]` | Prints what this machine is made of and which drivers have it, and sends nothing. `--save` writes it to a file; `--issue` offers to open it as a GitHub issue in the browser. See [Troubleshooting](27-troubleshooting.md). |
 | `alpymist channel [stable or dev]` | Shows or changes the release channel |
 | `alpymist guest [on or off]` | Shows or changes whether a virtual machine takes its graphics driver from the guest repository |
 | `alpymist open CATEGORY [ARGS]` | Opens something with the application chosen for it |

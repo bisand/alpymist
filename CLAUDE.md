@@ -78,6 +78,16 @@ no root, no listening socket, no configuration. Anything that needs root, or
 holds secrets, or is the thing itself and not a watch over something, is not
 a watch. See [ADR 0019](docs/adr/0019-watchdog.md).
 
+**A hardware report is run by hand and names nobody.** `alpymist report`
+prints, `--save` writes a file, `--issue` asks and opens the browser; nothing
+in the installer, a service or the session runs it, and nothing posts. What
+goes in is decided in `crates/alpymist-hwprobe/src/report.rs`: devices by
+their makers' numbers and never the names they announce, a network card by
+kind and never by name, no serial, address, host or account name. Its test
+builds a machine holding each of those and fails if one comes out; a new
+section means adding what it could leak to that test. See
+[ADR 0020](docs/adr/0020-hardware-reports.md).
+
 **The manual's "Every setting" page is made, not written.**
 `docs/manual/26-every-setting.md` is what `crates/alpymist/tests/every_setting.rs`
 makes from `alpymist list --json`, and that test fails when the two differ. A

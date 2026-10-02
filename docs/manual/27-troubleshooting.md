@@ -138,6 +138,36 @@ says:
 grim -g "$(slurp)" ~/test.png
 ```
 
+## Something in the machine does not work
+
+A Wi-Fi card that is not found, a touchpad that does nothing: tell us, and
+the next release may have it. This prints what the machine is made of and
+which driver has each part:
+
+```sh
+alpymist report
+```
+
+It sends nothing. What it prints has the make and model, the devices by
+their makers' numbers, the drivers, and the firmware that was asked for and
+not found. It has no serial number, no network address, no host name and no
+account name. To send it:
+
+```sh
+alpymist report --issue
+```
+
+shows the report, asks, and then opens the browser at a new issue on GitHub
+with the report filled in. Say there what does not work, and submit it;
+until you do, nothing has left the machine. An issue is public, and needs a
+GitHub account.
+
+On a machine with no network, `alpymist report --save report.txt` writes it
+to a file to carry to one that has. The live image has the command too, so
+a machine that cannot be installed to can still be reported: save onto the
+stick. `doas alpymist report --save report.txt` adds the firmware the kernel
+log names, which only root may read.
+
 ## Starting over with one program's settings
 
 Each program's settings are one file or one directory under `~/.config`.

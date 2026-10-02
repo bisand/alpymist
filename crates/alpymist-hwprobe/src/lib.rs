@@ -6,6 +6,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod report;
+
 use alpymist_core::{Capabilities, Error, GpuDevice, Result, Virtualisation};
 use std::fs;
 use std::path::Path;
