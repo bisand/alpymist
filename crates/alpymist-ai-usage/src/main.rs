@@ -29,8 +29,8 @@ use alpymist_ai_usage::store::{self, Kept};
 use alpymist_ai_usage::{run, secrets, when};
 use std::io::{BufRead as _, IsTerminal as _, Write as _};
 use std::os::unix::net::UnixListener;
-use std::path::PathBuf;
-use std::process::{Command, ExitCode};
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitCode, Stdio};
 use std::time::Duration;
 
 const USAGE: &str = "\
@@ -429,10 +429,46 @@ fn run_shown(line: &str) -> Result<bool, String> {
     }
 }
 
+/// Whether a program was stopped for an instruction the processor does not
+/// have: the kernel's SIGILL, or the 132 a shell makes of it.
+fn illegal_instruction(status: std::process::ExitStatus) -> bool {
+    use std::os::unix::process::ExitStatusExt as _;
+    status.signal() == Some(4) || status.code() == Some(132)
+}
+
+/// What to say of a tool that cannot run on this processor. Vendors build
+/// for processors newer than some Alpymist runs on, and what the shell says
+/// of it, "illegal instruction", names neither the cause nor whose it is.
+fn too_old_for(about: &str) -> String {
+    format!(
+        "{about} is built for a newer processor than this machine has, and cannot run \
+         here. That is its vendor's build, and nothing on this machine can change it."
+    )
+}
+
+/// Whether the tool at `path` is there and cannot run on this processor.
+fn cannot_run_here(path: &Path) -> bool {
+    Command::new(path)
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(illegal_instruction)
+}
+
 /// Install a provider's vendor's tool, its vendor's way.
 fn install_tool(requires: &definition::Requires) -> Result<(), String> {
     println!("Its vendor's installer is:");
-    match run_shown(&requires.install) {
+    let ran = run_shown(&requires.install);
+    // An installer that runs what it has just downloaded fails on a
+    // processor too old for it, and may leave the program behind.
+    if !matches!(ran, Ok(false))
+        && tool_path(&requires.program).is_some_and(|path| cannot_run_here(&path))
+    {
+        return Err(too_old_for(&requires.about));
+    }
+    match ran {
         Ok(true) if installed(&requires.program) => Ok(()),
         Ok(true) | Err(_) => Err(format!("{} did not install", requires.program)),
         Ok(false) => Err(format!("{} was not installed", requires.program)),
@@ -452,7 +488,6 @@ fn tool_of(id: &str) -> Result<(Definition, definition::Requires), String> {
 /// Start a provider's vendor's tool here, in this terminal, offering to
 /// install it first where it is not there.
 fn tool_run(id: &str) -> Result<(), String> {
-    use std::os::unix::process::CommandExt as _;
     let (_, requires) = tool_of(id)?;
     if !installed(&requires.program) {
         println!("{} is not installed.", requires.about);
@@ -461,10 +496,17 @@ fn tool_run(id: &str) -> Result<(), String> {
     }
     let path = tool_path(&requires.program)
         .ok_or_else(|| format!("{} is not where it was installed", requires.program))?;
-    let failed = Command::new(&path)
+    // Waited for and not become, so that what a too-old processor gets is a
+    // sentence and not the shell's "illegal instruction".
+    let status = Command::new(&path)
         .env("PATH", path_with_local_bin())
-        .exec();
-    Err(format!("{}: {failed}", path.display()))
+        .status()
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    if illegal_instruction(status) {
+        return Err(too_old_for(&requires.about));
+    }
+    // Its own answer is this one's.
+    std::process::exit(status.code().unwrap_or(1));
 }
 
 /// Install a provider's vendor's tool, or run its installer again, which
