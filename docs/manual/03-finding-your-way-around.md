@@ -38,6 +38,7 @@ the pointer has the focus, and its border is drawn in the accent colour.
 |---|---|
 | <kbd>Super</kbd>+<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Moves the focus to the window in that direction. |
 | <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Moves the window that way among the others, and from the edge of a screen on to the next. |
+| <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Takes it straight to the screen on that side, floating or not. |
 | <kbd>Super</kbd>+<kbd>F</kbd> | Makes the window fill the screen, and back. |
 | <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> | Floats the window above the tiled ones, and back. |
 | <kbd>Super</kbd>+<kbd>W</kbd> | Closes it. |

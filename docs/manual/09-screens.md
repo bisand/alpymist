@@ -44,6 +44,10 @@ is given them the next time either setting below is changed, unless it already
 uses one of the four for something else. One given them when they only took a
 window to another screen has them put right when it next logs in.
 
+<kbd>Super</kbd>+<kbd>Alt</kbd> and an arrow take the window straight to the
+screen on that side, floating or not, in one press, however many windows are
+between it and the edge. Every account has these from the package.
+
 <kbd>Super</kbd>+<kbd>Tab</kbd> shows the nine workspaces of the screen the
 pointer is on, on that screen; move the pointer to another screen and press it
 again for that one's. An account made before the key is given it the same way,
