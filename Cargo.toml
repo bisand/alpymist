@@ -26,6 +26,7 @@ members = [
     "crates/alpymist-thunderbolt",
     "crates/alpymist-ui",
     "crates/alpymist-wallpaper",
+    "crates/alpymist-watchdog",
     "crates/alpymist-widget",
     "crates/alpymist-wifi",
     "crates/alpymist-hwprobe",
@@ -56,6 +57,7 @@ alpymist-screensaver = { path = "crates/alpymist-screensaver", default-features 
 alpymist-settings = { path = "crates/alpymist-settings" }
 alpymist-theme = { path = "crates/alpymist-theme" }
 alpymist-ui = { path = "crates/alpymist-ui" }
+alpymist-watchdog = { path = "crates/alpymist-watchdog" }
 alpymist-widget = { path = "crates/alpymist-widget" }
 alpymist-wifi = { path = "crates/alpymist-wifi", default-features = false }
 clap = { version = "4", features = ["derive"] }

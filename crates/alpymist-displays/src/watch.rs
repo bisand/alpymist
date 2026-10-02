@@ -9,11 +9,13 @@
 use crate::screen;
 use std::io::{BufRead, BufReader, ErrorKind};
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// How long screens must have stopped arriving.
 const SETTLE: Duration = Duration::from_millis(700);
+/// How long after Hyprland stops telling of events it is asked again.
+const RETRY: Duration = Duration::from_secs(1);
 
 /// Whether an event line is about a screen coming or going.
 #[must_use]
@@ -38,6 +40,14 @@ pub fn socket() -> Option<PathBuf> {
     )
 }
 
+/// Hyprland's event socket, opened to be read a line at a time and to give
+/// up waiting after [`SETTLE`].
+fn listen(path: &Path) -> std::io::Result<BufReader<UnixStream>> {
+    let stream = UnixStream::connect(path)?;
+    stream.set_read_timeout(Some(SETTLE))?;
+    Ok(BufReader::new(stream))
+}
+
 /// Put the right layout in place now, and again whenever the screens change,
 /// until Hyprland ends.
 ///
@@ -45,19 +55,25 @@ pub fn socket() -> Option<PathBuf> {
 /// There is no Hyprland to follow.
 pub fn run() -> Result<(), String> {
     let path = socket().ok_or("not in a Hyprland session")?;
-    let stream = UnixStream::connect(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    stream
-        .set_read_timeout(Some(SETTLE))
-        .map_err(|e| e.to_string())?;
+    let mut reader = listen(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut laid_out = settle(None);
-    let mut reader = BufReader::new(stream);
     let mut pending = false;
     let mut line = String::new();
     loop {
         line.clear();
         match reader.read_line(&mut line) {
-            // Hyprland has gone, and the session with it.
-            Ok(0) => return Ok(()),
+            // Hyprland has gone, and the session with it — or it has only
+            // stopped telling this listener, as it does one that falls
+            // behind, and can be asked again. What the screens did meanwhile
+            // went unheard, so they are looked at afresh.
+            Ok(0) => {
+                std::thread::sleep(RETRY);
+                let Ok(again) = listen(&path) else {
+                    return Ok(());
+                };
+                reader = again;
+                pending = true;
+            }
             Ok(_) => pending |= screens_changed(line.trim_end()),
             Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {
                 if pending {

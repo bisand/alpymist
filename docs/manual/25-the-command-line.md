@@ -22,10 +22,12 @@ The one command for settings and for the system.
 | `alpymist clipboard …` | `copy`, `cut`, `paste`, and the history: `list`, `restore`, `pin`, `unpin`, `forget`, `clear`, `start`, `stop` |
 | `alpymist wallpaper` | Puts the chosen wallpaper on the screen |
 | `alpymist autostart [--dry-run]` | Starts the programs that start at login |
+| `alpymist watchdog --list` | Lists what the session keeps watch over: the screens, and the bar |
 | `alpymist firmware check` | As root: installs firmware a driver asked for and did not find |
 
 `alpymist session` starts a desktop session and is what the login screen
-runs; it is not for running by hand.
+runs, and `alpymist watchdog` alone is what Hyprland runs at login; neither
+is for running by hand.
 
 ## The desktop's programs
 

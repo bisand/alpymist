@@ -71,6 +71,13 @@ argument or a file, and a vendor's own tool is installed the vendor's way and
 never added to `depends`. `crates/alpymist-ai-usage/tests/definitions.rs`
 holds the shipped files to that. See [ADR 0017](docs/adr/0017-ai-usage.md).
 
+**A watch is an entry in a list, not a new `exec-once`.** What the session
+keeps an eye on is `WATCHES` in `crates/alpymist-watchdog`, each run in a
+process of its own by `alpymist watchdog`. The watchdog is the account's:
+no root, no listening socket, no configuration. Anything that needs root, or
+holds secrets, or is the thing itself and not a watch over something, is not
+a watch. See [ADR 0019](docs/adr/0019-watchdog.md).
+
 **The manual's "Every setting" page is made, not written.**
 `docs/manual/26-every-setting.md` is what `crates/alpymist/tests/every_setting.rs`
 makes from `alpymist list --json`, and that test fails when the two differ. A

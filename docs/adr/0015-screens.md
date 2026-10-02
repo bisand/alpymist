@@ -219,3 +219,16 @@ error in it.
 Hyprland reads permissions once, when it starts. A session that began
 before the upgrade does not load the plugin, and says nothing; the key does
 nothing until the next login.
+
+## Addendum — 2026-10-02: the watch moves to the watchdog
+
+`alpymist displays watch` was started by the packaged Hyprland configuration
+on its own. It is now one of the watches `alpymist watchdog` keeps
+([ADR 0019](0019-watchdog.md)), which is what that configuration starts
+instead; the command is still there, and does what it did.
+
+The watch took Hyprland to have ended when the event socket closed, and
+stopped following the screens. Hyprland also closes that socket to a listener
+that falls sixty-four events behind, so the watch now asks to listen again,
+looks at the screens afresh, and ends only when there is nothing to connect
+to.

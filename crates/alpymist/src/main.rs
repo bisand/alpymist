@@ -161,6 +161,17 @@ enum Command {
         #[command(subcommand)]
         action: FirmwareAction,
     },
+    /// Keep watch over the desktop for as long as the session lasts: the
+    /// screens coming and going, and the bar following Hyprland. Hyprland
+    /// runs this at login.
+    Watchdog {
+        /// List the watches, and start nothing.
+        #[arg(long)]
+        list: bool,
+        /// One watch alone, in this process: how the watchdog starts each.
+        #[arg(hide = true)]
+        watch: Option<String>,
+    },
     /// Print the menu fragment for every setting, for packaging.
     #[command(hide = true)]
     MenuFragment,
@@ -208,6 +219,21 @@ fn main() -> std::process::ExitCode {
     }
 }
 
+/// `alpymist watchdog`.
+fn watchdog(list: bool, watch: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    if list {
+        for watch in alpymist_watchdog::WATCHES {
+            println!("{:<10}{}", watch.name, watch.about);
+        }
+        return Ok(());
+    }
+    match watch {
+        Some(name) => alpymist_watchdog::watch(name)?,
+        None => alpymist_watchdog::run()?,
+    }
+    Ok(())
+}
+
 fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     // Before the registry is made: this is on every key that opens the
     // browser or a terminal, and needs none of it.
@@ -215,6 +241,10 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     // registry either.
     if let Command::Clipboard { action } = &cli.command {
         return clipboard::run(action);
+    }
+    // The watches: none of the registry either.
+    if let Command::Watchdog { list, watch } = &cli.command {
+        return watchdog(*list, watch.as_deref());
     }
     // Screens coming and going, and the lid: none of the registry either.
     if let Command::Displays { action } = &cli.command {
@@ -264,7 +294,10 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Probe { format } => Ok(probe(*format)?),
         Command::Session { desktop, args } => session(&all, &env, *desktop, args),
         Command::Wallpaper => Ok(alpymist_settings::wallpaper::show(&env)?),
-        Command::Open { .. } | Command::Clipboard { .. } | Command::Displays { .. } => {
+        Command::Open { .. }
+        | Command::Clipboard { .. }
+        | Command::Displays { .. }
+        | Command::Watchdog { .. } => {
             unreachable!("handled above")
         }
         Command::Autostart { dry_run } => {

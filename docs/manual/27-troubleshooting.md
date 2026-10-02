@@ -111,6 +111,13 @@ from a terminal to see why:
 waybar -c ~/.config/waybar/hyprland.jsonc -s ~/.config/waybar/style.css
 ```
 
+## The bar shows the wrong workspace
+
+The bar follows Hyprland, and can be cut off from it if it falls far behind.
+Alpymist notices within a minute and starts the bar again, which shows as the
+bar blinking once. Toggle › Top bar in the menu, twice, does the same at
+once.
+
 ## An application asks to "use weaker encryption"
 
 It has not found the keyring. Choose no, log out and in again, and try once

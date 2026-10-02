@@ -1,0 +1,15 @@
+[package]
+name = "alpymist-watchdog"
+description = "Alpymist's watchdog: the watches a session keeps over its own desktop, each in a process of its own, started again when it fails."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+alpymist-displays = { workspace = true }
+rustix = { version = "1", default-features = false, features = ["std", "net", "process"] }
+
+[lints]
+workspace = true

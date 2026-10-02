@@ -13,6 +13,7 @@ alpymist-core = { workspace = true }
 alpymist-displays = { workspace = true }
 alpymist-hwprobe = { workspace = true }
 alpymist-settings = { workspace = true }
+alpymist-watchdog = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
 

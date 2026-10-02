@@ -46,6 +46,7 @@ dependencies = [
  "alpymist-displays",
  "alpymist-hwprobe",
  "alpymist-settings",
+ "alpymist-watchdog",
  "clap",
  "serde_json",
 ]
@@ -383,6 +384,14 @@ dependencies = [
  "denise-render",
  "jpeg-encoder",
  "png",
+]
+
+[[package]]
+name = "alpymist-watchdog"
+version = "0.3.2"
+dependencies = [
+ "alpymist-displays",
+ "rustix 1.1.5",
 ]
 
 [[package]]

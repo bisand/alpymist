@@ -64,7 +64,8 @@ pub enum Action {
     /// Show every workspace of the screen with the focus, to pick one from
     /// (Super+Tab); again, and the overview goes.
     Overview,
-    /// Follow screens as they come and go. Hyprland runs this at login.
+    /// Follow screens as they come and go. `alpymist watchdog` does this,
+    /// among its watches.
     #[command(hide = true)]
     Watch,
 }
