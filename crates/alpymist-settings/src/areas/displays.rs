@@ -10,9 +10,12 @@
 //! those lines over, as the theme does (ADR 0007), and keeps the file as it
 //! was beside it.
 //!
-//! Super+Shift and an arrow take the window to the screen on that side. An
-//! account made before those keys is given them the same way, after its
-//! Super+arrow lines, unless it has put something of its own on one of them.
+//! Super+Shift and an arrow move the window that way, among the others and
+//! from the edge of a screen to the next. An account made before those keys
+//! is given them the same way, after its Super+arrow lines, unless it has put
+//! something of its own on one of them. One given them when they went only
+//! to another screen, and so did nothing up or down beside a screen with
+//! none above or below it, has them put right before each session.
 //!
 //! Super+Tab is the overview of a screen's workspaces, and is given likewise,
 //! after the Super+number lines, to an account with nothing on that key.
@@ -40,21 +43,28 @@ const FOCUS_DOWN: &str = "bind = SUPER, down, movefocus, d";
 const SCREEN_KEYS: [(&str, &str); 4] = [
     (
         "SHIFT SUPER|LEFT",
-        "bind = SUPER SHIFT, left, movewindow, mon:l",
+        "bind = SUPER SHIFT, left, movewindow, l",
     ),
     (
         "SHIFT SUPER|RIGHT",
-        "bind = SUPER SHIFT, right, movewindow, mon:r",
+        "bind = SUPER SHIFT, right, movewindow, r",
     ),
-    (
-        "SHIFT SUPER|UP",
-        "bind = SUPER SHIFT, up, movewindow, mon:u",
-    ),
+    ("SHIFT SUPER|UP", "bind = SUPER SHIFT, up, movewindow, u"),
     (
         "SHIFT SUPER|DOWN",
-        "bind = SUPER SHIFT, down, movewindow, mon:d",
+        "bind = SUPER SHIFT, down, movewindow, d",
     ),
 ];
+/// The same keys as they were first given, taking the window only to another
+/// screen, in the same order.
+const SCREEN_ONLY: [&str; 4] = [
+    "bind = SUPER SHIFT, left, movewindow, mon:l",
+    "bind = SUPER SHIFT, right, movewindow, mon:r",
+    "bind = SUPER SHIFT, up, movewindow, mon:u",
+    "bind = SUPER SHIFT, down, movewindow, mon:d",
+];
+/// Where `hyprland.conf` is kept as it was before those are put right.
+const KEPT_MOVE: &str = ".bak-move";
 
 /// The last of the Super+number lines, which the overview's key goes after.
 const MOVE_NINE: &str = "bind = SUPER SHIFT, 9, exec, alpymist displays move 9";
@@ -148,7 +158,7 @@ fn take_over(env: &Env) -> Vec<String> {
     }
     if let Some(keys) = with_screen_keys(&new) {
         new = keys;
-        what.push("Super+Shift and an arrow now take the window to the screen on that side");
+        what.push("Super+Shift and an arrow now move the window that way");
     }
     if let Some(keys) = with_overview_key(&new) {
         new = keys;
@@ -204,8 +214,8 @@ fn with_keys(conf: &str) -> Option<String> {
     changed.then_some(out)
 }
 
-/// `hyprland.conf` with Super+Shift and an arrow taking the window to the
-/// screen on that side, after the Super+arrow lines every account started
+/// `hyprland.conf` with Super+Shift and an arrow moving the window that way,
+/// after the Super+arrow lines every account started
 /// with; `None` when those are not as shipped, or any of the four is already
 /// bound, by the account or by having been given them before.
 fn with_screen_keys(conf: &str) -> Option<String> {
@@ -253,11 +263,51 @@ fn with_overview_key(conf: &str) -> Option<String> {
     Some(out)
 }
 
+/// Have Super+Shift and an arrow move the window that way, where the
+/// account's `hyprland.conf` still takes it only to another screen, as
+/// Alpymist first wrote, and tell a running Hyprland. Each of the four is put
+/// right by itself; one written any other way is somebody's choice.
+///
+/// # Errors
+/// The file could not be written.
+pub fn prepare_session(env: &Env) -> Result<(), String> {
+    let path = env.account(HYPRLAND);
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Ok(());
+    };
+    let Some(right) = with_moves(&text) else {
+        return Ok(());
+    };
+    let kept = crate::generated::beside(&path, KEPT_MOVE);
+    std::fs::write(&kept, &text).map_err(|e| format!("{}: {e}", kept.display()))?;
+    crate::generated::replace(&path, &right)?;
+    // As for the lock's key: at an upgrade nothing says which Hyprland is the
+    // account's, and before a login there is none to tell.
+    let _ = env.run(&["hyprctl", "-i", "0", "reload"]);
+    Ok(())
+}
+
+/// `hyprland.conf` with each of the keys that took the window only to another
+/// screen now moving it that way; `None` when there is none of them.
+fn with_moves(conf: &str) -> Option<String> {
+    let mut out = String::with_capacity(conf.len());
+    let mut changed = false;
+    for line in conf.lines() {
+        let new = SCREEN_ONLY
+            .iter()
+            .position(|old| line.trim() == *old)
+            .map(|i| SCREEN_KEYS[i].1);
+        changed |= new.is_some();
+        let _ = writeln!(out, "{}", new.unwrap_or(line));
+    }
+    changed.then_some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        FOCUS_DOWN, LID, MOVE_NINE, OVERVIEW_KEY, WORKSPACES, get, set, settings, with_keys,
-        with_overview_key, with_screen_keys,
+        FOCUS_DOWN, HYPRLAND, LID, MOVE_NINE, OVERVIEW_KEY, SCREEN_ONLY, WORKSPACES, get,
+        prepare_session, set, settings, with_keys, with_overview_key, with_screen_keys,
     };
     use crate::env::Env;
     use crate::model::Value;
@@ -314,10 +364,10 @@ mod tests {
             new,
             format!(
                 "{FOCUS_DOWN}\n\
-                 bind = SUPER SHIFT, left, movewindow, mon:l\n\
-                 bind = SUPER SHIFT, right, movewindow, mon:r\n\
-                 bind = SUPER SHIFT, up, movewindow, mon:u\n\
-                 bind = SUPER SHIFT, down, movewindow, mon:d\n\
+                 bind = SUPER SHIFT, left, movewindow, l\n\
+                 bind = SUPER SHIFT, right, movewindow, r\n\
+                 bind = SUPER SHIFT, up, movewindow, u\n\
+                 bind = SUPER SHIFT, down, movewindow, d\n\
                  bind = SUPER, Q, killactive\n"
             )
         );
@@ -327,6 +377,39 @@ mod tests {
         assert_eq!(with_screen_keys(&own), None);
         // Its Super+arrow lines changed by hand: there is nowhere to put them.
         assert_eq!(with_screen_keys("bind = SUPER, down, movefocus, u\n"), None);
+    }
+
+    #[test]
+    fn keys_that_only_went_to_another_screen_move_the_window_that_way() {
+        static RAN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+        let dir =
+            std::env::temp_dir().join(format!("alpymist-displays-move-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        let env = Env::test(&dir, false, &RAN);
+        std::fs::create_dir_all(env.account(HYPRLAND).parent().unwrap()).unwrap();
+        // Three as Alpymist wrote them, and one somebody changed.
+        let conf = format!(
+            "{FOCUS_DOWN}\n{}\n{}\n  {}\nbind = SUPER SHIFT, down, movewindow, mon:DP-1\n",
+            SCREEN_ONLY[0], SCREEN_ONLY[1], SCREEN_ONLY[2]
+        );
+        std::fs::write(env.account(HYPRLAND), &conf).unwrap();
+        prepare_session(&env).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(env.account(HYPRLAND)).unwrap(),
+            format!(
+                "{FOCUS_DOWN}\n\
+                 bind = SUPER SHIFT, left, movewindow, l\n\
+                 bind = SUPER SHIFT, right, movewindow, r\n\
+                 bind = SUPER SHIFT, up, movewindow, u\n\
+                 bind = SUPER SHIFT, down, movewindow, mon:DP-1\n"
+            )
+        );
+        let kept = format!("{}.bak-move", env.account(HYPRLAND).display());
+        assert_eq!(std::fs::read_to_string(kept).unwrap(), conf);
+        // Once is enough, and a running Hyprland is told the once.
+        prepare_session(&env).unwrap();
+        assert_eq!(*RAN.lock().unwrap(), ["hyprctl -i 0 reload"]);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
@@ -357,6 +440,7 @@ mod tests {
         }
         assert_eq!(with_keys(skel), None);
         assert_eq!(with_screen_keys(skel), None);
+        assert_eq!(super::with_moves(skel), None);
         assert!(skel.lines().any(|l| l == OVERVIEW_KEY.1));
         assert_eq!(with_overview_key(skel), None);
     }

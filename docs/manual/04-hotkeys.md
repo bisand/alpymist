@@ -28,7 +28,7 @@ applications.
 | <kbd>Super</kbd>+<kbd>F</kbd> | Full screen, and back |
 | <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> | Float, and back |
 | <kbd>Super</kbd>+<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Move the focus |
-| <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Take the window to the screen on that side |
+| <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Move the window that way, and on to the next screen from the edge |
 | <kbd>Super</kbd> + left drag | Move the window |
 | <kbd>Super</kbd> + right drag | Resize the window |
 | Drag the edge of a window | Resize it |

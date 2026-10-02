@@ -232,7 +232,12 @@ impl Settings {
         let input = areas::input::prepare_session(env);
         let notifications = areas::notifications::prepare_session(env);
         let lock = areas::lock::prepare_session(env);
-        input.and(notifications).and(lock).map_err(Error::Failed)
+        let moves = areas::displays::prepare_session(env);
+        input
+            .and(notifications)
+            .and(lock)
+            .and(moves)
+            .map_err(Error::Failed)
     }
 }
 
