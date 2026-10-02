@@ -10,6 +10,10 @@
 //! anyone can read in the process list. Changing it opens a terminal running
 //! `passwd`, which asks for the old one and the new one itself.
 //!
+//! The hardware report is `alpymist report --issue` in a terminal, started by
+//! its button and by nothing else: it shows the report and asks before it
+//! opens anything, and what it opens posts nothing by itself (ADR 0020).
+//!
 //! An administrator is an account in `wheel`, which is who polkit and doas
 //! ask. The switch is for the account asking, which as root is the one pkexec
 //! or doas names. The last administrator is never taken out: root's password
@@ -35,6 +39,8 @@ pub const INTERFACES: &str = "etc/network/interfaces";
 const UNNAMED: &str = "localhost";
 /// Changing the password's id.
 pub const PASSWORD_ID: &str = "system.password";
+/// The hardware report's id.
+pub const REPORT_ID: &str = "system.report";
 /// Being an administrator's id.
 pub const ADMINISTRATOR_ID: &str = "system.administrator";
 /// The groups, `wheel` among them.
@@ -127,6 +133,21 @@ pub fn settings() -> Vec<Setting> {
             scope: Scope::System,
             applies: Applies::Now,
         },
+        Setting {
+            id: REPORT_ID,
+            title: "Hardware report",
+            description: "Show what this computer is made of and which drivers have it, in a \
+                          terminal, and offer to open it as a GitHub issue to say what does not \
+                          work. It holds no serial number, address or name, and nothing is sent \
+                          unless you submit the issue.",
+            keywords: &[
+                "report", "hardware", "driver", "firmware", "bug", "issue", "probe", "support",
+            ],
+            kind: Kind::Action { label: "Show…" },
+            default: Value::Text(String::new()),
+            scope: Scope::Account,
+            applies: Applies::Now,
+        },
     ]
 }
 
@@ -134,7 +155,7 @@ pub fn settings() -> Vec<Setting> {
 pub fn get(env: &Env, setting: &Setting) -> Result<Value, String> {
     match setting.id {
         // Nothing to read: it is a thing to do, not a thing to be.
-        PASSWORD_ID => Ok(Value::Text(String::new())),
+        PASSWORD_ID | REPORT_ID => Ok(Value::Text(String::new())),
         FINGERPRINT_ID => Ok(Value::Bool(env.system(LOCK_FINGERPRINT).exists())),
         ADMINISTRATOR_ID => {
             let user = user(env)?;
@@ -147,7 +168,9 @@ pub fn get(env: &Env, setting: &Setting) -> Result<Value, String> {
 /// Set one, or reset it with `None`.
 pub fn set(env: &Env, setting: &Setting, value: Option<&Value>) -> Result<(), String> {
     match setting.id {
-        PASSWORD_ID => change_password(),
+        PASSWORD_ID => in_terminal("passwd"),
+        // It prints the report, asks, and says what it did.
+        REPORT_ID => in_terminal("alpymist report --issue"),
         FINGERPRINT_ID => fingerprint(env, value.and_then(Value::as_bool).unwrap_or(false)),
         ADMINISTRATOR_ID => administrator(env, value.and_then(Value::as_bool).unwrap_or(false)),
         _ => name(env, setting, value),
@@ -295,14 +318,14 @@ fn without_finger(service: &str) -> Option<String> {
     (kept.len() != service.lines().count()).then(|| kept.join("\n") + "\n")
 }
 
-/// Open a terminal for `passwd`, and leave it: it asks, and it says whether
+/// Open a terminal for `program`, and leave it: it asks, and it says whether
 /// it worked, before the window goes. The terminal is the one chosen in
 /// Settings › Default applications.
-fn change_password() -> Result<(), String> {
+fn in_terminal(program: &str) -> Result<(), String> {
     let command = [
         "sh".to_owned(),
         "-c".to_owned(),
-        "passwd; printf '\\nPress Enter to close. '; read -r _".to_owned(),
+        format!("{program}; printf '\\nPress Enter to close. '; read -r _"),
     ];
     let argv =
         alpymist_core::defaults::task_argv(&alpymist_core::defaults::Places::current(), &command);

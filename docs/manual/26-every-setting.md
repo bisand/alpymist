@@ -230,3 +230,4 @@ here, named `startup.<program>`.
 | **Password**<br>Change the password this account logs in and unlocks with, in a terminal that asks for the old one first.<br>`system.password` | An action |  |
 | **Administrator**<br>Let this account change settings for everyone and install software. The last administrator cannot be turned off.<br>`system.administrator` · System · Next login | `true`, `false` | `false` |
 | **Unlock with a fingerprint**<br>Let an enrolled finger unlock the screen and answer administrator prompts, beside the password. Logging in still takes the password. Fingers are added in Fingerprints.<br>`system.fingerprint` · System | `true`, `false` | `false` |
+| **Hardware report**<br>Show what this computer is made of and which drivers have it, in a terminal, and offer to open it as a GitHub issue to say what does not work. It holds no serial number, address or name, and nothing is sent unless you submit the issue.<br>`system.report` | An action |  |

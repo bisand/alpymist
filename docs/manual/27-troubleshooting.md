@@ -160,7 +160,7 @@ alpymist report --issue
 shows the report, asks, and then opens the browser at a new issue on GitHub
 with the report filled in. Say there what does not work, and submit it;
 until you do, nothing has left the machine. An issue is public, and needs a
-GitHub account.
+GitHub account. *Hardware report* in Settings › System does the same.
 
 On a machine with no network, `alpymist report --save report.txt` writes it
 to a file to carry to one that has. The live image has the command too, so

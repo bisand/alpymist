@@ -80,7 +80,8 @@ a watch. See [ADR 0019](docs/adr/0019-watchdog.md).
 
 **A hardware report is run by hand and names nobody.** `alpymist report`
 prints, `--save` writes a file, `--issue` asks and opens the browser; nothing
-in the installer, a service or the session runs it, and nothing posts. What
+in the installer, a service or the session runs it, and nothing posts;
+Settings' button is that command in a terminal. What
 goes in is decided in `crates/alpymist-hwprobe/src/report.rs`: devices by
 their makers' numbers and never the names they announce, a network card by
 kind and never by name, no serial, address, host or account name. Its test

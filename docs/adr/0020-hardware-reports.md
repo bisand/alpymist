@@ -29,6 +29,8 @@ that page, signed in as themselves, having seen it twice.
 **Nothing runs it for anyone.** Not the installer, not a service, not the
 first login, not on a failure. There is no setting that turns reporting on,
 because there is no reporting to turn on: only a command, run by hand.
+Settings › System has a button for it, *Hardware report*, which opens a
+terminal running `alpymist report --issue` and is that command and no more.
 
 **It holds hardware, and nothing that names a person or tells one machine
 from another of its kind.** In it: the make and model the firmware gives,

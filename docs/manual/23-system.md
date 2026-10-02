@@ -11,6 +11,7 @@ Settings › System has what belongs to the computer and to your account on it.
 | Password | Changes your password, in a terminal that asks for the old one first |
 | Administrator | Whether this account may change settings for everyone and install software. The last administrator cannot be turned off. |
 | Unlock with a fingerprint | See [Screensaver, idle and lock](14-screensaver-idle-and-lock.md) |
+| Hardware report | Shows what the computer is made of and which drivers have it, and offers to open it as a GitHub issue. Nothing is sent unless you submit it. See [Troubleshooting](27-troubleshooting.md). |
 
 ```sh
 alpymist set system.hostname workbench
