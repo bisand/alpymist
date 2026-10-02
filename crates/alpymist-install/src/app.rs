@@ -1566,6 +1566,39 @@ mod tests {
         );
     }
 
+    /// The erase confirmation is below the disks. When arrowing over a disk
+    /// chose it, the last disk was the only one that could be confirmed from
+    /// the keyboard: found on a machine with two, installing to the first.
+    #[test]
+    fn arrowing_over_the_disks_to_the_confirmation_keeps_the_chosen_disk() {
+        let mut a = at_disk();
+        for _ in 0..8 {
+            a.act(Action::Down);
+        }
+        a.act(Action::Choose);
+        assert!(a.wizard.answers.disk_confirmed);
+        assert_eq!(
+            a.wizard.answers.disk.as_ref().map(DiskPlan::device),
+            Some("/dev/sda"),
+            "arrowing past the second disk chose it"
+        );
+    }
+
+    #[test]
+    fn space_on_another_disk_chooses_it() {
+        let mut a = at_disk();
+        a.act(Action::Down);
+        assert_eq!(
+            a.wizard.answers.disk.as_ref().map(DiskPlan::device),
+            Some("/dev/sda")
+        );
+        a.act(Action::Choose);
+        assert_eq!(
+            a.wizard.answers.disk.as_ref().map(DiskPlan::device),
+            Some("/dev/sdb")
+        );
+    }
+
     #[test]
     fn choosing_a_toggle_row_flips_it() {
         let mut a = at_disk();

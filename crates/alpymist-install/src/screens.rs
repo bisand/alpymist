@@ -14,6 +14,10 @@ use alpymist_core::hyprland::Verdict;
 pub enum RowKind {
     /// One of a set: moving onto it selects it, the way a radio list works.
     Radio,
+    /// One of a set that is chosen by asking, with Space or a click. For a
+    /// set with rows below it: the cursor has to cross the set to reach them,
+    /// and crossing must not change the choice.
+    Pick,
     /// An independent on/off: moving onto it must *not* flip it.
     Toggle,
     /// An editable line. Moving onto it focuses it; typing changes it.
@@ -206,6 +210,15 @@ impl Row {
         }
     }
 
+    /// One of a set of mutually exclusive choices, chosen only when asked.
+    fn pick(text: impl Into<String>, chosen: bool) -> Self {
+        Self {
+            text: text.into(),
+            kind: RowKind::Pick,
+            chosen,
+        }
+    }
+
     /// An independent on/off.
     fn toggle(text: impl Into<String>, on: bool) -> Self {
         Self {
@@ -234,7 +247,8 @@ impl Row {
     ///
     /// True for radio rows, so arrowing through a list of keyboard layouts
     /// picks as you go. False for toggles — moving past a checkbox must never
-    /// flip it — and false for text, where landing merely focuses.
+    /// flip it — false for text, where landing merely focuses, and false for
+    /// the disks, which lie between the cursor and the erase confirmation.
     #[must_use]
     pub fn selects_on_focus(&self) -> bool {
         matches!(self.kind, RowKind::Radio)
@@ -586,7 +600,11 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
                         // Still one row per disk, so row indices stay disk indices.
                         Row::note(disk.label())
                     } else {
-                        Row::radio(
+                        // Not a radio: the erase confirmation is below the
+                        // disks, and with the last disk chosen by arrowing
+                        // over it no other could be confirmed from the
+                        // keyboard.
+                        Row::pick(
                             disk.label(),
                             a.disk.as_ref().is_some_and(|d| d.device() == disk.device),
                         )
@@ -607,6 +625,12 @@ pub fn rows(step: Step, a: &Answers) -> Vec<Row> {
                 ),
                 a.disk_confirmed,
             ));
+            // Only where there is a choice to make, and after the rows that
+            // `choose` finds by counting from the disks.
+            if a.disks.iter().filter(|d| d.mounted_at.is_none()).count() > 1 {
+                rows.push(Row::gap());
+                rows.push(Row::note("Space chooses the disk under the cursor."));
+            }
             rows
         }
         Step::Encryption => {
