@@ -14,6 +14,7 @@ use crate::wifi;
 use crate::wizard::{Step, Wizard};
 use alpymist_ui::chrome::Chrome;
 use alpymist_ui::palette::Palette;
+use alpymist_ui::picture::Picture;
 use alpymist_ui::render::{
     ButtonStyle, Scenery, button_ink, colour, new_cursor, paint_button, paint_cursor, paint_panel,
 };
@@ -199,8 +200,12 @@ pub struct App {
     cursor: usize,
     /// Colours.
     pub palette: Palette,
-    /// The mountains, recomposed on resize and rasterised once after it.
+    /// The boot's picture or the mountains, recomposed on resize and
+    /// rasterised once after it.
     scenery: Scenery,
+    /// The picture the splash showed, decoded once and scaled to each size.
+    /// `None` until it is loaded, and for good if it cannot be.
+    picture: Option<Picture>,
     /// Panel geometry, recomputed on resize.
     chrome: Chrome,
     /// Size the above were built for.
@@ -257,6 +262,7 @@ impl App {
             wizard: Wizard::new(answers),
             cursor: 0,
             scenery: Scenery::compose(width, height, &palette, SCENE_SEED),
+            picture: None,
             chrome: Chrome::for_screen(width, height),
             palette,
             size: (width, height),
@@ -275,6 +281,33 @@ impl App {
         };
         app.snap_cursor();
         app
+    }
+
+    /// Show the picture at `path` behind the panel instead of the
+    /// mountains: the one the splash showed, so the boot does not change
+    /// pictures when the installer starts. If it is missing or will not
+    /// decode, say why and keep the mountains.
+    pub fn load_picture(&mut self, path: &std::path::Path) {
+        match Picture::load(path) {
+            Ok(picture) => self.show_picture(picture),
+            Err(e) => eprintln!("no picture, drawing the mountains ({e})"),
+        }
+    }
+
+    /// Show `picture` behind the panel instead of the mountains.
+    pub fn show_picture(&mut self, picture: Picture) {
+        self.picture = Some(picture);
+        self.scenery = self.compose(self.size.0, self.size.1);
+    }
+
+    /// The background for a screen this size: the picture scaled to cover
+    /// it, or the mountains.
+    fn compose(&self, width: u32, height: u32) -> Scenery {
+        let scenery = Scenery::compose(width, height, &self.palette, SCENE_SEED);
+        match self.picture.as_ref().and_then(|p| p.cover(width, height)) {
+            Some(pixels) => scenery.with_picture(pixels),
+            None => scenery,
+        }
     }
 
     /// Drive Wi-Fi through this worker, and start looking for networks.
@@ -891,7 +924,7 @@ impl App {
         if self.size == (width, height) {
             return false;
         }
-        self.scenery = Scenery::compose(width, height, &self.palette, SCENE_SEED);
+        self.scenery = self.compose(width, height);
         self.chrome = Chrome::for_screen(width, height);
         self.size = (width, height);
         true
@@ -1834,6 +1867,19 @@ mod tests {
             (a.cursor(), a.wizard.step(), a.wizard.answers.clone()),
             before
         );
+    }
+
+    /// The splash's picture stays behind the installer, at every size; with
+    /// none, the mountains do.
+    #[test]
+    fn a_picture_is_shown_behind_the_panel_and_follows_a_resize() {
+        let mut a = app();
+        assert!(!a.scenery.is_picture());
+        let picture = super::Picture::from_rgb(4, 4, vec![0x40; 4 * 4 * 3]).unwrap();
+        a.show_picture(picture);
+        assert!(a.scenery.is_picture());
+        assert!(a.resize(1024, 768));
+        assert!(a.scenery.is_picture());
     }
 
     /// A text field takes focus on click but must not be "chosen" — there is
