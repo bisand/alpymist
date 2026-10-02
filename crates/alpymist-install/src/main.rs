@@ -88,7 +88,12 @@ mod run {
         .with_defaults();
 
         let size = Size::new(1280, 800);
-        let app = App::with_mode(answers, size.width, size.height, crate::install_mode());
+        let mut app = App::with_mode(answers, size.width, size.height, crate::install_mode());
+        // A development machine will not have the installed picture:
+        // `ALPYMIST_PICTURE=brand/wallpapers/milky-way.jpg` shows one.
+        let picture = std::env::var_os("ALPYMIST_PICTURE")
+            .unwrap_or_else(|| alpymist_ui::picture::SYSTEM.into());
+        app.load_picture(picture.as_ref());
         eprintln!("{}", app.face.status.describe());
         match hyprland {
             Some(check) => eprintln!("hardware: {}", check.verdict.describe()),
@@ -222,6 +227,7 @@ mod drm_run {
         let answers = detect();
         let adapter = answers.wifi.adapter.clone();
         let mut app = App::with_mode(answers, size.width, size.height, crate::install_mode());
+        app.load_picture(std::path::Path::new(alpymist_ui::picture::SYSTEM));
         eprintln!("{}", app.face.status.describe());
         // Joining a network on the live system writes nothing to a disk, so it
         // happens in a dry run too: it is how a dry run can check Wi-Fi works.

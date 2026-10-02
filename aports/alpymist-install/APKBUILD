@@ -11,7 +11,9 @@ makedepends="cargo"
 # font-fira-ttf is a runtime suggestion rather than a dependency: without it the
 # installer falls back to Denise's built-in bitmap, which still reads correctly
 # in Norwegian. It is in the image regardless, via the mkimage profile.
-depends=""
+# The picture is the splash's, shown behind the installer too so the boot
+# keeps one picture; without it the installer draws the mountains.
+depends="alpymist-splash-picture"
 install=""
 subpackages="$pkgname-openrc"
 options="!check"  # the test suite runs in CI, not in the package build

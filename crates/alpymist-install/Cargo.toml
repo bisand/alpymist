@@ -18,7 +18,7 @@ path = "src/main.rs"
 [dependencies]
 alpymist-core = { workspace = true }
 alpymist-hwprobe = { workspace = true }
-alpymist-ui = { workspace = true, features = ["render"] }
+alpymist-ui = { workspace = true, features = ["render", "picture"] }
 # iwd over D-Bus, shared with the desktop's Wi-Fi popup; without its popup.
 alpymist-wifi = { workspace = true }
 denise = { workspace = true }

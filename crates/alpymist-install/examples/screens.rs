@@ -9,7 +9,8 @@
 //!
 //! Set `ALPYMIST_FONT` to a Fira Mono TTF to preview with the real typeface;
 //! without it the built-in bitmap is used, which is also what a machine missing
-//! `font-fira-ttf` would show.
+//! `font-fira-ttf` would show. `ALPYMIST_PICTURE` likewise, for the picture
+//! behind the panel.
 
 use alpymist_core::hyprland::{Check, Verdict};
 use alpymist_install::answers::{Answers, DiskPlan, Network};
@@ -19,6 +20,14 @@ use alpymist_install::wizard::Step;
 use denise::PixelFormat;
 use denise::geom::Size;
 use denise_render::Canvas;
+
+/// The picture named by `ALPYMIST_PICTURE`, behind the panel as it is on the
+/// install image; without it, the mountains a machine missing it would show.
+fn show_picture(app: &mut App) {
+    if let Some(path) = std::env::var_os("ALPYMIST_PICTURE") {
+        app.load_picture(path.as_ref());
+    }
+}
 
 /// Plausible answers, so later screens have something to show.
 fn answers() -> Answers {
@@ -73,6 +82,7 @@ fn main() {
             answers.wifi.status = Status::Connected("Fjellheim".into());
         }
         let mut app = App::new(answers, width, height);
+        show_picture(&mut app);
         // The dry-run install reports on a thread and the Install screen will
         // not continue until it has finished, so its progress is collected
         // here as the real loop does; without that this never reached Done.
@@ -110,6 +120,7 @@ fn main() {
         dns: String::new(),
     });
     let mut app = App::new(answers, width, height);
+    show_picture(&mut app);
     while app.wizard.step() != Step::Network {
         app.act(Action::Advance);
     }
