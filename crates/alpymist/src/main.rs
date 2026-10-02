@@ -11,6 +11,7 @@ mod clipboard;
 mod displays;
 mod firmware;
 mod guest;
+mod hardware;
 mod launch;
 mod report;
 mod root;
@@ -392,6 +393,9 @@ fn session(
         eprintln!("alpymist session: {e}");
     }
     if let Err(e) = alpymist_displays::prepare(&alpymist_displays::conf_path()) {
+        eprintln!("alpymist session: {e}");
+    }
+    if let Err(e) = hardware::prepare(&hardware::conf_path()) {
         eprintln!("alpymist session: {e}");
     }
     let program = match desktop {

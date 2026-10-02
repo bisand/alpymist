@@ -138,6 +138,20 @@ says:
 grim -g "$(slurp)" ~/test.png
 ```
 
+## The pointer moves but cannot be seen
+
+Some graphics drivers show nothing where Hyprland puts the pointer. On the
+nouveau driver, for older Nvidia cards, Alpymist has Hyprland draw it itself.
+On another, try it for this session:
+
+```sh
+hyprctl keyword cursor:no_hardware_cursors true
+```
+
+If that brings it back, put `cursor { no_hardware_cursors = true }` in
+`~/.config/hypr/hyprland.conf` to keep it, and tell us with a hardware
+report, below, so the next machine like yours needs neither.
+
 ## Something in the machine does not work
 
 A Wi-Fi card that is not found, a touchpad that does nothing: tell us, and

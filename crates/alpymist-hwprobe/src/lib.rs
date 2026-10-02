@@ -35,6 +35,16 @@ pub fn probe() -> Result<Capabilities> {
     })
 }
 
+/// The kernel drivers of this machine's graphics cards, in card order: what
+/// [`probe`] finds of them, without asking EGL anything.
+#[must_use]
+pub fn drm_drivers() -> Vec<String> {
+    drm_devices(Path::new("/sys/class/drm"))
+        .into_iter()
+        .filter_map(|card| card.driver)
+        .collect()
+}
+
 /// Total RAM in MiB, parsed from `MemTotal` in `/proc/meminfo`.
 fn memory_mib() -> Result<u64> {
     let path = "/proc/meminfo";
