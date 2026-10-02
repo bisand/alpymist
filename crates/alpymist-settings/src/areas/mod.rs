@@ -10,6 +10,7 @@ pub mod displays;
 pub mod input;
 pub mod keyboard;
 pub mod language;
+pub mod lock;
 pub mod notifications;
 pub mod power;
 pub mod screensaver;

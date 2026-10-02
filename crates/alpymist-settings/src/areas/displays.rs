@@ -18,6 +18,7 @@
 //! after the Super+number lines, to an account with nothing on that key.
 
 use super::clipboard::chord;
+use super::lock::{NEW_KEY as NEW_LOCK, OLD_KEY as OLD_LOCK};
 use crate::env::Env;
 use crate::model::{Applies, Kind, Scope, Setting, Value};
 use alpymist_displays::layout::{FILE, Layouts};
@@ -32,10 +33,6 @@ pub const WORKSPACES: &str = "displays.workspaces";
 const HYPRLAND: &str = "hypr/hyprland.conf";
 /// Where it is kept as it was before the workspace keys were taken over.
 pub const KEPT: &str = ".bak-workspaces";
-/// Super+L as accounts made before Alpymist's own lock have it.
-const OLD_LOCK: &str = "bind = SUPER, L, exec, swaylock -f -c 0b121e";
-/// Super+L as it is now.
-const NEW_LOCK: &str = "bind = SUPER, L, exec, alpymist-lock";
 /// The last of the Super+arrow lines every account started with, which the
 /// keys that take a window to another screen go after.
 const FOCUS_DOWN: &str = "bind = SUPER, down, movefocus, d";

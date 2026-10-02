@@ -190,3 +190,20 @@ Unlock with a fingerprint on, the lock asks a second PAM service,
 unlocks as the password does. The password service and everything else here
 are unchanged. [ADR 0016](0016-fingerprints.md) has the reasons, and the
 reasons the login screen still takes only the password.
+
+## Addendum — 2026-10-03: accounts already made are given the lock too
+
+The first consequence above said every call site runs `alpymist-lock`. That
+was true of what ships, and not of an account made before it: its
+`hyprland.conf` kept `swaylock -f -c 0b121e` on Super+L, and its `power.toml`
+kept the same as the command that locks before sleeping. With swaylock off the
+system, the key did nothing, and, a failed lock not stopping a suspend, a
+closed lid slept and woke unlocked. The one thing that put the key right ran
+only when a Displays setting was changed, and nothing put `power.toml` right.
+
+`alpymist session prepare`, which runs before every session and for each
+account when the desktop package is upgraded, now changes both lines where
+they are still exactly what Alpymist wrote, and keeps each file as it was
+beside it as `.bak-lock`. Any other lock command, swaylock with other
+arguments included, is somebody's choice and is left alone, as `power.toml`
+accepting any command always meant.

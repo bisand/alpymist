@@ -231,7 +231,8 @@ impl Settings {
         areas::themed::prepare_session(env, &areas::appearance::load(env));
         let input = areas::input::prepare_session(env);
         let notifications = areas::notifications::prepare_session(env);
-        input.and(notifications).map_err(Error::Failed)
+        let lock = areas::lock::prepare_session(env);
+        input.and(notifications).and(lock).map_err(Error::Failed)
     }
 }
 
