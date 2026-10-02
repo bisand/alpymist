@@ -23,6 +23,9 @@ alpymist-theme = { workspace = true }
 alpymist-screensaver = { workspace = true }
 # iwd, without the popup.
 alpymist-wifi = { workspace = true }
+# Who is running this, asked of the kernel: /proc is not mounted in the
+# installer's chroot, where `alpymist guest on` runs as root.
+rustix = { version = "1", default-features = false, features = ["std", "process"] }
 serde_json = { workspace = true }
 toml = { version = "0.9", default-features = false, features = ["parse", "display", "serde", "std"] }
 
