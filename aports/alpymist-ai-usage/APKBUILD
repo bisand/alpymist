@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-ai-usage
-pkgver=0.3.0
+pkgver=0.3.1
 pkgrel=0
 pkgdesc="Alpymist's AI usage: how much of a subscription or API budget is left, in the bar"
 url="https://github.com/bisand/alpymist"
