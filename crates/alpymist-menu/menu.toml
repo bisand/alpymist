@@ -131,7 +131,7 @@ items = [
 title = "Learn"
 items = [
   { name = "About Alpymist", icon = "\U000F02FD", exec = "alpymist-about", detail = "Version and channel", keywords = ["version", "release", "channel", "info"] },
-  { name = "Keybindings", icon = "", exec = "grep -E '^bindm? *=' ~/.config/hypr/hyprland.conf | sed 's/^bindm\\? *= *//' | less", terminal = true, keywords = ["shortcuts", "keys"] },
+  { name = "Keybindings", icon = "", exec = "grep -hE '^bind[em]? *=' ~/.config/hypr/hyprland.conf /usr/share/alpymist/hyprland-windows.conf | sed 's/^bind[em]\\? *= *//' | less", terminal = true, keywords = ["shortcuts", "keys"] },
   { name = "Alpymist", icon = "󰊤", exec = "alpymist open browser https://github.com/bisand/alpymist" },
   { name = "Hyprland wiki", icon = "", exec = "alpymist open browser https://wiki.hypr.land" },
   { name = "Alpine wiki", icon = "", exec = "alpymist open browser https://wiki.alpinelinux.org" },

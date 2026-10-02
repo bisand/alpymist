@@ -43,6 +43,9 @@ the pointer has the focus, and its border is drawn in the accent colour.
 | <kbd>Super</kbd>+<kbd>W</kbd> | Closes it. |
 | <kbd>Super</kbd> and drag with the left button | Moves a window. |
 | <kbd>Super</kbd> and drag with the right button | Resizes it. |
+| Drag the edge of a window | Resizes it too: the pointer changes over an edge. |
+| <kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Resizes it from the keyboard, for as long as the keys are held. |
+| <kbd>Super</kbd>+<kbd>J</kbd> | Turns two windows side by side into one over the other, and back. |
 
 Some windows float in the middle of the screen by themselves, because they
 are dialogs rather than somebody's work: Settings, and a terminal that a menu

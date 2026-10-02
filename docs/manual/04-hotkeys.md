@@ -31,6 +31,9 @@ applications.
 | <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Take the window to the screen on that side |
 | <kbd>Super</kbd> + left drag | Move the window |
 | <kbd>Super</kbd> + right drag | Resize the window |
+| Drag the edge of a window | Resize it |
+| <kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Resize the window, for as long as it is held |
+| <kbd>Super</kbd>+<kbd>J</kbd> | Turn side by side into over and under, and back |
 
 ## Workspaces
 
