@@ -25,6 +25,7 @@ The one command for settings and for the system.
 | `alpymist autostart [--dry-run]` | Starts the programs that start at login |
 | `alpymist watchdog --list` | Lists what the session keeps watch over: the screens, and the bar |
 | `alpymist firmware check` | As root: installs firmware a driver asked for and did not find |
+| `alpymist firmware broadcom [--to DIR or --from DIR]` | Fetches the firmware Broadcom's older Wi-Fi cards need, which no package may hold. `--to` puts it on a stick for a machine with no network, and `--from` takes it from one. |
 
 `alpymist session` starts a desktop session and is what the login screen
 runs, and `alpymist watchdog` alone is what Hyprland runs at login; neither

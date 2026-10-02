@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 mod autostart;
+mod broadcom;
 mod channel;
 mod clipboard;
 mod displays;
@@ -197,6 +198,18 @@ enum FirmwareAction {
     Check,
     /// Follow the kernel log, installing what is missing as drivers ask.
     Watch,
+    /// Fetch the firmware Broadcom's older Wi-Fi cards need, which no package
+    /// may hold: download Broadcom's own driver, check it, and cut the
+    /// firmware out. As root, on a machine with a network.
+    Broadcom {
+        /// Put it in DIR/alpymist-firmware and not on this machine: on a
+        /// stick, for a machine with no network. Needs no root.
+        #[arg(long, value_name = "DIR", conflicts_with = "from")]
+        to: Option<PathBuf>,
+        /// Take it from DIR, where `--to` put it, and download nothing.
+        #[arg(long, value_name = "DIR")]
+        from: Option<PathBuf>,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -329,6 +342,9 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Firmware {
             action: FirmwareAction::Watch,
         } => firmware::watch(),
+        Command::Firmware {
+            action: FirmwareAction::Broadcom { to, from },
+        } => broadcom::run_command(to.as_deref(), from.as_deref()),
         Command::MenuFragment => {
             print!("{}", alpymist_settings::menu::fragment(&all));
             Ok(())

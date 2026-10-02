@@ -61,6 +61,33 @@ doas alpymist firmware check
 and restart. `dmesg | grep -i firmware` shows what a driver asked for and did
 not find.
 
+### A Broadcom card in an older laptop
+
+If a notification said the Broadcom Wi-Fi card needs firmware, or
+`alpymist report` lists a `network` device with the driver `b43-pci-bridge`:
+that firmware is in no package, because Broadcom lets nobody pass it on.
+With a network by cable or a phone's USB tethering:
+
+```sh
+doas alpymist firmware broadcom
+```
+
+downloads Broadcom's own driver, checks it, cuts the firmware out and starts
+the card.
+
+With no network on that machine, fetch it on another Alpymist machine onto a
+stick, and take it from there:
+
+```sh
+alpymist firmware broadcom --to /media/usb          # on the machine with a network
+doas alpymist firmware broadcom --from /media/usb   # on the one without
+```
+
+A stick the installer runs from is looked at too: with `alpymist-firmware`
+on it, a new installation has Wi-Fi from its first start. That needs a stick
+that can be written to, made by copying the image's files to a FAT partition
+and not with `dd`.
+
 ## A dock's keyboard, mouse or network does nothing
 
 The dock is waiting to be allowed. Its screens work regardless, which makes

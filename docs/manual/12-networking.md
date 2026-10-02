@@ -45,3 +45,9 @@ default. A service watches for a driver asking for one and installs the
 package that has it, so a card that did not work at first boot may work after
 the next one with a network connection. `doas alpymist firmware check` does
 that once, now.
+
+Broadcom's older Wi-Fi cards, in every Mac from before 2012 and many other
+laptops of those years, need firmware that nobody is allowed to package.
+`doas alpymist firmware broadcom` fetches it from where Broadcom's own driver
+is published; see [Troubleshooting](27-troubleshooting.md) for a machine
+with no other way onto a network.

@@ -89,6 +89,17 @@ builds a machine holding each of those and fails if one comes out; a new
 section means adding what it could leak to that test. See
 [ADR 0020](docs/adr/0020-hardware-reports.md).
 
+**Firmware nobody may ship is not shipped.** Broadcom's `b43` firmware is
+in no package and not on the image; `alpymist firmware broadcom` downloads
+Broadcom's driver from OpenWrt's mirrors, held to the SHA-256 in
+`crates/alpymist/src/broadcom.rs`, and cuts it out on the machine that asks,
+or onto a stick with `--to`. Nothing downloads it unasked: the firmware
+watch and the installer only say which command to run. What the installer
+and `--from` copy off a stick is `.fw` files into the directories in
+`alpymist-core`'s `CARRIED_DIRS` and nothing else. A new version of that
+driver is a new pin, not a looser check. See
+[ADR 0021](docs/adr/0021-firmware-nobody-may-ship.md).
+
 **The manual's "Every setting" page is made, not written.**
 `docs/manual/26-every-setting.md` is what `crates/alpymist/tests/every_setting.rs`
 makes from `alpymist list --json`, and that test fails when the two differ. A

@@ -16,7 +16,7 @@
 //! also uses for whatever a driver asks for after installation.
 
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// The packages holding these firmware paths, as `modinfo -F firmware` prints
@@ -55,6 +55,46 @@ pub fn has_wireless() -> bool {
     })
 }
 
+/// The tops of the install media among `repos`: a repository that is a
+/// directory, `/media/usb/apks`, is on a medium whose top is its parent.
+#[must_use]
+pub fn media(repos: &[String]) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = Vec::new();
+    for repo in repos {
+        if let Some(top) = repo
+            .strip_prefix('/')
+            .and_then(|_| Path::new(repo).parent())
+            && !found.iter().any(|f| f == top)
+        {
+            found.push(top.to_path_buf());
+        }
+    }
+    found
+}
+
+/// Copy firmware a stick carries (`alpymist firmware broadcom --to`) into
+/// the system at `root`, and say so. Nothing carried is nothing said.
+#[must_use]
+pub fn carried(root: &str, media: &[PathBuf]) -> Vec<String> {
+    let into = Path::new(root).join("lib/firmware");
+    let mut report = Vec::new();
+    for top in media {
+        let from = top.join(alpymist_core::firmware::CARRIED);
+        match alpymist_core::firmware::take_carried(&from, &into) {
+            Ok(0) => {}
+            Ok(copied) => report.push(format!(
+                "Copied {copied} firmware files carried in {}",
+                from.display()
+            )),
+            Err(e) => report.push(format!(
+                "Could not copy firmware from {}: {e}",
+                from.display()
+            )),
+        }
+    }
+    report
+}
+
 /// Install the firmware this machine's drivers need into the system at `root`.
 ///
 /// Run as `alpymist-install firmware /mnt`, as a step of the install plan.
@@ -62,6 +102,32 @@ pub fn has_wireless() -> bool {
 /// # Errors
 /// What went wrong, for the install log. The system boots without it.
 pub fn install(root: &str) -> Result<Vec<String>, String> {
+    // What a stick carries first, whatever becomes of the packages: it is
+    // there for the machine with no network to fetch them over.
+    let live = std::fs::read_to_string("/etc/apk/repositories").unwrap_or_default();
+    let brought = carried(root, &media(&repositories(&live)));
+    match packaged(root) {
+        Ok(mut report) => {
+            if brought.is_empty() && report.iter().any(|l| l.contains("linux-firmware-b43")) {
+                report.push(
+                    "Broadcom Wi-Fi: its firmware is in no package. Once installed, with a \
+                     network: doas alpymist firmware broadcom"
+                        .into(),
+                );
+            }
+            Ok(brought.into_iter().chain(report).collect())
+        }
+        Err(why) => Err(brought
+            .into_iter()
+            .chain(std::iter::once(why))
+            .collect::<Vec<_>>()
+            .join("\n")),
+    }
+}
+
+/// The firmware packages the loaded drivers name, from the medium and the
+/// network.
+fn packaged(root: &str) -> Result<Vec<String>, String> {
     let modules: Vec<String> = std::fs::read_dir("/sys/module")
         .map_err(|e| format!("could not list the loaded drivers: {e}"))?
         .flatten()
@@ -158,7 +224,30 @@ pub fn is_root(path: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{packages, repositories};
+    use super::{carried, media, packages, repositories};
+    use std::path::PathBuf;
+
+    #[test]
+    fn a_stick_is_found_from_its_repository_and_what_it_carries_is_copied() {
+        let repos = [
+            "/media/usb/apks".to_string(),
+            "https://dl-cdn.alpinelinux.org/alpine/v3.24/main".to_string(),
+            "/media/usb/apks".to_string(),
+        ];
+        assert_eq!(media(&repos), [PathBuf::from("/media/usb")]);
+
+        let d = std::env::temp_dir().join(format!("alpymist-carried-in-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let stick = d.join("usb");
+        let root = d.join("mnt");
+        std::fs::create_dir_all(stick.join("alpymist-firmware/b43")).unwrap();
+        std::fs::write(stick.join("alpymist-firmware/b43/ucode16_mimo.fw"), "u").unwrap();
+        let said = carried(root.to_str().unwrap(), &[stick.clone(), d.join("cdrom")]);
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].starts_with("Copied 1 firmware files"));
+        assert!(root.join("lib/firmware/b43/ucode16_mimo.fw").is_file());
+        let _ = std::fs::remove_dir_all(&d);
+    }
 
     #[test]
     fn firmware_is_found_in_its_vendors_package() {

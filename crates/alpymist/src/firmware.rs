@@ -257,6 +257,19 @@ fn provide(pending: &mut BTreeSet<Missing>) -> bool {
             return false;
         }
     };
+    // The one driver whose firmware Alpymist knows how to fetch though no
+    // package has it. Said once: the request is not kept after this.
+    if wanted
+        .iter()
+        .any(|p| !available.contains(p) && p == "linux-firmware-b43")
+    {
+        let body = "This machine's Broadcom Wi-Fi card needs firmware that no package \
+                    may hold. With a network by cable or a phone: doas alpymist firmware \
+                    broadcom. Without one, Troubleshooting in the manual says how to \
+                    carry it on a stick.";
+        say(body);
+        tell_sessions("Wi-Fi needs firmware", body);
+    }
     for package in wanted.iter().filter(|p| !available.contains(p)) {
         for m in pending
             .iter()
