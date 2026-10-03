@@ -65,28 +65,89 @@ not find.
 
 If a notification said the Broadcom Wi-Fi card needs firmware, or
 `alpymist report` lists a `network` device with the driver `b43-pci-bridge`:
-that firmware is in no package, because Broadcom lets nobody pass it on.
-With a network by cable or a phone's USB tethering:
+that firmware is in no package, because Broadcom lets nobody pass it on, and
+it is not on Alpymist's image for the same reason. What Broadcom does publish
+is its own driver for routers, with the firmware inside it. Every way below
+downloads that driver from OpenWrt's mirrors, to the machine that asks, checks
+that it is exactly the file expected, and cuts the firmware out there. Nobody
+passes the firmware on to anybody, which is how every other distribution does
+it too.
+
+**With a network on that machine**, by cable or a phone's USB tethering:
 
 ```sh
 doas alpymist firmware broadcom
 ```
 
-downloads Broadcom's own driver, checks it, cuts the firmware out and starts
-the card.
+and the card shows its networks a moment later.
 
-With no network on that machine, fetch it on another Alpymist machine onto a
-stick, and take it from there:
+**With no network on that machine**, the firmware is fetched by another
+machine onto a stick. Any stick with room for a megabyte will do, and the
+stick Alpymist is installed from does best, if it was made by copying files
+and not with `dd`, as [for a Mac](02-getting-started.md#for-a-mac): the
+installer looks on the stick it runs from, and a new installation then has
+Wi-Fi from its first start.
+
+On another Alpymist machine, with the stick at `/media/usb`:
 
 ```sh
-alpymist firmware broadcom --to /media/usb          # on the machine with a network
-doas alpymist firmware broadcom --from /media/usb   # on the one without
+alpymist firmware broadcom --to /media/usb
 ```
 
-A stick the installer runs from is looked at too: with `alpymist-firmware`
-on it, a new installation has Wi-Fi from its first start. That needs a stick
-that can be written to, made by copying the image's files to a FAT partition
-and not with `dd`.
+On anything else, the same is a script, `broadcom-firmware.sh`. It is at the
+top of an install stick made by copying files, and at
+<https://alpymist.org/broadcom-firmware.sh>. Run from the stick, it writes to
+the stick:
+
+```sh
+sh /Volumes/ALPYMIST/broadcom-firmware.sh        # macOS
+sh /media/usb/broadcom-firmware.sh               # Linux
+```
+
+or, downloaded, with the stick's directory named:
+
+```sh
+curl -fsSLO https://alpymist.org/broadcom-firmware.sh
+sh broadcom-firmware.sh /Volumes/ALPYMIST
+```
+
+It needs `curl` or `wget`, and either `b43-fwcutter`, which most Linux
+distributions package under that name, or a C compiler to build it with,
+which on macOS is `xcode-select --install`. On Windows, run it in WSL, with
+the stick's drive letter in place of `e`: `sh broadcom-firmware.sh /mnt/e`.
+A macOS too old to make a secure connection to today's servers cannot
+download anything; use another machine.
+
+Either way leaves a directory `alpymist-firmware/b43` on the stick, and
+nothing else is changed. If Alpymist is already installed, take it from there:
+
+```sh
+doas alpymist firmware broadcom --from /media/usb
+```
+
+The live system on the install stick does not use the firmware: Wi-Fi works
+from the installed system's first start, not in the installer.
+
+## A control key does nothing
+
+The volume, brightness, media and radio keys are bound for every machine;
+see [Hotkeys](04-hotkeys.md#the-control-keys). When one does nothing:
+
+- Run what the key runs, in a terminal: `alpymist key brightness-up`,
+  `alpymist key volume-up`. If that works, the key is not reaching the
+  desktop. Hold <kbd>Fn</kbd> with it, or look for an *Fn lock*; on a Mac the
+  top row is these keys without <kbd>fn</kbd>. Some keys never reach the
+  system at all: most laptops light their keyboard, and some switch their
+  radios, in their own firmware.
+- If it says there is *no screen brightness to change*, the kernel found no
+  backlight on this machine: `ls /sys/class/backlight` is empty. That is the
+  graphics driver's, and worth an issue with `alpymist report`.
+- If it says the account *may not change that light*, the account is not in
+  the `video` group (`id` lists them; `doas adduser NAME video`, and log in
+  again), or the machine has not been restarted since the upgrade that
+  brought the keys.
+- The play and next keys act on a program that says it is playing. With
+  nothing playing they do nothing.
 
 ## A dock's keyboard, mouse or network does nothing
 

@@ -20,6 +20,10 @@ alpymist set sound.input-volume 80
 alpymist list sound.output      # the devices there are
 ```
 
+The keyboard's volume, mute and microphone keys work wherever a keyboard
+has them, on the lock screen too, and the play, next and previous keys
+control whatever is playing; see [Hotkeys](04-hotkeys.md#the-control-keys).
+
 On the bar, a click on the speaker opens the volume mixer (pavucontrol), with
 a volume for each program that is playing and each device. A right click
 mutes. Setup › Audio in the menu opens the same mixer.

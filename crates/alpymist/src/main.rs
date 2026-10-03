@@ -13,6 +13,7 @@ mod displays;
 mod firmware;
 mod guest;
 mod hardware;
+mod keys;
 mod launch;
 mod report;
 mod root;
@@ -170,6 +171,13 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Do what one of the keyboard's control keys does: volume, brightness,
+    /// the keyboard's light, what is playing, the radios. Hyprland runs this
+    /// when the key is pressed.
+    Key {
+        /// The key.
+        key: keys::Key,
+    },
     /// Install firmware that a driver asked for and did not find. As root;
     /// the alpymist-firmware service runs `watch` at boot.
     Firmware {
@@ -269,6 +277,10 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     if let Command::Clipboard { action } = &cli.command {
         return clipboard::run(action);
     }
+    // A control key, held down, is this many times a second.
+    if let Command::Key { key } = &cli.command {
+        return keys::run(*key);
+    }
     // The watches: none of the registry either.
     if let Command::Watchdog { list, watch } = &cli.command {
         return watchdog(*list, watch.as_deref());
@@ -328,6 +340,7 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Open { .. }
         | Command::Clipboard { .. }
         | Command::Displays { .. }
+        | Command::Key { .. }
         | Command::Report { .. }
         | Command::Watchdog { .. } => {
             unreachable!("handled above")

@@ -18,6 +18,11 @@
 //! - `alpymist firmware broadcom --from DIR`, as root on the machine without,
 //!   takes it from there.
 //!
+//! On a machine that is not Alpymist, `site/static/broadcom-firmware.sh` is
+//! `--to`: the same file from the same places, held to the same checksum,
+//! which a test here keeps true. It is on the image too, so an install stick
+//! made by copying files carries it.
+//!
 //! Nothing runs this for anyone. It is one file from one place, held to a
 //! checksum, and what it leaves is firmware only that driver reads.
 
@@ -247,5 +252,31 @@ mod tests {
         assert!(SHA256.chars().all(|c| c.is_ascii_hexdigit()));
         assert!(MIRRORS.iter().all(|m| m.starts_with("https://")));
         assert!(OBJECT.starts_with(ARCHIVE.trim_end_matches(".tar.bz2")));
+    }
+
+    /// The script that does this on a machine without Alpymist, a Mac under
+    /// macOS or any other Linux, fetches the same file from the same places
+    /// and holds it to the same checksum: one pin, written twice.
+    #[test]
+    fn the_script_for_other_systems_has_the_same_pin() {
+        let script = include_str!("../../../site/static/broadcom-firmware.sh");
+        let assigned = |name: &str| {
+            script
+                .lines()
+                .find_map(|l| l.strip_prefix(&format!("{name}=\"")))
+                .and_then(|v| v.strip_suffix('"'))
+                .unwrap_or_else(|| panic!("the script sets no {name}"))
+        };
+        assert_eq!(assigned("ARCHIVE"), ARCHIVE);
+        assert_eq!(assigned("SHA256"), SHA256);
+        assert_eq!(assigned("OBJECT"), OBJECT);
+        assert_eq!(assigned("MIRRORS"), MIRRORS.join(" "));
+        // What it builds the cutter from, where there is no package of it,
+        // is pinned as well, and nothing in it is fetched without TLS.
+        assert_eq!(assigned("CUTTER_SHA256").len(), 64);
+        assert!(assigned("CUTTER_URL").starts_with("https://"));
+        assert!(!script.contains("http://"));
+        // And it leaves it where the installer and `--from` look.
+        assert!(script.contains(&format!("into=\"$dir/{}\"", super::CARRIED)));
     }
 }

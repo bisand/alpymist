@@ -36,6 +36,22 @@ build_alpymist_boot() {
 	[ -f "$DESTDIR"/boot/grub/fonts/unicode.pf2 ] || die "no GRUB font"
 }
 
+# The script that fetches Broadcom's Wi-Fi firmware onto a stick, at the top
+# of the image: a stick made by copying the image's files, as an old Mac
+# needs, carries the means to fetch what that Mac's Wi-Fi card needs, to be
+# run under macOS or anything else with a network before installing. The
+# script and nothing it downloads: the firmware is not on the image
+# (ADR 0021). build-iso.sh puts the script beside this file.
+section_alpymist_firmware_script() {
+	build_section alpymist_firmware_script \
+		$(checksum < "$_alpymist_scripts"/broadcom-firmware.sh)
+}
+
+build_alpymist_firmware_script() {
+	install -m 755 "$_alpymist_scripts"/broadcom-firmware.sh \
+		"$DESTDIR"/broadcom-firmware.sh
+}
+
 profile_alpymist() {
 	profile_base
 	title="Alpymist"
@@ -112,6 +128,10 @@ profile_alpymist() {
 		x86*) initfs_cmdline="$initfs_cmdline intel_iommu=on";;
 	esac
 	apkovl="genapkovl-alpymist.sh"
+	# Where build-iso.sh put this file, and broadcom-firmware.sh beside it:
+	# the directory mkimage.sh is run in. Set here and not at the top, for
+	# the reason given below.
+	_alpymist_scripts="$PWD"
 
 	_alpymist_boot_menus
 }

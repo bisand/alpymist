@@ -79,3 +79,41 @@ the program, reviewed like any other.
   OpenFWWF is that for the oldest `b43` cards and not for this one; nobody
   has written it for the N-PHY cards. It is not ruled out here; it is a
   project of its own, to be measured before it is promised.
+
+## Addendum, 2026-10-03: a script for the machine that is not Alpymist
+
+`--to` supposed a second machine running Alpymist. The machine most people
+have beside a 2009 Mac is that Mac, under macOS, with its Wi-Fi working; or
+somebody's laptop with another Linux on it. Neither has `alpymist`.
+
+**`broadcom-firmware.sh` is `--to` for any system with a shell.** It lives in
+`site/static/`, so it is at `alpymist.org/broadcom-firmware.sh`, and the image
+has it at its top, so a stick made by copying the image's files carries it.
+It downloads the same file from the same mirrors, refuses it on the same
+checksum, and leaves the firmware in the same `alpymist-firmware/b43`. A test
+in `crates/alpymist/src/broadcom.rs` fails when the script and the program
+name different files or checksums: one pin, written twice.
+
+**Where there is no `b43-fwcutter`, it builds it.** macOS has no package of
+it. The script downloads `b43-fwcutter-019.tar.bz2` from its author's site,
+bues.ch, holds it to a SHA-256 written in the script, and compiles its two C
+files. That is a second pin and a second place to fetch from, both for the
+script only: `alpymist firmware broadcom` still takes the tool from Alpine.
+
+**What is on the image is the script.** Nothing it downloads is: the image
+still holds no firmware of Broadcom's and no driver of Broadcom's, and the
+decision above stands as written. The script is run by a person, by name,
+and by nothing else.
+
+What this does not cover:
+
+- Windows has no native way. The script runs under WSL; a PowerShell one
+  would have to cut the firmware out itself, with no `b43-fwcutter` to lean
+  on, and is not written.
+- The script was run on Linux, with a packaged `b43-fwcutter` and with one it
+  built, and gave byte for byte what `alpymist firmware broadcom --to` gives.
+  It has not been run on macOS at the time of writing.
+- An old macOS whose curl cannot agree a TLS version with today's servers
+  cannot fetch at all. The script does not fall back to plain HTTP: the
+  checksum would still hold the file, but a script that quietly stops using
+  TLS is not what this project ships.

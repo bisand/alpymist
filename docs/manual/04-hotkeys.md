@@ -5,7 +5,9 @@ Every key Alpymist binds, in one place. They are ordinary lines in
 `~/.config/hypr/hyprland.conf`, which is yours to change: Setup › Config ›
 Hyprland in the menu opens it. Learn › Keybindings in the menu lists the ones
 your own file has, apart from the lid, the power and sleep keys and
-<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Delete</kbd>.
+<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Delete</kbd>. The keyboard's
+[control keys](#the-control-keys) come from the package and are not in your
+file.
 
 ## Opening things
 
@@ -78,11 +80,46 @@ from your own file, so it is not lost in an edit of yours.
 | <kbd>F11</kbd> | Restart |
 | <kbd>F12</kbd> | Power off |
 
-## What is not bound
+## The control keys
 
-Alpymist does not yet bind the volume, brightness or media keys. Volume is
-on the bar's speaker icon and in Settings › Sound. You can bind them yourself
-in `hyprland.conf`; Hyprland's wiki has the lines.
+The keys with a picture on them, on whatever keyboard has them: a laptop's
+top row, usually with <kbd>Fn</kbd> held, or a row of their own on a desktop
+keyboard. A Mac's top row is these keys without <kbd>fn</kbd>, and F1 to F12
+with it. Each says what it did in a notification at the corner of the
+screen, and all but the last group work on the lock screen too.
+
+| Key | Does |
+|---|---|
+| Volume up, volume down | The volume, 5% at a time, to 100% and no further. Up also unmutes |
+| Mute | Mute the sound, and back |
+| Microphone mute | Mute the microphone, and back |
+| Brightness up, brightness down | The screen's light, in smaller steps as it gets dim, and never all the way to dark |
+| Keyboard light up, down, on/off | The keyboard's light, where the system is what sets it: a Mac's |
+| Play/pause, next, previous, stop | Whatever is playing: a browser's tab, a music player |
+| Wi-Fi | Wi-Fi off, and on again |
+| Bluetooth | Bluetooth off, and on again, once it is turned on in Settings › Bluetooth |
+| Airplane mode | Wi-Fi and Bluetooth off; again, and those it switched off are back |
+| Settings (a cog) | Settings |
+| Display | Settings › Displays |
+| Search | The menu |
+| Home, web | The web browser |
+| Files | The file manager |
+| Lock | Lock the screen |
+| A Mac's F3 and F4 | Every workspace of this screen, and the menu's applications |
+
+A key that does nothing at all may be one the keyboard handles itself, as
+most laptops do their keyboard light, or one the kernel has no name for; see
+[Troubleshooting](27-troubleshooting.md#a-control-key-does-nothing).
+
+These come from the package, in `/usr/share/alpymist/hyprland-keys.conf`, so
+an upgrade keeps them current. Each runs `alpymist key`, which can be run by
+hand or bound to any other key:
+
+```
+bind = SUPER, F12, exec, alpymist key volume-up
+```
+
+`alpymist key --help` lists them.
 
 ## Changing a key
 
@@ -94,3 +131,11 @@ bind = SUPER, E, exec, alpymist open files
 
 Hyprland reads the file again as soon as it is saved. A line of your own
 comes after Alpymist's packaged ones, so yours wins.
+
+Hyprland runs every line a key has, so to give a key of the package's another
+job, take the package's away first:
+
+```
+unbind = , XF86AudioPlay
+bind = , XF86AudioPlay, exec, my-player --toggle
+```

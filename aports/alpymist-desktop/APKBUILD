@@ -114,6 +114,7 @@ depends="
 	pipewire
 	pipewire-pulse
 	pipewire-spa-bluez
+	playerctl
 	polkit
 	seatd
 	shadow
@@ -259,6 +260,13 @@ package() {
 	# Which windows float as dialogs, which hyprland-security.conf sources.
 	install -Dm644 "$builddir"/desktop/hypr/hyprland-windows.conf \
 		"$pkgdir"/usr/share/alpymist/hyprland-windows.conf
+	# The volume, brightness, media and radio keys, which
+	# hyprland-security.conf sources too.
+	install -Dm644 "$builddir"/desktop/hypr/hyprland-keys.conf \
+		"$pkgdir"/usr/share/alpymist/hyprland-keys.conf
+	# The screen's and the keyboard's light, to the video group; see the file.
+	install -Dm644 "$builddir"/desktop/udev/91-alpymist-backlight.rules \
+		"$pkgdir"/usr/lib/udev/rules.d/91-alpymist-backlight.rules
 	_skel desktop "$pkgdir"
 }
 

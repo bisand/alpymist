@@ -24,8 +24,9 @@ The one command for settings and for the system.
 | `alpymist wallpaper` | Puts the chosen wallpaper on the screen |
 | `alpymist autostart [--dry-run]` | Starts the programs that start at login |
 | `alpymist watchdog --list` | Lists what the session keeps watch over: the screens, and the bar |
+| `alpymist key KEY` | Does what one of the keyboard's control keys does: `volume-up`, `mute`, `brightness-down`, `play-pause`, `wifi`, `airplane` and the rest; `--help` lists them |
 | `alpymist firmware check` | As root: installs firmware a driver asked for and did not find |
-| `alpymist firmware broadcom [--to DIR or --from DIR]` | Fetches the firmware Broadcom's older Wi-Fi cards need, which no package may hold. `--to` puts it on a stick for a machine with no network, and `--from` takes it from one. |
+| `alpymist firmware broadcom [--to DIR or --from DIR]` | Fetches the firmware Broadcom's older Wi-Fi cards need, which no package may hold. `--to` puts it on a stick for a machine with no network, and `--from` takes it from one. On a machine that is not Alpymist, `broadcom-firmware.sh` is `--to`; see [Troubleshooting](27-troubleshooting.md#a-broadcom-card-in-an-older-laptop). |
 
 `alpymist session` starts a desktop session and is what the login screen
 runs, and `alpymist watchdog` alone is what Hyprland runs at login; neither
