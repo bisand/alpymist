@@ -113,6 +113,16 @@ lights go to the `video` group by `desktop/udev/91-alpymist-backlight.rules`
 and never to `input`, and a radio is switched by iwd or bluetoothd, not by
 rfkill. See [ADR 0022](docs/adr/0022-control-keys.md).
 
+**Tab completion is asked of the program, not generated.** The three files
+in `desktop/completion` hold no command's name: each hands the words typed to
+the hidden `alpymist complete` and shows what it prints, so a new subcommand,
+option or setting is completed the day it exists. What clap cannot list — the
+settings, a setting's values, the screens — is in `named` in
+`crates/alpymist/src/complete.rs`; an argument that takes names of that sort
+goes there. No completion crate: clap's own description of the command line
+is enough, and a test there holds the shells' files to how the command is run
+and how it ends for a file's name.
+
 **The manual's "Every setting" page is made, not written.**
 `docs/manual/26-every-setting.md` is what `crates/alpymist/tests/every_setting.rs`
 makes from `alpymist list --json`, and that test fails when the two differ. A

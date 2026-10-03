@@ -58,6 +58,15 @@ package() {
 		"$pkgdir"/usr/share/polkit-1/actions/org.alpymist.settings.policy
 	install -Dm755 "$srcdir"/alpymist-firmware.initd \
 		"$pkgdir"/etc/init.d/alpymist-firmware
+	# Tab after `alpymist`, for each shell in the place it looks. Here and
+	# not in packages of their own: they are a few lines that ask the
+	# program above what to offer, and zsh is every account's shell.
+	install -Dm644 "$builddir"/desktop/completion/_alpymist \
+		"$pkgdir"/usr/share/zsh/site-functions/_alpymist
+	install -Dm644 "$builddir"/desktop/completion/alpymist.bash \
+		"$pkgdir"/usr/share/bash-completion/completions/alpymist
+	install -Dm644 "$builddir"/desktop/completion/alpymist.fish \
+		"$pkgdir"/usr/share/fish/vendor_completions.d/alpymist.fish
 }
 
 # Filled in by `abuild checksum` at build time; see alpymist-install.
