@@ -65,7 +65,8 @@ first five, and any others in use, at its left end.
 
 <kbd>Super</kbd>+<kbd>Tab</kbd> is for when you have forgotten where the
 browser went: the nine workspaces as they are now, small, three by three.
-Click one to go to it, or press the key again to stay where you were.
+Click one to go to it, press <kbd>Super</kbd> and its number without reaching
+for the pointer, or press the key again to stay where you were.
 
 A click on a workspace in the bar goes to it. With more than one screen,
 each screen has its own nine, and the keys act on the screen the pointer is

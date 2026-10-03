@@ -50,7 +50,8 @@ between it and the edge. Every account has these from the package.
 
 <kbd>Super</kbd>+<kbd>Tab</kbd> shows the nine workspaces of the screen the
 pointer is on, on that screen; move the pointer to another screen and press it
-again for that one's. An account made before the key is given it the same way,
+again for that one's. Click a workspace to go to it, or press
+<kbd>Super</kbd> and its number. An account made before the key is given it the same way,
 unless it already uses <kbd>Super</kbd>+<kbd>Tab</kbd>. The overview is loaded
 when the desktop starts, so the first time after the upgrade that brought it,
 log out and in.
