@@ -10,7 +10,7 @@ Settings › System has what belongs to the computer and to your account on it.
 | Computer name | What the computer is called on the network, in the terminal's prompt and on the login screen |
 | Password | Changes your password, in a terminal that asks for the old one first |
 | Administrator | Whether this account may change settings for everyone and install software. The last administrator cannot be turned off. |
-| Unlock with a fingerprint | See [Screensaver, idle and lock](14-screensaver-idle-and-lock.md) |
+| Unlock the screen, answer administrator prompts, and log in, with a fingerprint | Three switches, one for each place a finger can stand in for the password. See [Screensaver, idle and lock](14-screensaver-idle-and-lock.md#unlocking-with-a-fingerprint) |
 | Hardware report | Shows what the computer is made of and which drivers have it, and offers to open it as a GitHub issue. Nothing is sent unless you submit it. See [Troubleshooting](27-troubleshooting.md). |
 
 ```sh

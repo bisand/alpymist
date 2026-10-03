@@ -280,6 +280,21 @@ pub enum Status {
     Problem(String),
 }
 
+/// What Enter with nothing typed asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Empty {
+    /// The empty password, checked as any other.
+    Password,
+    /// The fingerprint reader, as the login service does where Settings
+    /// turned that on.
+    Finger,
+}
+
+/// What is said while the reader waits for a finger.
+pub const TOUCH: &str = "Touch the fingerprint reader";
+/// What is said under the field where a finger logs in.
+pub const OR_A_FINGER: &str = "Or press Enter and touch the reader";
+
 /// How many sceneries of other sizes are kept.
 const SPARE: usize = 3;
 
@@ -295,6 +310,8 @@ pub struct App {
     /// What that line says when there is nothing else to: how else to get in,
     /// such as the fingerprint reader.
     pub hint: Option<String>,
+    /// What Enter with nothing typed asks for.
+    pub empty: Empty,
     /// This machine's name, for the footer.
     pub hostname: String,
     /// The keyboard layout keys are read with, for the footer.
@@ -351,6 +368,7 @@ impl App {
             caret: 0,
             status,
             hint: None,
+            empty: Empty::Password,
             hostname: String::new(),
             keyboard: String::new(),
             footer_hint: None,
@@ -566,7 +584,11 @@ impl App {
             let _ = tx.send(authenticate(&name, &password));
         });
         self.pending = Some(rx);
-        self.status = Status::Checking;
+        self.status = if self.empty == Empty::Finger && self.password.is_empty() {
+            Status::Notice(TOUCH.into())
+        } else {
+            Status::Checking
+        };
     }
 
     /// Somebody got in without the password — an enrolled finger on the
@@ -1010,6 +1032,27 @@ mod tests {
         settle(&mut a);
         assert!(a.started);
         assert_eq!(*asked.lock().unwrap(), [("kid".into(), "right".into())]);
+    }
+
+    #[test]
+    fn enter_with_nothing_typed_says_to_touch_the_reader_where_a_finger_logs_in() {
+        let (mut app, _) = app(&["andre"]);
+        app.act(Action::Submit);
+        assert_eq!(
+            app.status,
+            Status::Checking,
+            "no finger is taken by default"
+        );
+        settle(&mut app);
+
+        app.empty = super::Empty::Finger;
+        app.act(Action::Submit);
+        assert_eq!(app.status, Status::Notice(super::TOUCH.into()));
+        settle(&mut app);
+        type_text(&mut app, "wrong");
+        app.act(Action::Submit);
+        assert_eq!(app.status, Status::Checking, "a typed password is checked");
+        settle(&mut app);
     }
 
     #[test]

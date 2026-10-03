@@ -12,12 +12,12 @@ practice.
 |---|---|
 | The `root` account | Locked. Nobody logs in as root. |
 | Administration | Through `doas`, for administrators, with your password |
-| Login | Always asks for a password. There is no automatic login. |
+| Login | Asks for a password, or for an enrolled finger where that is turned on. There is no automatic login. |
 | Network services | None listening. The SSH server is not installed until turned on. |
 | Bluetooth | Off |
 | Thunderbolt and USB4 devices | Asked about before they are let in |
 | Clipboard history | Off |
-| Fingerprint unlock | Off |
+| A fingerprint, at the lock screen, at administrator prompts and at login | Off, each |
 | Secrets | In a keyring encrypted with your login password |
 | Locking when the screen turns off | Off: see below |
 

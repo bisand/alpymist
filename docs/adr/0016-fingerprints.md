@@ -77,3 +77,95 @@ claimed the reader next would let them in on a finger they never asked about.
 - A system without a reader, or an account with no finger enrolled, loses
   nothing. `pam_fprintd` says so at once, and the lock asks again less and less
   often, up to once a minute.
+
+## Addendum, 2026-10-03: a switch for each place, and the login screen among them
+
+The decision above gave one switch that did two things, and said the login
+screen never takes a finger. Both are changed.
+
+**Each place has a switch of its own**, all off until an administrator turns
+one on:
+
+- `system.fingerprint-lock`: the lock screen's service, as before.
+- `system.fingerprint-prompts`: the line in `polkit-1`, as before.
+- `system.fingerprint-login`: new, below.
+
+A system where the one switch was on has the first two on, since each is read
+from the file it writes.
+
+**The login screen takes a finger where its switch is on.** This reverses
+"the login screen never takes a finger". The reason given for that stands and
+is not mended: a login by finger opens a session whose keyring is locked, and
+the first program that wants a secret asks for the password. Every other
+distribution that offers a login by finger leaves it so. What changed is who
+decides: it was decided for everyone, and it is now a switch whose description
+says what it costs.
+
+How it works:
+
+- The switch replaces `auth include base-auth` in `/etc/pam.d/alpymist-greetd`
+  with the same modules spelt out, between two notes so they can be found and
+  taken out again. `pam_unix` is asked first. A right password jumps past the
+  reader. Anything else goes on to `pam_fprintd`, for one try of ten seconds,
+  and a finger the daemon knows jumps past the refusal and past
+  `pam_gnome_keyring`, which is never handed the empty password a finger came
+  with.
+- greetd runs one PAM conversation for a login, so the login screen cannot ask
+  two services at once as the lock screen does. Enter with nothing typed is how
+  a finger is asked for: the empty password fails, and the reader is next.
+- A typed password that is wrong is not left waiting on the reader. PAM asking
+  for a finger means the password failed, and the login screen cancels there
+  and says so. It tells that message by the word "finger" in it; were
+  `pam_fprintd` to say it in another language, a wrong password would wait the
+  ten seconds and then be refused, and nothing worse.
+- An account with no password logs in on Enter, as before: `nullok` is kept.
+
+What this gives up, beyond the keyring:
+
+- The login service no longer includes Alpine's `base-auth` while the switch is
+  on, so a change Alpine makes to that file does not reach it. A test holds
+  the spelt-out stack to `base-auth` as it is in linux-pam 1.7, less
+  `pam_kwallet5`, which nothing here installs.
+- `alpymist-greetd` is the package's file in `/etc`, edited. As with
+  `polkit-1`, apk keeps the edit and puts a changed package file beside it as
+  `.apk-new`. Off puts back the one line exactly.
+- A finger at the login screen is the same weakness as at the lock screen,
+  with the machine freshly started and nobody's session open behind it.
+
+**`doas` still takes no finger, and cannot.** Alpine builds `doas`, and
+`sudo`, without PAM, so there is no service to put `pam_fprintd` in. A finger
+for a terminal's password would mean Alpymist building its own setuid program
+to stand in for Alpine's, which is a decision of ADR 0002's size and is not
+taken here. What a terminal does get: Alpymist's own commands escalate through
+polkit, and take a finger where the prompts switch is on.
+
+The stack was run through PAM on the X1 with a wrong password and no finger:
+the password was asked, then the reader, and it was refused when the reader
+gave up. Then it was installed there and a finger logged in at the login
+screen, with the keyring asking for the password afterwards, as said above.
+
+**Enter stays.** A finger and a password taken at once, whichever comes
+first, is what the lock screen does and what was wanted here too. greetd
+0.10.3 cannot do it, and its source says why:
+
+- It runs one PAM conversation for a login, and refuses a second while the
+  first is open ("a session is already being configured").
+- It speaks to the login screen only in answer to something the login screen
+  sent. With a password prompt open, it has no way to say that a finger
+  matched.
+- While PAM waits on the reader, greetd waits on PAM holding its one lock
+  (`get_question` in `context.rs`), and `CancelSession` needs that lock. A
+  waiting attempt cannot be abandoned when somebody types a password, from
+  the same connection or another.
+
+So within one conversation it is one and then the other. Arming the reader
+without Enter was weighed and turned down: a password typed while the reader
+waits would not be checked until the reader gave up, ten seconds at worst,
+for everyone who logs in on a machine with the switch on. Enter costs the
+person with the finger one key and the person with the password nothing.
+
+The login managers where both work at once, GDM above all, run a
+conversation for each side by side, as the lock screen here does. Getting
+there means greetd learning to cancel a waiting attempt or to run two, or a
+login daemon of Alpymist's own. Neither is taken up here; either would be an
+addendum to this.
