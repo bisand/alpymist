@@ -77,25 +77,50 @@ A few things are worth knowing about it:
 
 ## Unlocking with a fingerprint
 
-On a laptop with a supported reader, an enrolled finger can unlock the screen
-and answer administrator prompts. Logging in always takes the password,
-because the password is what unlocks your keyring.
+On a laptop with a supported reader, an enrolled finger can stand in for the
+password in three places, each with a switch of its own in Settings › System.
+All three are off until you turn them on, and the password goes on working
+everywhere.
 
-The installer sets this up where it finds a reader it knows. On another
+| Switch | A finger then | `alpymist set` |
+|---|---|---|
+| Unlock the screen with a fingerprint | Unlocks the locked screen | `system.fingerprint-lock` |
+| Answer administrator prompts with a fingerprint | Answers the window that asks for an administrator's password | `system.fingerprint-prompts` |
+| Log in with a fingerprint | Logs in at the login screen | `system.fingerprint-login` |
+
+The installer sets the reader up where it finds one it knows. On another
 machine, `doas apk add alpymist-fingerprint` first; the reader also needs a
 driver of its own, which for most is `fprintd`.
 
 1. Search the menu for **Fingerprints**, or run `alpymist-fingerprint`.
    Choose a finger, add it, and test it. Adding or removing one asks for your
    password.
-2. Turn on *Unlock with a fingerprint* in Settings › System, or
-   `alpymist set system.fingerprint true`. This asks for an administrator's
-   password.
+2. Turn on the switches you want in Settings › System, or for instance
+   `alpymist set system.fingerprint-lock true`. Each asks for an
+   administrator's password.
 
-At the lock screen, touch the reader or type the password, whichever you
+**At the lock screen**, touch the reader or type the password, whichever you
 like. After three fingers in a row that are not recognised, the lock stops
 listening to the reader until it is unlocked with the password.
 
+**At an administrator prompt**, touch the reader, or type the password and
+press Enter.
+
+**At the login screen**, press <kbd>Enter</kbd> with nothing typed, then
+touch the reader within ten seconds. Typing the password logs in as it always
+did, and does not wait for a finger.
+
+A login by finger leaves your keyring locked. The keyring is opened with your
+password, and a finger has no password to give. The first program that wants
+something kept there, such as a saved Wi-Fi or git password or an SSH key's
+passphrase, asks for your password then. Log in with the password when you
+would rather not be asked later.
+
+`doas` in a terminal always takes the password: Alpine builds it without the
+part a fingerprint would go through. Alpymist's own commands that need an
+administrator, such as `alpymist set` for a system setting, ask through the
+administrator prompt, and so take a finger where that switch is on.
+
 A finger is weaker than a good password in two ways: it can be lifted from a
-surface, and it cannot be changed. That is why this is off until you turn it
-on.
+surface, and it cannot be changed. That is why each of these is off until you
+turn it on.

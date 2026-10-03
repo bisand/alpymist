@@ -7,6 +7,13 @@
 //! so the attempt is abandoned and says why rather than sending the password
 //! again as the answer to a different question.
 //!
+//! Where Settings has turned on logging in with a fingerprint, the login
+//! service asks for a finger after a password that was not right (ADR 0016's
+//! addendum). An empty password is how this screen asks for the reader: it
+//! is sent, PAM says to touch the reader, and the answer is the finger's. A
+//! password that was typed and is wrong is not left waiting ten seconds for
+//! a finger nobody is offering: PAM asking for one is taken as the refusal.
+//!
 //! Every failure cancels the session before returning. greetd refuses to begin
 //! a new one while an old one is half set up, so forgetting that turns one
 //! wrong password into a screen that can never log anyone in.
@@ -44,6 +51,27 @@ pub enum Outcome {
     Failed(String),
 }
 
+/// Whether the login service takes a finger: `service` is the text of its
+/// PAM file, and a line of it, not a comment, names `pam_fprintd`.
+#[must_use]
+pub fn takes_a_finger(service: &str) -> bool {
+    service
+        .lines()
+        .any(|line| !line.trim_start().starts_with('#') && line.contains("pam_fprintd.so"))
+}
+
+/// What is said for a password that did not log in.
+const NOT_RIGHT: &str = "That password is not right.";
+/// What is said for a finger that did not.
+pub const NOT_THAT_FINGER: &str = "That finger was not recognised.";
+
+/// Whether a notice from PAM is the reader asking for a finger.
+/// `pam_fprintd` says "Place your finger on the fingerprint reader", or
+/// "Swipe your finger across" it, and names the reader where there are two.
+fn asks_for_a_finger(notice: &str) -> bool {
+    notice.to_lowercase().contains("finger")
+}
+
 /// Log `username` in with `password` and start `cmd`.
 ///
 /// Notices PAM sends along the way — "your password expires in 3 days" — are
@@ -79,6 +107,8 @@ fn converse(
         username: username.to_string(),
     })?;
     let mut answered = false;
+    // Whether the reader was asked, after an empty password.
+    let mut fingered = false;
 
     loop {
         reply = match reply {
@@ -86,7 +116,10 @@ fn converse(
             Response::Error {
                 error_type: ErrorType::AuthError,
                 ..
-            } => return Ok(Outcome::Rejected("That password is not right.".into())),
+            } => {
+                let why = if fingered { NOT_THAT_FINGER } else { NOT_RIGHT };
+                return Ok(Outcome::Rejected(why.into()));
+            }
             Response::Error { description, .. } => return Ok(Outcome::Failed(description)),
             Response::AuthMessage {
                 auth_message_type: AuthMessageType::Secret | AuthMessageType::Visible,
@@ -102,6 +135,21 @@ fn converse(
                 greetd.call(&Request::PostAuthMessageResponse {
                     response: Some(password.to_string()),
                 })?
+            }
+            Response::AuthMessage { auth_message, .. }
+                if answered && asks_for_a_finger(&auth_message) =>
+            {
+                // The password was not right, or this would not be asked.
+                if !password.is_empty() {
+                    return Ok(Outcome::Rejected(NOT_RIGHT.into()));
+                }
+                fingered = true;
+                greetd.call(&Request::PostAuthMessageResponse { response: None })?
+            }
+            // What the reader says of a finger it did not take: the refusal
+            // that follows says it.
+            Response::AuthMessage { .. } if fingered => {
+                greetd.call(&Request::PostAuthMessageResponse { response: None })?
             }
             Response::AuthMessage { auth_message, .. } => {
                 let text = auth_message.trim();
@@ -253,6 +301,104 @@ mod tests {
             .count();
         assert_eq!(answers, 1);
         assert!(g.cancelled());
+    }
+
+    fn info(text: &str) -> Response {
+        Response::AuthMessage {
+            auth_message_type: AuthMessageType::Info,
+            auth_message: text.into(),
+        }
+    }
+
+    const PLACE: &str = "Place your finger on the fingerprint reader";
+
+    #[test]
+    fn enter_with_nothing_typed_and_a_finger_logs_in() {
+        let mut g = Script::new([
+            secret("Password: "),
+            info(PLACE),
+            Response::Success,
+            Response::Success,
+        ]);
+        let mut notices = Vec::new();
+        let outcome = attempt(&mut g, "andre", "", &cmd(), &mut notices);
+        assert_eq!(outcome, Outcome::Started);
+        assert!(notices.is_empty(), "{notices:?}");
+        assert_eq!(
+            g.asked[1..3],
+            [
+                Request::PostAuthMessageResponse {
+                    response: Some(String::new())
+                },
+                Request::PostAuthMessageResponse { response: None },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_finger_not_recognised_is_said_to_be_the_finger() {
+        let mut g = Script::new([
+            secret("Password: "),
+            info(PLACE),
+            info("Failed to match fingerprint"),
+            Response::Error {
+                error_type: ErrorType::AuthError,
+                description: "pam_authenticate: AUTH_ERR".into(),
+            },
+        ]);
+        let mut notices = Vec::new();
+        let outcome = attempt(&mut g, "andre", "", &cmd(), &mut notices);
+        assert_eq!(outcome, Outcome::Rejected(super::NOT_THAT_FINGER.into()));
+        assert!(g.cancelled());
+    }
+
+    /// The reader is asked only after the password failed, so being asked is
+    /// the answer, and nobody waits ten seconds to be told.
+    #[test]
+    fn a_wrong_typed_password_does_not_wait_for_a_finger() {
+        let mut g = Script::new([secret("Password: "), info(PLACE)]);
+        let (outcome, _) = run(&mut g);
+        assert_eq!(
+            outcome,
+            Outcome::Rejected("That password is not right.".into())
+        );
+        assert!(g.cancelled());
+        assert_eq!(
+            g.asked.len(),
+            3,
+            "the reader was not acknowledged: {:?}",
+            g.asked
+        );
+    }
+
+    /// With the switch off nothing asks for a finger, and nothing changes.
+    #[test]
+    fn enter_with_nothing_typed_is_a_wrong_password_where_no_finger_is_taken() {
+        let mut g = Script::new([
+            secret("Password: "),
+            Response::Error {
+                error_type: ErrorType::AuthError,
+                description: "pam_authenticate: AUTH_ERR".into(),
+            },
+        ]);
+        let mut notices = Vec::new();
+        let outcome = attempt(&mut g, "andre", "", &cmd(), &mut notices);
+        assert_eq!(
+            outcome,
+            Outcome::Rejected("That password is not right.".into())
+        );
+    }
+
+    #[test]
+    fn the_login_service_says_whether_it_takes_a_finger() {
+        let shipped = include_str!("../../../desktop/alpymist-greetd.pam");
+        assert!(!super::takes_a_finger(shipped));
+        assert!(super::takes_a_finger(
+            "-auth\t[success=2 default=ignore]\tpam_fprintd.so max-tries=1 timeout=10\n"
+        ));
+        assert!(!super::takes_a_finger(
+            "# -auth sufficient pam_fprintd.so\n"
+        ));
     }
 
     #[test]

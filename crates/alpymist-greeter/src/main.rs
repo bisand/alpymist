@@ -25,6 +25,10 @@ use alpymist_greeter::app::Power;
 /// The package makes it greetd's.
 #[cfg(feature = "drm")]
 const LAST_USER: &str = "/var/cache/alpymist-greeter/last-user";
+/// The PAM service a login is checked with, as greetd's configuration names
+/// it.
+#[cfg(feature = "drm")]
+const LOGIN_SERVICE: &str = "/etc/pam.d/alpymist-greetd";
 
 /// The session command from `--cmd`, split into arguments.
 fn session_command() -> Result<Vec<String>, String> {
@@ -334,6 +338,14 @@ mod console {
             size.height,
         );
         app.hostname = super::hostname();
+        // Settings › System › Log in with a fingerprint rewrites the login
+        // service, which is where this reads it from: no second switch.
+        if std::fs::read_to_string(super::LOGIN_SERVICE)
+            .is_ok_and(|service| login::takes_a_finger(&service))
+        {
+            app.empty = alpymist_greeter::app::Empty::Finger;
+            app.set_hint(Some(alpymist_greeter::app::OR_A_FINGER.into()));
+        }
         app.load_picture(std::path::Path::new(alpymist_greeter::app::PICTURE));
         if let Ok(last) = std::fs::read_to_string(super::LAST_USER) {
             app.select(last.trim());

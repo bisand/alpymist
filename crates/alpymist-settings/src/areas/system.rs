@@ -19,12 +19,15 @@
 //! or doas names. The last administrator is never taken out: root's password
 //! is locked, so nobody could look after the computer again.
 //!
-//! Unlocking with a fingerprint is off until it is turned on here (ADR 0016).
-//! On, it is two PAM changes and nothing else: the lock screen's own
-//! fingerprint service, [`LOCK_FINGERPRINT`], whose being there is the switch,
-//! and one `pam_fprintd` line in polkit's, so administrator prompts take an
-//! enrolled finger too. The password still works everywhere, and the login
-//! screen never takes a finger: it is what unlocks the keyring.
+//! A fingerprint is off everywhere until it is turned on here (ADR 0016), and
+//! each place it can be used has a switch of its own. Each is a PAM change
+//! and nothing else: the lock screen's own fingerprint service,
+//! [`LOCK_FINGERPRINT`], whose being there is the switch; one `pam_fprintd`
+//! line in polkit's, so administrator prompts take an enrolled finger; and,
+//! for logging in, [`LOGIN`]'s password stack with a finger asked for after a
+//! password that was not right. The password still works everywhere. A login
+//! by finger leaves the keyring locked, which its switch says: the keyring is
+//! opened with the password, and a finger has none to give.
 
 use crate::env::Env;
 use crate::model::{Applies, Kind, Scope, Setting, TextRule, Value};
@@ -45,8 +48,14 @@ pub const REPORT_ID: &str = "system.report";
 pub const ADMINISTRATOR_ID: &str = "system.administrator";
 /// The groups, `wheel` among them.
 pub const GROUP: &str = "etc/group";
-/// Unlocking with a fingerprint's id.
-pub const FINGERPRINT_ID: &str = "system.fingerprint";
+/// Unlocking the screen with a fingerprint's id.
+pub const FINGERPRINT_LOCK_ID: &str = "system.fingerprint-lock";
+/// Answering administrator prompts with a fingerprint's id.
+pub const FINGERPRINT_PROMPTS_ID: &str = "system.fingerprint-prompts";
+/// Logging in with a fingerprint's id.
+pub const FINGERPRINT_LOGIN_ID: &str = "system.fingerprint-login";
+/// The login screen's PAM service, as greetd's configuration names it.
+pub const LOGIN: &str = "etc/pam.d/alpymist-greetd";
 /// The lock screen's fingerprint service, as `alpymist-lock` names it.
 pub const LOCK_FINGERPRINT: &str = "etc/pam.d/alpymist-lock-fingerprint";
 /// polkit's PAM service, which administrator prompts are checked with.
@@ -59,19 +68,53 @@ pub const PAM_FPRINTD: &str = "usr/lib/security/pam_fprintd.so";
 /// The lock screen's service: a finger, checked by the fingerprint daemon,
 /// and nothing that could take a password.
 const LOCK_SERVICE: &str = "\
-# Written by Settings › System › Unlock with a fingerprint, and removed when
+# Written by Settings › System › Unlock the screen with a fingerprint, and removed when
 # it is turned off. The lock screen asks this beside the password: an
 # enrolled finger on the reader, checked by the fingerprint daemon.
 auth\t\trequired\tpam_fprintd.so
 ";
 /// What goes before the line in polkit's service, so it can be found again.
-const POLKIT_NOTE: &str =
-    "# Settings › System › Unlock with a fingerprint: an enrolled finger, or the password";
+const POLKIT_NOTE: &str = "# Settings › System › Answer administrator prompts with a fingerprint: an enrolled finger, or the password";
 /// The line itself. `sufficient`: a finger lets the prompt through, and
 /// anything else — no reader, no finger enrolled, the reader held by the lock
 /// screen, a finger not recognised — goes on to the password. The dash keeps
 /// polkit working should fprintd-pam be removed while this is on.
 const POLKIT_LINE: &str = "-auth\t\tsufficient\tpam_fprintd.so";
+/// What polkit's note said before each place had a switch of its own; taken
+/// out with the line, so a system switched on then is left clean.
+const POLKIT_NOTE_BEFORE: &str =
+    "# Settings › System › Unlock with a fingerprint: an enrolled finger, or the password";
+
+/// The line of the login service that a finger takes the place of: Alpine's
+/// own password stack.
+const LOGIN_PASSWORD: &str = "auth\t\tinclude\t\tbase-auth";
+/// What a login checks with a finger allowed: [`LOGIN_PASSWORD`]'s modules,
+/// spelt out, with a finger between the password and the refusal.
+///
+/// The password is asked first, and a right one goes past the reader to the
+/// keyring, which it opens. One that is not right — nothing typed, most of
+/// all — goes on to the reader, once and for ten seconds, and a finger the
+/// daemon knows goes past the refusal and past the keyring too: the keyring
+/// is never offered the empty password a finger came with. The login screen sends an empty
+/// password to ask for the reader, and gives up on a typed one that was
+/// wrong without waiting for a finger. An account with no password logs in
+/// on Enter, as it did. `pam_permit` is there because a line that jumps says
+/// nothing of its own, and a stack where nothing said yes is a no. The dash
+/// keeps logging in by password working should fprintd-pam be removed while
+/// this is on.
+///
+/// This is `base-auth` spelt out, and must go on saying what it says: a test
+/// holds it to Alpine's file as it was when this was written.
+const LOGIN_FINGER: &str = "\
+# Settings › System › Log in with a fingerprint: the password, or an enrolled finger
+auth\t\t[success=2 default=ignore]\tpam_unix.so nullok
+-auth\t\t[success=2 default=ignore]\tpam_fprintd.so max-tries=1 timeout=10
+auth\t\trequisite\tpam_deny.so
+-auth\t\toptional\tpam_gnome_keyring.so
+auth\t\trequired\tpam_permit.so
+auth\t\trequired\tpam_nologin.so
+auth\t\trequired\tpam_env.so
+# Settings › System › Log in with a fingerprint: to here";
 
 /// The settings.
 pub fn settings() -> Vec<Setting> {
@@ -115,19 +158,35 @@ pub fn settings() -> Vec<Setting> {
             applies: Applies::NextLogin,
         },
         Setting {
-            id: FINGERPRINT_ID,
-            title: "Unlock with a fingerprint",
-            description: "Let an enrolled finger unlock the screen and answer administrator \
-                          prompts, beside the password. Logging in still takes the password. \
-                          Fingers are added in Fingerprints.",
-            keywords: &[
-                "fingerprint",
-                "finger",
-                "reader",
-                "biometric",
-                "fprintd",
-                "touch",
-            ],
+            id: FINGERPRINT_LOCK_ID,
+            title: "Unlock the screen with a fingerprint",
+            description: "Let an enrolled finger unlock the locked screen, beside the \
+                          password. Fingers are added in Fingerprints.",
+            keywords: FINGER_WORDS,
+            kind: Kind::Switch,
+            default: Value::Bool(false),
+            scope: Scope::System,
+            applies: Applies::Now,
+        },
+        Setting {
+            id: FINGERPRINT_PROMPTS_ID,
+            title: "Answer administrator prompts with a fingerprint",
+            description: "Let an enrolled finger answer the window that asks for an \
+                          administrator's password, beside the password. Not doas in a \
+                          terminal, which takes only the password.",
+            keywords: FINGER_WORDS,
+            kind: Kind::Switch,
+            default: Value::Bool(false),
+            scope: Scope::System,
+            applies: Applies::Now,
+        },
+        Setting {
+            id: FINGERPRINT_LOGIN_ID,
+            title: "Log in with a fingerprint",
+            description: "Let an enrolled finger log in: press Enter with no password typed, \
+                          then touch the reader. The keyring stays locked after such a login, \
+                          so saved passwords and keys ask for the password when first used.",
+            keywords: FINGER_WORDS,
             kind: Kind::Switch,
             default: Value::Bool(false),
             scope: Scope::System,
@@ -151,12 +210,28 @@ pub fn settings() -> Vec<Setting> {
     ]
 }
 
+/// What finds any of the fingerprint switches.
+const FINGER_WORDS: &[&str] = &[
+    "fingerprint",
+    "finger",
+    "reader",
+    "biometric",
+    "fprintd",
+    "touch",
+];
+
 /// Its value.
 pub fn get(env: &Env, setting: &Setting) -> Result<Value, String> {
     match setting.id {
         // Nothing to read: it is a thing to do, not a thing to be.
         PASSWORD_ID | REPORT_ID => Ok(Value::Text(String::new())),
-        FINGERPRINT_ID => Ok(Value::Bool(env.system(LOCK_FINGERPRINT).exists())),
+        FINGERPRINT_LOCK_ID => Ok(Value::Bool(env.system(LOCK_FINGERPRINT).exists())),
+        FINGERPRINT_PROMPTS_ID => Ok(Value::Bool(has_line(env, POLKIT, POLKIT_LINE))),
+        FINGERPRINT_LOGIN_ID => Ok(Value::Bool(has_line(
+            env,
+            LOGIN,
+            LOGIN_FINGER.lines().next().unwrap_or_default(),
+        ))),
         ADMINISTRATOR_ID => {
             let user = user(env)?;
             Ok(Value::Bool(wheel(env)?.iter().any(|m| m == user)))
@@ -171,7 +246,21 @@ pub fn set(env: &Env, setting: &Setting, value: Option<&Value>) -> Result<(), St
         PASSWORD_ID => in_terminal("passwd"),
         // It prints the report, asks, and says what it did.
         REPORT_ID => in_terminal("alpymist report --issue"),
-        FINGERPRINT_ID => fingerprint(env, value.and_then(Value::as_bool).unwrap_or(false)),
+        FINGERPRINT_LOCK_ID | FINGERPRINT_PROMPTS_ID | FINGERPRINT_LOGIN_ID => {
+            let on = value.and_then(Value::as_bool).unwrap_or(false);
+            if on && !env.system(PAM_FPRINTD).exists() {
+                return Err(
+                    "Fingerprint support is not installed: add the alpymist-fingerprint \
+                     package, then enrol a finger in Fingerprints."
+                        .into(),
+                );
+            }
+            match setting.id {
+                FINGERPRINT_LOCK_ID => lock(env, on),
+                FINGERPRINT_PROMPTS_ID => polkit(env, on),
+                _ => login(env, on),
+            }
+        }
         ADMINISTRATOR_ID => administrator(env, value.and_then(Value::as_bool).unwrap_or(false)),
         _ => name(env, setting, value),
     }
@@ -229,28 +318,84 @@ fn administrator(env: &Env, on: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// Let a finger unlock the screen and answer administrator prompts, or stop
-/// it, as root. polkit's service goes first: a lock screen that takes a
-/// finger while prompts do not is the smaller surprise, should the second
-/// write fail.
-fn fingerprint(env: &Env, on: bool) -> Result<(), String> {
+/// Whether the PAM service `service` has `line` in it.
+fn has_line(env: &Env, service: &str, line: &str) -> bool {
+    std::fs::read_to_string(env.system(service)).is_ok_and(|text| text.lines().any(|l| l == line))
+}
+
+/// Let a finger unlock the screen, or stop it, as root: the lock screen's
+/// fingerprint service is made, or removed.
+fn lock(env: &Env, on: bool) -> Result<(), String> {
     let lock = env.system(LOCK_FINGERPRINT);
-    if !on {
-        polkit(env, false)?;
-        return match std::fs::remove_file(&lock) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(crate::io_error(&lock, &e)),
-            _ => Ok(()),
-        };
+    if on {
+        return crate::generated::replace(&lock, LOCK_SERVICE);
     }
-    if !env.system(PAM_FPRINTD).exists() {
-        return Err(
-            "Fingerprint support is not installed: add the alpymist-fingerprint \
-                    package, then enrol a finger in Fingerprints."
-                .into(),
-        );
+    match std::fs::remove_file(&lock) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(crate::io_error(&lock, &e)),
+        _ => Ok(()),
     }
-    polkit(env, true)?;
-    crate::generated::replace(&lock, LOCK_SERVICE)
+}
+
+/// Let a finger log in, or stop it, as root: the login service's password
+/// line becomes [`LOGIN_FINGER`], or that becomes the line again. Nothing
+/// else in the service is touched, and one already as asked is not written.
+fn login(env: &Env, on: bool) -> Result<(), String> {
+    let path = env.system(LOGIN);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && !on => return Ok(()),
+        Err(e) => return Err(crate::io_error(&path, &e)),
+    };
+    let changed = if on {
+        login_with_finger(&text)
+    } else {
+        login_without_finger(&text)
+    };
+    let first = LOGIN_FINGER.lines().next().unwrap_or_default();
+    match changed {
+        Some(text) => crate::generated::replace(&path, &text),
+        None if on && !text.lines().any(|l| l == first) => Err(format!(
+            "{} does not check the password with \"auth include base-auth\", so there \
+             is nowhere known to put a fingerprint; it was left as it is",
+            path.display()
+        )),
+        None => Ok(()),
+    }
+}
+
+/// The login service with a finger allowed: its `auth include base-auth`
+/// line, however it is spaced, replaced by [`LOGIN_FINGER`]. `None` when
+/// there is no such line.
+fn login_with_finger(service: &str) -> Option<String> {
+    let password: Vec<&str> = LOGIN_PASSWORD.split_whitespace().collect();
+    let mut found = false;
+    let lines: Vec<&str> = service
+        .lines()
+        .map(|line| {
+            if !found && line.split_whitespace().eq(password.iter().copied()) {
+                found = true;
+                LOGIN_FINGER
+            } else {
+                line
+            }
+        })
+        .collect();
+    found.then(|| lines.join("\n") + "\n")
+}
+
+/// The login service with the password alone again: everything from
+/// [`LOGIN_FINGER`]'s first line to its last replaced by the one line.
+/// `None` when it has no such block.
+fn login_without_finger(service: &str) -> Option<String> {
+    let mut block = LOGIN_FINGER.lines();
+    let (first, last) = (block.next()?, block.next_back()?);
+    let lines: Vec<&str> = service.lines().collect();
+    let from = lines.iter().position(|l| *l == first)?;
+    let to = from + lines[from..].iter().position(|l| *l == last)?;
+    let mut out: Vec<&str> = lines[..from].to_vec();
+    out.push(LOGIN_PASSWORD);
+    out.extend(&lines[to + 1..]);
+    Some(out.join("\n") + "\n")
 }
 
 /// Put the `pam_fprintd` line in polkit's service, or take it out. Only that
@@ -313,7 +458,7 @@ fn with_finger(service: &str) -> Option<String> {
 fn without_finger(service: &str) -> Option<String> {
     let kept: Vec<&str> = service
         .lines()
-        .filter(|l| *l != POLKIT_LINE && *l != POLKIT_NOTE)
+        .filter(|l| ![POLKIT_LINE, POLKIT_NOTE, POLKIT_NOTE_BEFORE].contains(l))
         .collect();
     (kept.len() != service.lines().count()).then(|| kept.join("\n") + "\n")
 }
@@ -403,8 +548,9 @@ fn rename(interfaces: &str, old: &str, new: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ADMINISTRATOR_ID, FINGERPRINT_ID, GROUP, HOSTNAME, HOSTNAME_ID, INTERFACES,
-        LOCK_FINGERPRINT, PAM_FPRINTD, POLKIT, members, rename,
+        ADMINISTRATOR_ID, FINGERPRINT_LOCK_ID, FINGERPRINT_LOGIN_ID, FINGERPRINT_PROMPTS_ID, GROUP,
+        HOSTNAME, HOSTNAME_ID, INTERFACES, LOCK_FINGERPRINT, LOGIN, PAM_FPRINTD, POLKIT, members,
+        rename,
     };
     use crate::env::Env;
     use crate::{Error, Settings, Value};
@@ -457,8 +603,19 @@ mod tests {
         assert_eq!(super::with_finger("account required pam_unix.so\n"), None);
     }
 
+    /// The login service as the package ships it.
+    const GREETD: &str = include_str!("../../../../desktop/alpymist-greetd.pam");
+    /// Alpine's `base-auth`, from linux-pam 1.7, which the login service
+    /// includes and a login by finger spells out.
+    const BASE_AUTH: &str = "auth required pam_unix.so nullok\n\
+                             auth required pam_nologin.so\n\
+                             auth required pam_env.so\n\
+                             \n\
+                             -auth optional pam_gnome_keyring.so\n\
+                             -auth optional pam_kwallet5.so\n";
+
     #[test]
-    fn a_fingerprint_is_off_until_turned_on_and_needs_fprintd_pam() {
+    fn each_place_a_finger_is_taken_has_a_switch_of_its_own_and_all_are_off() {
         static RAN: Mutex<Vec<String>> = Mutex::new(Vec::new());
         let d = std::env::temp_dir().join(format!("alpymist-finger-{}", std::process::id()));
         std::fs::remove_dir_all(&d).ok();
@@ -466,38 +623,155 @@ mod tests {
         let settings = Settings::new();
         std::fs::create_dir_all(env.system("etc/pam.d")).unwrap();
         std::fs::write(env.system(POLKIT), POLKIT_1).unwrap();
-        assert_eq!(settings.get(&env, FINGERPRINT_ID), Ok(Value::Bool(false)));
-
-        let refused = settings.set(&env, FINGERPRINT_ID, "on", false);
-        assert!(
-            matches!(refused, Err(Error::Failed(ref m)) if m.contains("alpymist-fingerprint")),
-            "{refused:?}"
-        );
-        assert_eq!(
-            std::fs::read_to_string(env.system(POLKIT)).unwrap(),
-            POLKIT_1
-        );
+        std::fs::write(env.system(LOGIN), GREETD).unwrap();
+        let all = [
+            FINGERPRINT_LOCK_ID,
+            FINGERPRINT_PROMPTS_ID,
+            FINGERPRINT_LOGIN_ID,
+        ];
+        let read = |file: &str| std::fs::read_to_string(env.system(file)).unwrap();
+        let state = || all.map(|id| settings.get(&env, id).unwrap() == Value::Bool(true));
+        assert_eq!(state(), [false; 3]);
+        for id in all {
+            assert_eq!(settings.find(id).unwrap().default, Value::Bool(false));
+            // Without fprintd-pam, nothing is changed.
+            let refused = settings.set(&env, id, "on", false);
+            assert!(
+                matches!(refused, Err(Error::Failed(ref m)) if m.contains("alpymist-fingerprint")),
+                "{refused:?}"
+            );
+        }
+        assert_eq!(read(POLKIT), POLKIT_1);
+        assert_eq!(read(LOGIN), GREETD);
+        assert!(!env.system(LOCK_FINGERPRINT).exists());
 
         std::fs::create_dir_all(env.system("usr/lib/security")).unwrap();
         std::fs::write(env.system(PAM_FPRINTD), "").unwrap();
-        settings.set(&env, FINGERPRINT_ID, "on", false).unwrap();
-        assert_eq!(settings.get(&env, FINGERPRINT_ID), Ok(Value::Bool(true)));
-        let lock = std::fs::read_to_string(env.system(LOCK_FINGERPRINT)).unwrap();
+
+        // Each alone: the others stay as they were.
+        settings
+            .set(&env, FINGERPRINT_LOCK_ID, "on", false)
+            .unwrap();
+        assert_eq!(state(), [true, false, false]);
+        let lock = read(LOCK_FINGERPRINT);
         assert!(lock.contains("pam_fprintd.so") && !lock.contains("pam_unix"));
-        assert!(
-            std::fs::read_to_string(env.system(POLKIT))
-                .unwrap()
-                .contains(super::POLKIT_LINE)
+        assert_eq!(read(POLKIT), POLKIT_1);
+        assert_eq!(read(LOGIN), GREETD);
+
+        settings
+            .set(&env, FINGERPRINT_PROMPTS_ID, "on", false)
+            .unwrap();
+        assert_eq!(state(), [true, true, false]);
+        assert!(read(POLKIT).contains(super::POLKIT_LINE));
+        assert_eq!(read(LOGIN), GREETD);
+
+        settings.reset(&env, FINGERPRINT_LOCK_ID, false).unwrap();
+        assert_eq!(state(), [false, true, false]);
+        assert!(!env.system(LOCK_FINGERPRINT).exists());
+
+        settings
+            .set(&env, FINGERPRINT_LOGIN_ID, "on", false)
+            .unwrap();
+        assert_eq!(state(), [false, true, true]);
+        settings
+            .set(&env, FINGERPRINT_LOGIN_ID, "on", false)
+            .unwrap();
+        assert_eq!(
+            read(LOGIN).matches("pam_fprintd").count(),
+            1,
+            "once is enough"
         );
 
-        settings.reset(&env, FINGERPRINT_ID, false).unwrap();
-        assert_eq!(settings.get(&env, FINGERPRINT_ID), Ok(Value::Bool(false)));
-        assert!(!env.system(LOCK_FINGERPRINT).exists());
-        assert_eq!(
-            std::fs::read_to_string(env.system(POLKIT)).unwrap(),
-            POLKIT_1
-        );
+        settings.reset(&env, FINGERPRINT_PROMPTS_ID, false).unwrap();
+        settings.reset(&env, FINGERPRINT_LOGIN_ID, false).unwrap();
+        assert_eq!(state(), [false; 3]);
+        assert_eq!(read(POLKIT), POLKIT_1);
+        assert_eq!(read(LOGIN), GREETD, "exactly as the package ships it");
         std::fs::remove_dir_all(&d).ok();
+    }
+
+    /// A system switched on when one switch did the lock and the prompts
+    /// shows both on, and its prompts switch takes out the old note too.
+    #[test]
+    fn a_system_switched_on_before_the_switches_were_split_is_read_and_cleaned() {
+        let before = format!(
+            "auth requisite pam_nologin.so\n{}\n{}\nauth required pam_unix.so\n",
+            super::POLKIT_NOTE_BEFORE,
+            super::POLKIT_LINE
+        );
+        assert_eq!(
+            super::without_finger(&before).as_deref(),
+            Some("auth requisite pam_nologin.so\nauth required pam_unix.so\n")
+        );
+        assert_eq!(super::with_finger(&before), None, "already on");
+    }
+
+    #[test]
+    fn a_login_by_finger_checks_what_a_login_by_password_checks() {
+        let with = super::login_with_finger(GREETD).unwrap();
+        assert!(!with.contains("base-auth\n"), "{with}");
+        // The rest of the service is as it was.
+        for line in GREETD.lines().filter(|l| !l.contains("base-auth")) {
+            assert!(with.lines().any(|l| l == line), "lost: {line}");
+        }
+        assert_eq!(super::login_without_finger(&with).as_deref(), Some(GREETD));
+        assert_eq!(super::login_without_finger(GREETD), None);
+        assert_eq!(
+            super::login_with_finger(&with),
+            None,
+            "nowhere to put it twice"
+        );
+        assert_eq!(
+            super::login_with_finger("auth required pam_unix.so\n"),
+            None,
+            "a service somebody rewrote is left alone"
+        );
+
+        // The modules a finger's stack runs, in order, less the three that
+        // are the finger: the reader, the refusal, and the yes that a stack
+        // of jumps needs.
+        let module = |line: &str| {
+            let line = line.trim_start_matches('-');
+            let rest = line.strip_prefix("auth")?.trim_start();
+            // The control: one word, or one bracket.
+            let rest = match rest.strip_prefix('[') {
+                Some(bracket) => bracket.split_once(']')?.1,
+                None => rest.split_once(char::is_whitespace)?.1,
+            };
+            Some(rest.split_whitespace().collect::<Vec<_>>().join(" "))
+        };
+        let finger: Vec<String> = super::LOGIN_FINGER
+            .lines()
+            .filter_map(module)
+            .filter(|m| {
+                !["pam_fprintd.so", "pam_deny.so", "pam_permit.so"]
+                    .iter()
+                    .any(|own| m.starts_with(own))
+            })
+            .collect();
+        // kwallet is KDE's, and nothing here installs it.
+        let base: Vec<String> = BASE_AUTH
+            .lines()
+            .filter_map(module)
+            .filter(|m| m != "pam_kwallet5.so")
+            .collect();
+        let sorted = |mut modules: Vec<String>| {
+            modules.sort();
+            modules
+        };
+        assert_eq!(sorted(finger), sorted(base));
+
+        // The password before the finger, and a right one jumps the reader
+        // and the refusal both.
+        let lines: Vec<&str> = super::LOGIN_FINGER.lines().collect();
+        assert!(lines[1].contains("[success=2 default=ignore]") && lines[1].contains("pam_unix"));
+        assert!(lines[2].starts_with("-auth") && lines[2].contains("[success=2 default=ignore]"));
+        assert!(lines[2].contains("pam_fprintd.so max-tries=1 timeout=10"));
+        assert!(lines[3].contains("requisite") && lines[3].contains("pam_deny.so"));
+        // A finger goes past the keyring, which only a password opens, and
+        // lands on the line that says yes.
+        assert!(lines[4].contains("pam_gnome_keyring.so"));
+        assert!(lines[5].contains("required") && lines[5].contains("pam_permit.so"));
     }
 
     #[test]
