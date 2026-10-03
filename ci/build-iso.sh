@@ -43,6 +43,8 @@ if [ ! -d /tmp/aports ]; then
 fi
 cp /src/profiles/mkimg.alpymist.sh /src/profiles/genapkovl-alpymist.sh /tmp/aports/scripts/
 chmod +x /tmp/aports/scripts/genapkovl-alpymist.sh
+# What mkimg.alpymist.sh puts at the top of the image; see it.
+cp /src/site/static/broadcom-firmware.sh /tmp/aports/scripts/
 
 echo ">>> [3/3] building the image for $ARCH"
 cd /tmp/aports/scripts

@@ -49,5 +49,9 @@ that once, now.
 Broadcom's older Wi-Fi cards, in every Mac from before 2012 and many other
 laptops of those years, need firmware that nobody is allowed to package.
 `doas alpymist firmware broadcom` fetches it from where Broadcom's own driver
-is published; see [Troubleshooting](27-troubleshooting.md) for a machine
-with no other way onto a network.
+is published. A machine with no other way onto a network has it carried
+over on a stick, which the install stick itself can be; see
+[Troubleshooting](27-troubleshooting.md#a-broadcom-card-in-an-older-laptop).
+
+The keyboard's Wi-Fi and airplane-mode keys switch the radio off and on, as
+the switch in the Wi-Fi popup does.

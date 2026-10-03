@@ -67,6 +67,23 @@ tar -xf alpymist-<version>-x86_64.iso -C /Volumes/ALPYMIST
 diskutil eject /dev/diskN
 ```
 
+A Mac from before 2012 has a Broadcom Wi-Fi card whose firmware nobody is
+allowed to pass on, Alpymist included, so it is not on the image. The stick
+carries a script that fetches it from where Broadcom's own driver is
+published. Run it now, while this Mac, or whatever machine made the stick,
+still has a network:
+
+```sh
+sh /Volumes/ALPYMIST/broadcom-firmware.sh     # macOS
+sudo sh stick/broadcom-firmware.sh            # Linux, before the umount above
+```
+
+It leaves the firmware in `alpymist-firmware` on the stick, the installer
+copies it into the new system, and Wi-Fi works from the first start. Skipped,
+it can be done afterwards; see
+[Troubleshooting](27-troubleshooting.md#a-broadcom-card-in-an-older-laptop),
+which also says what the script needs.
+
 Hold Option as the Mac starts, and choose *EFI Boot*.
 
 A stick made this way starts any machine with UEFI firmware, not only a Mac,

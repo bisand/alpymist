@@ -1,0 +1,12 @@
+# Alpymist: the screen's and the keyboard's light, for the brightness keys.
+#
+# The kernel gives both to root. The account at the screen is in the video
+# group, so that group may write them: `alpymist key brightness-up` and the
+# rest run as the account, with no helper and no root.
+#
+# brightnessctl's own rules do the same for the screen, and give every LED
+# to the input group, which the account is deliberately not in: that group
+# reads every keyboard. So the keyboard's light is given to video here,
+# after those rules, and the other LEDs are left as they were.
+ACTION=="add|change", SUBSYSTEM=="backlight", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
+ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="*kbd_backlight*", RUN+="/bin/chgrp video /sys/class/leds/%k/brightness", RUN+="/bin/chmod g+w /sys/class/leds/%k/brightness"

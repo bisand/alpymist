@@ -97,8 +97,21 @@ or onto a stick with `--to`. Nothing downloads it unasked: the firmware
 watch and the installer only say which command to run. What the installer
 and `--from` copy off a stick is `.fw` files into the directories in
 `alpymist-core`'s `CARRIED_DIRS` and nothing else. A new version of that
-driver is a new pin, not a looser check. See
+driver is a new pin, not a looser check. The pin is written twice:
+`site/static/broadcom-firmware.sh` is the same fetch for a machine that is
+not Alpymist, served by the site and put at the top of the image, and a test
+in `broadcom.rs` fails when the two disagree. The script goes on the image;
+nothing it downloads ever does. See
 [ADR 0021](docs/adr/0021-firmware-nobody-may-ship.md).
+
+**A control key is a bind and a name, in two files that must agree.**
+`desktop/hypr/hyprland-keys.conf` binds each volume, brightness, media and
+radio key to `alpymist key NAME`, for every machine alike, and
+`crates/alpymist/src/keys.rs` is what the names do; its tests fail when
+either has a name the other lacks. No per-machine table, nothing as root:
+lights go to the `video` group by `desktop/udev/91-alpymist-backlight.rules`
+and never to `input`, and a radio is switched by iwd or bluetoothd, not by
+rfkill. See [ADR 0022](docs/adr/0022-control-keys.md).
 
 **The manual's "Every setting" page is made, not written.**
 `docs/manual/26-every-setting.md` is what `crates/alpymist/tests/every_setting.rs`
