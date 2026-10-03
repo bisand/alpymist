@@ -39,6 +39,40 @@ Then start the computer from the stick. Alpymist does nothing to support
 Secure Boot: if the machine refuses to start from the stick, turn Secure Boot
 off in its firmware settings.
 
+### For a Mac
+
+An Intel Mac lists what it can start from when Option is held down as it
+starts, and a stick written with `dd` may not be on that list. Make the stick
+with a FAT partition instead, and copy the image's files onto it. This erases
+the stick too.
+
+On Linux, with the stick's device in place of `/dev/sdX`:
+
+```sh
+printf 'label: gpt\ntype=uefi\n' | sudo sfdisk --wipe always /dev/sdX
+sudo mkfs.vfat -F 32 -n ALPYMIST /dev/sdX1
+mkdir image stick
+sudo mount -o loop,ro alpymist-<version>-x86_64.iso image
+sudo mount /dev/sdX1 stick
+sudo cp -r image/. stick/
+sudo umount image stick
+```
+
+On macOS, `diskutil list` says which disk the stick is. With it in place of
+`/dev/diskN`:
+
+```sh
+diskutil eraseDisk FAT32 ALPYMIST GPT /dev/diskN
+tar -xf alpymist-<version>-x86_64.iso -C /Volumes/ALPYMIST
+diskutil eject /dev/diskN
+```
+
+Hold Option as the Mac starts, and choose *EFI Boot*.
+
+A stick made this way starts any machine with UEFI firmware, not only a Mac,
+and can be written to afterwards. It does not start one that boots the older
+BIOS way; `dd` is for those.
+
 ## The installer
 
 The stick boots straight into the installer. It asks, in order:

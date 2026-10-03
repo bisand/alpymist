@@ -86,7 +86,7 @@ doas alpymist firmware broadcom --from /media/usb   # on the one without
 A stick the installer runs from is looked at too: with `alpymist-firmware`
 on it, a new installation has Wi-Fi from its first start. That needs a stick
 that can be written to, made by copying the image's files to a FAT partition
-and not with `dd`.
+and not with `dd`, as [for a Mac](02-getting-started.md#for-a-mac).
 
 ## A dock's keyboard, mouse or network does nothing
 
