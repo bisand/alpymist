@@ -141,5 +141,31 @@ polkit, and take a finger where the prompts switch is on.
 
 The stack was run through PAM on the X1 with a wrong password and no finger:
 the password was asked, then the reader, and it was refused when the reader
-gave up. A finger logging in at the login screen itself had not been tried
-when this was written.
+gave up. Then it was installed there and a finger logged in at the login
+screen, with the keyring asking for the password afterwards, as said above.
+
+**Enter stays.** A finger and a password taken at once, whichever comes
+first, is what the lock screen does and what was wanted here too. greetd
+0.10.3 cannot do it, and its source says why:
+
+- It runs one PAM conversation for a login, and refuses a second while the
+  first is open ("a session is already being configured").
+- It speaks to the login screen only in answer to something the login screen
+  sent. With a password prompt open, it has no way to say that a finger
+  matched.
+- While PAM waits on the reader, greetd waits on PAM holding its one lock
+  (`get_question` in `context.rs`), and `CancelSession` needs that lock. A
+  waiting attempt cannot be abandoned when somebody types a password, from
+  the same connection or another.
+
+So within one conversation it is one and then the other. Arming the reader
+without Enter was weighed and turned down: a password typed while the reader
+waits would not be checked until the reader gave up, ten seconds at worst,
+for everyone who logs in on a machine with the switch on. Enter costs the
+person with the finger one key and the person with the password nothing.
+
+The login managers where both work at once, GDM above all, run a
+conversation for each side by side, as the lock screen here does. Getting
+there means greetd learning to cancel a waiting attempt or to run two, or a
+login daemon of Alpymist's own. Neither is taken up here; either would be an
+addendum to this.
