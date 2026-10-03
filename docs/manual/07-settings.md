@@ -44,6 +44,9 @@ alpymist reset touchpad.natural-scroll
 `alpymist list --json` prints the same as JSON, for scripts.
 [Every setting](26-every-setting.md) is that list, with what each one means.
 
+In a terminal, <kbd>Tab</kbd> finishes what you have begun: a command, a
+setting's id, and after the id the values it takes.
+
 ## The popups
 
 Wi-Fi, power and AI usage each have a popup under the bar for the quick

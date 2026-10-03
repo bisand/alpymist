@@ -9,6 +9,7 @@ mod autostart;
 mod broadcom;
 mod channel;
 mod clipboard;
+mod complete;
 mod displays;
 mod firmware;
 mod guest;
@@ -22,7 +23,7 @@ mod settings;
 
 use alpymist_core::Channel;
 use alpymist_settings::{Env, Settings};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory as _, Parser, Subcommand, ValueEnum};
 use std::ffi::OsString;
 use std::os::unix::process::CommandExt as _;
 use std::path::PathBuf;
@@ -198,6 +199,14 @@ enum Command {
     /// Print the menu fragment for every setting, for packaging.
     #[command(hide = true)]
     MenuFragment,
+    /// Print what Tab offers for the last of WORDS, the words typed after
+    /// `alpymist`. The shells' completion runs this.
+    #[command(hide = true)]
+    Complete {
+        /// The words so far, the one being typed last: empty for a new one.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        words: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -245,6 +254,10 @@ enum Desktop {
 
 fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
+    // On every Tab: before anything else is looked at.
+    if let Command::Complete { words } = &cli.command {
+        return complete::run(&mut Cli::command(), words);
+    }
     match run(&cli) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
@@ -339,6 +352,7 @@ fn run(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Wallpaper => Ok(alpymist_settings::wallpaper::show(&env)?),
         Command::Open { .. }
         | Command::Clipboard { .. }
+        | Command::Complete { .. }
         | Command::Displays { .. }
         | Command::Key { .. }
         | Command::Report { .. }

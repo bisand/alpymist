@@ -25,7 +25,11 @@ The shell is `zsh`, with:
   <kbd>→</kbd> accepts one.
 - **Syntax highlighting**: a command that does not exist is red before you
   press <kbd>Enter</kbd>.
-- **Completion** on <kbd>Tab</kbd> for commands, options and files.
+- **Completion** on <kbd>Tab</kbd> for commands, options and files. After
+  `alpymist` it knows the settings and what each takes:
+  `alpymist set touchpad.` and <kbd>Tab</kbd> lists the touchpad's, and
+  <kbd>Tab</kbd> after one of them lists its values. `bash` and `fish`,
+  installed from the Store, are given the same.
 - **oh-my-zsh's git plugin**, which gives short names such as `gst` for
   `git status` and `gco` for `git checkout`.
 - **The starship prompt**, showing who and where you are, the directory, the
