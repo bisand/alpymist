@@ -117,7 +117,7 @@ rfkill. See [ADR 0022](docs/adr/0022-control-keys.md).
 in `desktop/completion` hold no command's name: each hands the words typed to
 the hidden `alpymist complete` and shows what it prints, so a new subcommand,
 option or setting is completed the day it exists. What clap cannot list — the
-settings, a setting's values, the screens — is in `named` in
+settings, a setting's values, the screens and their modes — is in `named` in
 `crates/alpymist/src/complete.rs`; an argument that takes names of that sort
 goes there. No completion crate: clap's own description of the command line
 is enough, and a test there holds the shells' files to how the command is run
