@@ -37,9 +37,11 @@ with that.
 4. **Create the release.** Notes are hand-written — read the last two releases
    with `gh release view` first and match their voice.
    ```sh
-   gh release create v<next> --target main --prerelease \
+   gh release create v<next> --target main \
      --title "Alpymist <next>" --notes-file <file>
    ```
+   A normal release, not `--prerelease`: every one since 0.1.0 is, and a
+   pre-release does not become GitHub's "Latest".
 5. **Watch it through.** Release builds packages and ISOs and attaches them;
    "Publish to stable" then signs the index and pushes the site.
    ```sh
