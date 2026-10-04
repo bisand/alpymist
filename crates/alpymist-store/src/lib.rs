@@ -18,6 +18,7 @@ pub mod config;
 pub mod icons;
 pub mod pictures;
 pub mod search;
+pub mod sha1;
 pub mod source;
 pub mod store;
 pub mod view;

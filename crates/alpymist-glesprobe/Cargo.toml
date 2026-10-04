@@ -9,7 +9,6 @@ repository.workspace = true
 
 [dependencies]
 alpymist-core = { workspace = true }
-khronos-egl = { workspace = true }
 libloading = { workspace = true }
 
 [lints]

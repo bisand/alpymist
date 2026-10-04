@@ -82,7 +82,18 @@ impl std::error::Error for ProbeError {}
 /// "mesa-egl is not installed" and "this GPU has no working driver" call for
 /// very different responses.
 pub fn probe() -> Result<GlesInfo, ProbeError> {
-    let raw = ffi::query()?;
+    diagnose(&mut |_| {})
+}
+
+/// [`probe`], telling `say` each step as it is taken and how it went: the
+/// last thing said is the step that failed. For reading along on hardware
+/// that lands somewhere unexpected.
+///
+/// # Errors
+///
+/// As [`probe`].
+pub fn diagnose(say: &mut dyn FnMut(&str)) -> Result<GlesInfo, ProbeError> {
+    let raw = ffi::query(say)?;
     Ok(GlesInfo {
         version: parse_gl_version(&raw.version)
             .ok_or_else(|| ProbeError::UnparsableVersion(raw.version.clone()))?,

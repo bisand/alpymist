@@ -22,7 +22,6 @@ serde_json = { workspace = true }
 zeroize = { workspace = true }
 # polkitd is spoken to over the system bus, which needs nothing linked.
 zbus = { workspace = true }
-blocking = { workspace = true }
 
 [dev-dependencies]
 png = { workspace = true }

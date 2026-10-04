@@ -96,7 +96,7 @@ impl Agent {
         }
         let child = Arc::new(Mutex::new(child));
         lock(&self.running).insert(cookie.clone(), Arc::clone(&child));
-        let status = blocking::unblock(move || wait(&child)).await;
+        let status = Waited::on(move || wait(&child)).await;
         lock(&self.running).remove(&cookie);
         match status {
             Some(true) => Ok(()),
@@ -113,6 +113,45 @@ impl Agent {
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// What a thread of its own is busy finding out, to be awaited: the bus is
+/// served by one thread, and a prompt somebody is reading must not hold it.
+struct Waited<T>(Arc<Mutex<(Option<T>, Option<std::task::Waker>)>>);
+
+impl<T: Send + 'static> Waited<T> {
+    /// Run `work` on a thread of its own.
+    fn on(work: impl FnOnce() -> T + Send + 'static) -> Self {
+        let shared = Self(Arc::new(Mutex::new((None, None))));
+        let theirs = Arc::clone(&shared.0);
+        std::thread::spawn(move || {
+            let found = work();
+            let mut state = lock(&theirs);
+            state.0 = Some(found);
+            if let Some(waker) = state.1.take() {
+                waker.wake();
+            }
+        });
+        shared
+    }
+}
+
+impl<T> std::future::Future for Waited<T> {
+    type Output = T;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<T> {
+        let mut state = lock(&self.0);
+        if let Some(found) = state.0.take() {
+            return std::task::Poll::Ready(found);
+        }
+        // Under the lock the thread takes to finish, so it cannot finish
+        // between the look above and the waker being left.
+        state.1 = Some(context.waker().clone());
+        std::task::Poll::Pending
+    }
 }
 
 /// Wait for a prompt without holding its lock, so it can be cancelled.
@@ -295,7 +334,46 @@ pub fn register(prompt: PathBuf) -> Result<Registration, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{members, parse_pkexec, uid_of};
+    use super::{Waited, members, parse_pkexec, uid_of};
+    use std::future::Future as _;
+    use std::sync::Arc;
+    use std::task::{Context, Poll, Wake, Waker};
+    use std::time::Duration;
+
+    /// A waker that wakes the thread the test runs on.
+    struct Unpark(std::thread::Thread);
+
+    impl Wake for Unpark {
+        fn wake(self: Arc<Self>) {
+            self.0.unpark();
+        }
+    }
+
+    #[test]
+    fn what_a_thread_finds_out_is_awaited_and_wakes_whoever_waits() {
+        let waker = Waker::from(Arc::new(Unpark(std::thread::current())));
+        let mut context = Context::from_waker(&waker);
+
+        // Still at work when first asked: pending, and woken when done.
+        let mut slow = std::pin::pin!(Waited::on(|| {
+            std::thread::sleep(Duration::from_millis(100));
+            7
+        }));
+        assert_eq!(slow.as_mut().poll(&mut context), Poll::Pending);
+        let found = loop {
+            if let Poll::Ready(found) = slow.as_mut().poll(&mut context) {
+                break found;
+            }
+            // Returns when woken; and at once, if that was before this.
+            std::thread::park_timeout(Duration::from_secs(10));
+        };
+        assert_eq!(found, 7);
+
+        // Done before anybody asked: ready at the first asking.
+        let mut quick = std::pin::pin!(Waited::on(|| "done"));
+        std::thread::sleep(Duration::from_millis(100));
+        assert_eq!(quick.as_mut().poll(&mut context), Poll::Ready("done"));
+    }
 
     #[test]
     fn only_a_root_pkexec_is_believed() {
