@@ -1,7 +1,7 @@
 //! Driving QEMU and capturing what the guest says on its serial console.
 
 use crate::Arch;
-use anyhow::{Context, Result};
+use crate::error::{Context, Result};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};

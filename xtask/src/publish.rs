@@ -25,8 +25,8 @@
 //! too, that containment bounds dev's key, not what a compromised workflow can
 //! reach.
 
+use crate::error::{Context, Result, bail, ensure};
 use alpymist_core::Channel;
-use anyhow::{Context, Result, bail, ensure};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};

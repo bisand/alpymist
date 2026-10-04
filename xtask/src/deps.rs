@@ -12,7 +12,7 @@
 //! the manifests by us, and a TOML parser would be a dependency of the check
 //! on dependencies.
 
-use anyhow::{Context, Result, bail, ensure};
+use crate::error::{Context, Result, bail, ensure};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -38,8 +38,7 @@ const OURS: [&str; 10] = [
 /// Every third-party crate a manifest in this workspace may name, and what it
 /// is for. Adding a line is the review: say why nothing of ours, and nothing
 /// already here, does the job. Those with an issue beside them are to go.
-const ALLOWED: [(&str, &str); 24] = [
-    ("anyhow", "xtask's errors; not shipped. To go, #114"),
+const ALLOWED: [(&str, &str); 21] = [
     (
         "blocking",
         "one wait off the polkit agent's thread. To go, #115",
@@ -67,10 +66,6 @@ const ALLOWED: [(&str, &str); 24] = [
     ),
     ("libloading", "opening libEGL at run time for that probe"),
     (
-        "nix",
-        "uevents, inotify and an interface's address. To go, #114",
-    ),
-    (
         "png",
         "the wallpaper, the store's icons, and every snapshot",
     ),
@@ -87,7 +82,6 @@ const ALLOWED: [(&str, &str); 24] = [
         "a signal handler on a bare console, without unsafe",
     ),
     ("smithay-client-toolkit", "Wayland surfaces and input. #113"),
-    ("thiserror", "two error enums. To go, #114"),
     ("toml", "every settings file"),
     ("zbus", "iwd, fprintd and polkit on the system bus. #112"),
     ("zeroize", "a password wiped from memory once handed on"),
@@ -99,7 +93,7 @@ const ALLOWED: [(&str, &str); 24] = [
 /// is about half of it: the desktop preview's winit is most of the rest. A
 /// crude figure, but one that cannot grow without being edited here. When the
 /// lockfile shrinks, bring it down.
-const LOCKED: usize = 313;
+const LOCKED: usize = 312;
 
 /// Check the workspace at `root` against all of the above.
 pub fn deps(root: &Path) -> Result<()> {

@@ -23,36 +23,56 @@ mod ffi;
 /// Every variant names the step that failed. A user whose machine lands on an
 /// unexpectedly low tier can read this and know whether they are missing Mesa,
 /// missing a driver, or running hardware EGL cannot drive.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProbeError {
     /// libEGL is not installed, or cannot be loaded.
-    #[error("libEGL.so.1 could not be loaded ({0}); is mesa-egl installed?")]
     NoLibrary(String),
     /// The library loaded but is not a usable EGL implementation.
-    #[error("libEGL.so.1 is missing required EGL 1.4 entry points")]
     MissingSymbols,
     /// No EGL display could be opened by any platform we tried.
-    #[error("no EGL display available (tried surfaceless, then default)")]
     NoDisplay,
     /// `eglInitialize` failed.
-    #[error("eglInitialize failed; EGL found no usable driver")]
     InitFailed,
     /// No config matched a minimal GL ES 2 request.
-    #[error("no EGL config supports GL ES 2 rendering")]
     NoConfig,
     /// A context could not be created at ES 3 or ES 2.
-    #[error("could not create a GL ES context at version 3 or 2")]
     NoContext,
     /// The context could not be made current, even with a pbuffer.
-    #[error("could not make a GL ES context current")]
     NoCurrent,
     /// `glGetString` was not resolvable, or returned nothing.
-    #[error("glGetString was unavailable or returned no version string")]
     NoStrings,
     /// The driver returned a `GL_VERSION` we could not parse.
-    #[error("could not parse a version out of GL_VERSION {0:?}")]
     UnparsableVersion(String),
 }
+
+impl std::fmt::Display for ProbeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoLibrary(inner) => write!(
+                f,
+                "libEGL.so.1 could not be loaded ({inner}); is mesa-egl installed?"
+            ),
+            Self::MissingSymbols => {
+                f.write_str("libEGL.so.1 is missing required EGL 1.4 entry points")
+            }
+            Self::NoDisplay => {
+                f.write_str("no EGL display available (tried surfaceless, then default)")
+            }
+            Self::InitFailed => f.write_str("eglInitialize failed; EGL found no usable driver"),
+            Self::NoConfig => f.write_str("no EGL config supports GL ES 2 rendering"),
+            Self::NoContext => f.write_str("could not create a GL ES context at version 3 or 2"),
+            Self::NoCurrent => f.write_str("could not make a GL ES context current"),
+            Self::NoStrings => {
+                f.write_str("glGetString was unavailable or returned no version string")
+            }
+            Self::UnparsableVersion(inner) => {
+                write!(f, "could not parse a version out of GL_VERSION {inner:?}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProbeError {}
 
 /// Ask EGL what this machine can render.
 ///

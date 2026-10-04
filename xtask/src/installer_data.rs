@@ -5,7 +5,7 @@
 //! Alpine builder, where `kbd-bkeymaps` and `tzdata` can be installed; the output
 //! is committed, so building the installer never needs either package.
 
-use anyhow::{Context, Result};
+use crate::error::{Context, Result};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;

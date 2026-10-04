@@ -14,7 +14,7 @@ pub struct Changes {
     #[cfg(target_os = "linux")]
     uevents: Option<std::os::fd::OwnedFd>,
     #[cfg(target_os = "linux")]
-    inotify: Option<nix::sys::inotify::Inotify>,
+    inotify: Option<std::os::fd::OwnedFd>,
 }
 
 impl Changes {
@@ -43,22 +43,19 @@ impl Changes {
     #[cfg(target_os = "linux")]
     #[allow(clippy::must_use_candidate)]
     pub fn wait(&self, timeout: Duration) -> bool {
-        use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
-        use std::os::fd::{AsFd, AsRawFd};
+        use rustix::event::{PollFd, PollFlags, poll};
+        use rustix::net::{RecvFlags, recv};
 
-        let mut fds = Vec::new();
-        if let Some(u) = &self.uevents {
-            fds.push(PollFd::new(u.as_fd(), PollFlags::POLLIN));
-        }
-        if let Some(i) = &self.inotify {
-            fds.push(PollFd::new(i.as_fd(), PollFlags::POLLIN));
-        }
+        let mut fds: Vec<PollFd<'_>> = [&self.uevents, &self.inotify]
+            .into_iter()
+            .flatten()
+            .map(|fd| PollFd::new(fd, PollFlags::IN))
+            .collect();
         if fds.is_empty() {
             std::thread::sleep(timeout);
             return false;
         }
-        let limit = PollTimeout::try_from(timeout).unwrap_or(PollTimeout::MAX);
-        if poll(&mut fds, limit).unwrap_or(0) <= 0 {
+        if poll(&mut fds, Some(&limit(timeout))).unwrap_or(0) == 0 {
             return false;
         }
         drop(fds);
@@ -66,11 +63,7 @@ impl Changes {
         let mut changed = false;
         if let Some(u) = &self.uevents {
             let mut buf = [0u8; 4096];
-            while let Ok(n) = nix::sys::socket::recv(
-                u.as_raw_fd(),
-                &mut buf,
-                nix::sys::socket::MsgFlags::MSG_DONTWAIT,
-            ) {
+            while let Ok((n, _)) = recv(u, &mut buf[..], RecvFlags::DONTWAIT) {
                 if n == 0 {
                     break;
                 }
@@ -78,10 +71,10 @@ impl Changes {
             }
         }
         if let Some(i) = &self.inotify {
-            while let Ok(events) = i.read_events() {
-                if events.is_empty() {
-                    break;
-                }
+            // What was written is not looked at: that something was, is all
+            // there is to know. The descriptor does not block.
+            let mut events = [0u8; 4096];
+            while rustix::io::read(i, &mut events[..]).is_ok_and(|n| n > 0) {
                 changed = true;
             }
         }
@@ -106,35 +99,42 @@ pub fn is_power_supply(message: &[u8]) -> bool {
         .any(|field| field == b"SUBSYSTEM=power_supply")
 }
 
+/// `timeout` as poll takes it.
+#[cfg(target_os = "linux")]
+fn limit(timeout: Duration) -> rustix::event::Timespec {
+    rustix::event::Timespec {
+        tv_sec: i64::try_from(timeout.as_secs()).unwrap_or(i64::MAX),
+        tv_nsec: timeout.subsec_nanos().into(),
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn uevents() -> Option<std::os::fd::OwnedFd> {
-    use nix::sys::socket::{
-        AddressFamily, NetlinkAddr, SockFlag, SockProtocol, SockType, bind, socket,
-    };
-    use std::os::fd::AsRawFd;
-    let fd = socket(
-        AddressFamily::Netlink,
-        SockType::Datagram,
-        SockFlag::SOCK_CLOEXEC | SockFlag::SOCK_NONBLOCK,
-        SockProtocol::NetlinkKObjectUEvent,
+    use rustix::net::netlink::{KOBJECT_UEVENT, SocketAddrNetlink};
+    use rustix::net::{AddressFamily, SocketFlags, SocketType, bind, socket_with};
+    let fd = socket_with(
+        AddressFamily::NETLINK,
+        SocketType::DGRAM,
+        SocketFlags::CLOEXEC | SocketFlags::NONBLOCK,
+        Some(KOBJECT_UEVENT),
     )
     .ok()?;
     // Group 1 is the kernel's own broadcast; udev's rebroadcast is another.
-    bind(fd.as_raw_fd(), &NetlinkAddr::new(0, 1)).ok()?;
+    bind(&fd, &SocketAddrNetlink::new(0, 1)).ok()?;
     Some(fd)
 }
 
 #[cfg(target_os = "linux")]
-fn watch_dir(dir: &Path) -> Option<nix::sys::inotify::Inotify> {
-    use nix::sys::inotify::{AddWatchFlags, InitFlags, Inotify};
-    let inotify = Inotify::init(InitFlags::IN_CLOEXEC | InitFlags::IN_NONBLOCK).ok()?;
+fn watch_dir(dir: &Path) -> Option<std::os::fd::OwnedFd> {
+    use rustix::fs::inotify::{CreateFlags, WatchFlags, add_watch, init};
+    let inotify = init(CreateFlags::CLOEXEC | CreateFlags::NONBLOCK).ok()?;
     std::fs::create_dir_all(dir).ok()?;
-    inotify
-        .add_watch(
-            dir,
-            AddWatchFlags::IN_CLOSE_WRITE | AddWatchFlags::IN_MOVED_TO | AddWatchFlags::IN_DELETE,
-        )
-        .ok()?;
+    add_watch(
+        &inotify,
+        dir,
+        WatchFlags::CLOSE_WRITE | WatchFlags::MOVED_TO | WatchFlags::DELETE,
+    )
+    .ok()?;
     Some(inotify)
 }
 
@@ -150,5 +150,24 @@ mod tests {
         assert!(!is_power_supply(
             b"add@/devices/virtual/net/tun0\0ACTION=add\0SUBSYSTEM=net\0"
         ));
+    }
+
+    /// The kernel itself: a file written where the configuration is kept
+    /// ends a wait, and nothing written does not.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_file_written_in_the_directory_ends_the_wait() {
+        use super::Changes;
+        use std::time::Duration;
+        let dir = std::env::temp_dir().join(format!("alpymist-power-{}", std::process::id()));
+        let changes = Changes::new(Some(&dir));
+        assert!(changes.inotify.is_some(), "the directory is not watched");
+        assert!(changes.uevents.is_some(), "uevents are not listened to");
+        assert!(!changes.wait(Duration::from_millis(50)));
+        std::fs::write(dir.join("power.toml"), "mode = \"saver\"\n").unwrap();
+        assert!(changes.wait(Duration::from_secs(5)));
+        // Taken, all of it: the next wait is for the next change.
+        assert!(!changes.wait(Duration::from_millis(50)));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

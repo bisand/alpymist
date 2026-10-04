@@ -18,21 +18,41 @@ pub use capabilities::{Capabilities, GlesInfo, GpuDevice, Virtualisation};
 pub use channel::Channel;
 
 /// Errors produced by Alpymist libraries.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error {
     /// A `/sys` or `/proc` node could not be read.
-    #[error("reading {path}: {source}")]
     Probe {
         /// The path that could not be read.
         path: String,
         /// Underlying I/O failure.
-        #[source]
         source: std::io::Error,
     },
 
     /// Hardware probing is not implemented for the host platform.
-    #[error("hardware probing is only supported on Linux (host: {0})")]
     UnsupportedHost(&'static str),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Probe { path, source } => write!(f, "reading {path}: {source}"),
+            Self::UnsupportedHost(host) => {
+                write!(
+                    f,
+                    "hardware probing is only supported on Linux (host: {host})"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Probe { source, .. } => Some(source),
+            Self::UnsupportedHost(_) => None,
+        }
+    }
 }
 
 /// Convenient result alias.
