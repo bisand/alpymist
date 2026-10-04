@@ -21,7 +21,7 @@ serde_json = { workspace = true }
 # The password is wiped from memory as soon as it has been handed on.
 zeroize = { workspace = true }
 # polkitd is spoken to over the system bus, which needs nothing linked.
-zbus = { workspace = true }
+alpymist-dbus = { workspace = true }
 
 [dev-dependencies]
 png = { workspace = true }

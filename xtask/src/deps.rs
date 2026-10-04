@@ -39,7 +39,7 @@ const OURS: [&str; 10] = [
 /// Every third-party crate a manifest in this workspace may name, and what it
 /// is for. Adding a line is the review: say why nothing of ours, and nothing
 /// already here, does the job. Those with an issue beside them are to go.
-const ALLOWED: [(&str, &str); 17] = [
+const ALLOWED: [(&str, &str); 16] = [
     (
         "bytemuck",
         "a shared buffer's bytes as pixels, without unsafe",
@@ -68,7 +68,6 @@ const ALLOWED: [(&str, &str); 17] = [
     ),
     ("smithay-client-toolkit", "Wayland surfaces and input. #113"),
     ("toml", "every settings file"),
-    ("zbus", "iwd, fprintd and polkit on the system bus. #112"),
     ("zeroize", "a password wiped from memory once handed on"),
     ("zune-core", "zune-jpeg's options"),
     ("zune-jpeg", "decoding the boot picture, in pure Rust"),
@@ -79,11 +78,10 @@ const ALLOWED: [(&str, &str); 17] = [
 /// crude figure, but one that cannot grow without being edited here. When the
 /// lockfile shrinks, bring it down.
 ///
-/// It went up by four, from 299, when the Wayland hosts moved to the current
-/// smithay-client-toolkit: winit, under the desktop preview, still wants the
-/// old one, so the lockfile holds both. What ships holds one, and lost its
-/// second rustix, linux-raw-sys and memmap2 by the move.
-const LOCKED: usize = 303;
+/// Four of them are the old smithay-client-toolkit and what it alone needs:
+/// winit, under the desktop preview, still wants it, so the lockfile holds
+/// that and the current one the Wayland hosts use. What ships holds one.
+const LOCKED: usize = 267;
 
 /// Check the workspace at `root` against all of the above.
 pub fn deps(root: &Path) -> Result<()> {

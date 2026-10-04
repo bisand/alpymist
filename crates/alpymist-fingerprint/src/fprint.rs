@@ -9,8 +9,8 @@
 //! registered, so a call can wait on a person; the window carries on drawing
 //! meanwhile, and hears how things went as [`Event`]s.
 
+use alpymist_dbus::{Connection, Error, Proxy, Rule};
 use std::sync::mpsc::Receiver;
-use zbus::blocking::{Connection, MessageIterator, Proxy};
 
 /// The daemon's bus name.
 pub const SERVICE: &str = "net.reactivated.Fprint";
@@ -81,22 +81,22 @@ pub fn run(
     for order in orders {
         let answer = match order {
             Order::Enrol(finger) => device
-                .call_method("EnrollStart", &(finger.as_str(),))
+                .call("EnrollStart", vec![finger.as_str().into()])
                 .err()
                 .map(|e| Event::Refused(reason(&e))),
             Order::Test => device
-                .call_method("VerifyStart", &("any",))
+                .call("VerifyStart", vec!["any".into()])
                 .err()
                 .map(|e| Event::Refused(reason(&e))),
             Order::Stop => {
                 // Whichever is going on; the other says so, and is ignored.
-                let _ = device.call_method("EnrollStop", &());
-                let _ = device.call_method("VerifyStop", &());
+                let _ = device.call("EnrollStop", Vec::new());
+                let _ = device.call("VerifyStop", Vec::new());
                 None
             }
             Order::RemoveAll => Some(Event::Removed(
                 device
-                    .call_method("DeleteEnrolledFingers2", &())
+                    .call("DeleteEnrolledFingers2", Vec::new())
                     .map(drop)
                     .map_err(|e| reason(&e)),
             )),
@@ -107,28 +107,44 @@ pub fn run(
             break;
         }
     }
-    let _ = device.call_method("Release", &());
+    let _ = device.call("Release", Vec::new());
 }
 
 /// Connect, find the reader, claim it for this account, and read what it has.
-fn open() -> Result<(Connection, Proxy<'static>, Event), String> {
+fn open() -> Result<(Connection, Proxy, Event), String> {
     let conn = Connection::system().map_err(|e| format!("no system bus: {e}"))?;
-    let manager = proxy(&conn, MANAGER_PATH.to_owned(), MANAGER)?;
-    let path: zbus::zvariant::OwnedObjectPath = manager
-        .call("GetDefaultDevice", &())
+    let manager = conn.proxy(SERVICE, MANAGER_PATH, MANAGER);
+    let path = manager
+        .ask("GetDefaultDevice", Vec::new())
         .map_err(|e| no_reader(&e))?;
-    let device = proxy(&conn, path.to_string(), DEVICE)?;
-    let name: String = device
-        .get_property("name")
-        .unwrap_or_else(|_| "Fingerprint reader".into());
-    let stages: i32 = device.get_property("num-enroll-stages").unwrap_or(5);
+    let path = path
+        .as_path()
+        .ok_or("The fingerprint service did not say where the reader is.")?;
+    let device = conn.proxy(SERVICE, path, DEVICE);
+    let name = device
+        .get("name")
+        .ok()
+        .and_then(|name| name.as_str().map(str::to_owned))
+        .unwrap_or_else(|| "Fingerprint reader".into());
+    let stages = device
+        .get("num-enroll-stages")
+        .ok()
+        .and_then(|stages| stages.as_i64())
+        .unwrap_or(5);
     // For the caller: an empty name means this account.
     device
-        .call_method("Claim", &("",))
+        .call("Claim", vec!["".into()])
         .map_err(|e| format!("The reader is in use: {}", reason(&e)))?;
     // fprintd says "none" as an error.
-    let enrolled: Vec<String> = device
-        .call("ListEnrolledFingers", &("",))
+    let enrolled = device
+        .ask("ListEnrolledFingers", vec!["".into()])
+        .map(|fingers| {
+            fingers
+                .items()
+                .iter()
+                .filter_map(|finger| finger.as_str().map(str::to_owned))
+                .collect()
+        })
         .unwrap_or_default();
     let ready = Event::Ready {
         reader: Some(name),
@@ -139,51 +155,25 @@ fn open() -> Result<(Connection, Proxy<'static>, Event), String> {
     Ok((conn, device, ready))
 }
 
-fn proxy(
-    conn: &Connection,
-    path: String,
-    interface: &'static str,
-) -> Result<Proxy<'static>, String> {
-    zbus::blocking::proxy::Builder::new(conn)
-        .destination(SERVICE)
-        .and_then(|b| b.path(path))
-        .and_then(|b| b.interface(interface))
-        .map(|b| b.cache_properties(zbus::proxy::CacheProperties::No))
-        .and_then(zbus::blocking::proxy::Builder::build)
-        .map_err(|e| format!("the fingerprint daemon: {e}"))
-}
-
 /// Forward the device's `EnrollStatus` and `VerifyStatus` from a thread of
 /// their own, while the calls wait on theirs.
-fn listen(
-    conn: &Connection,
-    device: &Proxy<'static>,
-    send: impl Fn(Event) -> bool + Send + 'static,
-) {
-    let rule = zbus::MatchRule::builder()
-        .msg_type(zbus::message::Type::Signal)
-        .sender(SERVICE)
-        .and_then(|b| b.interface(DEVICE))
-        .and_then(|b| b.path(device.path().to_owned()))
-        .map(zbus::match_rule::Builder::build);
-    let Ok(rule) = rule else {
-        return;
-    };
-    let Ok(messages) = MessageIterator::for_match_rule(rule, conn, Some(64)) else {
+fn listen(conn: &Connection, device: &Proxy, send: impl Fn(Event) -> bool + Send + 'static) {
+    let rule = Rule::from(SERVICE).interface(DEVICE).path(device.path());
+    let Ok(messages) = conn.signals(rule) else {
         return;
     };
     std::thread::spawn(move || {
-        for message in messages.flatten() {
-            let header = message.header();
-            let Some(member) = header.member() else {
+        for message in messages {
+            // Both say how it went, and whether that is the end of it.
+            let [result, done] = message.body.as_slice() else {
                 continue;
             };
-            let Ok((result, done)) = message.body().deserialize::<(String, bool)>() else {
+            let (Some(result), Some(done)) = (result.as_str(), done.as_bool()) else {
                 continue;
             };
-            let event = match member.as_str() {
-                "EnrollStatus" => Event::Enroll(result, done),
-                "VerifyStatus" => Event::Verify(result, done),
+            let event = match message.member.as_deref() {
+                Some("EnrollStatus") => Event::Enroll(result.to_owned(), done),
+                Some("VerifyStatus") => Event::Verify(result.to_owned(), done),
                 _ => continue,
             };
             if !send(event) {
@@ -194,7 +184,7 @@ fn listen(
 }
 
 /// Why there is no reader: none connected, or no daemon to ask.
-fn no_reader(e: &zbus::Error) -> String {
+fn no_reader(e: &Error) -> String {
     let text = e.to_string();
     if text.contains("NoSuchDevice") {
         "No fingerprint reader was found.".into()
@@ -206,15 +196,13 @@ fn no_reader(e: &zbus::Error) -> String {
 }
 
 /// A D-Bus error as a person reads it: its message, not its name.
-fn reason(e: &zbus::Error) -> String {
+fn reason(e: &Error) -> String {
     match e {
-        zbus::Error::MethodError(name, message, _) => {
-            if name.as_str().ends_with("AccessDenied")
-                || name.as_str().ends_with("PermissionDenied")
-            {
+        Error::Method { name, message } => {
+            if name.ends_with("AccessDenied") || name.ends_with("PermissionDenied") {
                 "Not allowed: the password was not given, or not right.".into()
             } else {
-                message.clone().unwrap_or_else(|| name.to_string())
+                message.clone().unwrap_or_else(|| name.clone())
             }
         }
         other => other.to_string(),

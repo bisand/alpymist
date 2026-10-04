@@ -52,6 +52,16 @@ place for `unsafe` is an ADR. See
 [ADR 0004](docs/adr/0004-unsafe-and-musl-linking.md) and
 [ADR 0024](docs/adr/0024-pam-bindings-of-our-own.md).
 
+**The bus is spoken to with `alpymist-dbus`, and it does little.**
+Calls, signals, properties and a few served methods on the system bus, for
+iwd, the fingerprint daemon and polkit: blocking, over a unix socket, with no
+dependencies. No file descriptors in messages, no session bus, nothing
+asynchronous; a program that needs one of those is a reason to talk, not a
+feature to add in passing. Everything it reads is checked as it is read,
+whoever sent it, and `wire.rs`'s tests are what hold it to that: a new kind
+of value or field means a test of what happens when it is malformed. See
+[ADR 0025](docs/adr/0025-dbus-client-of-our-own.md).
+
 **A new dependency is a line in `xtask/src/deps.rs`, with its reason.**
 As little as possible that is not ours, from crates.io, and well known.
 `cargo xtask deps` fails on a locked package from anywhere else, on a
