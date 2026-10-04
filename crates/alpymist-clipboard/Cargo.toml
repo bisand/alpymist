@@ -12,7 +12,7 @@ repository.workspace = true
 alpymist-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-toml = { version = "0.9", default-features = false, features = ["parse", "display", "serde", "std"] }
+toml = { workspace = true, features = ["display"] }
 
 [lints]
 workspace = true

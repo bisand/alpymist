@@ -26,14 +26,14 @@ denise = { workspace = true }
 denise-render = { workspace = true }
 denise-text = { workspace = true }
 serde = { workspace = true }
-toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
+toml = { workspace = true }
 # The catalogues are read from what Flatpak and apk already keep on disk:
 # Flathub's AppStream XML and its PNG icons, and apk's gzipped index files,
 # named after the SHA-1 of their URL. Pure Rust, nothing linked.
-quick-xml = "0.41"
-flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
-png = "0.17"
-sha1_smol = "1"
+quick-xml = { workspace = true }
+flate2 = { workspace = true }
+png = { workspace = true }
+sha1_smol = { workspace = true }
 
 [lints]
 workspace = true

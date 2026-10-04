@@ -30,7 +30,7 @@ required-features = ["window"]
 
 [dependencies]
 # The fingerprint daemon, over the system bus, which needs nothing linked.
-zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
+zbus = { workspace = true }
 # Enrolling asks polkit, and polkit asks for the password in Alpymist's dialog
 # through an agent the window registers for itself.
 alpymist-auth = { workspace = true, optional = true }
@@ -40,7 +40,7 @@ denise-render = { workspace = true, optional = true }
 denise-text = { workspace = true, optional = true }
 
 [dev-dependencies]
-png = "0.17"
+png = { workspace = true }
 
 [lints]
 workspace = true

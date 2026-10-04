@@ -19,8 +19,8 @@ serde_json = { workspace = true }
 # The host: a wlr layer surface over wl_shm, as the menu's. Linux only, so a
 # widget's logic, its drawing and its offscreen snapshots build anywhere.
 [target.'cfg(target_os = "linux")'.dependencies]
-bytemuck = "1"
-smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop", "xkbcommon"] }
+bytemuck = { workspace = true }
+smithay-client-toolkit = { workspace = true }
 
 [lints]
 workspace = true

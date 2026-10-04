@@ -38,11 +38,11 @@ denise = { workspace = true, optional = true }
 denise-render = { workspace = true, optional = true }
 denise-text = { workspace = true, optional = true }
 serde = { workspace = true }
-toml = { version = "0.9", default-features = false, features = ["parse", "display", "serde", "std"] }
+toml = { workspace = true, features = ["display"] }
 
 # Devices arriving are kernel uevents on a netlink socket any user may read.
 [target.'cfg(target_os = "linux")'.dependencies]
-rustix = { version = "1", default-features = false, features = ["std", "event", "net"] }
+rustix = { workspace = true, features = ["event", "net"] }
 
 [lints]
 workspace = true

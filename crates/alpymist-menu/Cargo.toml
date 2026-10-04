@@ -18,17 +18,17 @@ denise = { workspace = true }
 denise-render = { workspace = true }
 denise-text = { workspace = true }
 serde = { workspace = true }
-toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
+toml = { workspace = true }
 
 # The window is a wlr layer surface over wl_shm: no GPU context to create and no
 # toolkit to start, which is most of why it is on screen within a frame or two.
 # Linux only, so the logic and the offscreen preview still build on a Mac.
 [target.'cfg(target_os = "linux")'.dependencies]
-bytemuck = "1"
-smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop", "xkbcommon"] }
+bytemuck = { workspace = true }
+smithay-client-toolkit = { workspace = true }
 
 [dev-dependencies]
-png = "0.17"
+png = { workspace = true }
 
 [lints]
 workspace = true

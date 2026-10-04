@@ -112,7 +112,7 @@ fn write_mark(path: &str, size: u32) -> Result<(), String> {
     let mut encoder = png::Encoder::new(BufWriter::new(file), size, height);
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);
-    encoder.set_compression(png::Compression::Best);
+    encoder.set_compression(png::Compression::High);
     encoder
         .write_header()
         .and_then(|mut w| w.write_image_data(&rgba))
@@ -325,7 +325,7 @@ fn write_png(path: &str, pixels: &[u32], width: u32, height: u32) -> Result<(), 
     // quarter of the size before compression.
     encoder.set_color(png::ColorType::Rgb);
     encoder.set_depth(png::BitDepth::Eight);
-    encoder.set_compression(png::Compression::Best);
+    encoder.set_compression(png::Compression::High);
     let rgb = to_rgb(pixels);
     encoder
         .write_header()

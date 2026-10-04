@@ -24,12 +24,12 @@ denise-winit = { workspace = true, optional = true }
 denise-drm = { workspace = true, optional = true }
 denise-evdev = { workspace = true, optional = true }
 # Reads /etc/localtime itself, so the clock is in the machine's time zone.
-jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo"] }
+jiff = { workspace = true, features = ["tz-system", "tzdb-zoneinfo"] }
 serde = { workspace = true }
 # The 24-hour clock, from the system's settings.toml.
-toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
+toml = { workspace = true }
 serde_json = { workspace = true }
-signal-hook = { version = "0.3", optional = true }
+signal-hook = { workspace = true, optional = true }
 
 [features]
 default = ["winit"]
@@ -39,9 +39,9 @@ drm = ["alpymist-ui/drm", "dep:denise-drm", "dep:denise-evdev", "dep:signal-hook
 
 [dev-dependencies]
 # The snapshot example: the login screen rendered to a PNG for review.
-png = "0.17"
+png = { workspace = true }
 # The clock test names a zone rather than trusting the build machine's.
-jiff = { version = "0.2", default-features = false, features = ["std", "tzdb-bundle-always"] }
+jiff = { workspace = true, features = ["tzdb-bundle-always"] }
 
 [lints]
 workspace = true

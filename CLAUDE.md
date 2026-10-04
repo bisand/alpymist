@@ -56,7 +56,9 @@ place for `unsafe` is an ADR. See
 As little as possible that is not ours, from crates.io, and well known.
 `cargo xtask deps` fails on a locked package from anywhere else, on a
 third-party crate a manifest names that `ALLOWED` does not, on one `ALLOWED`
-names that nothing uses, and on a lockfile grown past `LOCKED`. Denise's
+names that nothing uses, on a member that gives a crate a version of its own
+and not `workspace = true`, and on a lockfile grown past `LOCKED`. Every
+third-party crate is declared once, in `[workspace.dependencies]`. Denise's
 crates are ours and listed by name in `OURS`, never by prefix. Adding a line
 to make the check pass is not the fix when something of ours, or something
 already there, does the job; raising `LOCKED` wants a reason too. See
