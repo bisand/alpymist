@@ -32,6 +32,11 @@ pub struct Saver {
     last: Vec<u32>,
     /// The parts of the screen the last frame changed. `None` is all of it.
     changed: Option<Vec<Rect>>,
+    /// How small the picture in `last` is, and how far it is blown up.
+    small: Size,
+    block: u32,
+    /// Which drawn row `row` holds, blown up, when it holds one.
+    expanded: Option<u32>,
     started: Instant,
     /// Where the pointer was when it first reached the surface.
     ///
@@ -51,29 +56,17 @@ impl Saver {
             row: Vec::new(),
             last: Vec::new(),
             changed: None,
+            small: Size::new(0, 0),
+            block: 1,
+            expanded: None,
             started: Instant::now(),
             pointer: None,
         }
     }
 
-    /// How long it has been up, in milliseconds.
-    fn elapsed(&self) -> u64 {
-        u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX)
-    }
-}
-
-impl Widget for Saver {
-    type Event = ();
-
-    /// Ignored: the host gives a full-screen widget the whole output.
-    fn layout(&mut self, _scale: u32) -> Size {
-        self.picture
-            .as_ref()
-            .map_or(Size::new(1, 1), |(output, _)| *output)
-    }
-
-    fn paint(&mut self, frame: &mut Frame<'_>) {
-        let output = frame.size();
+    /// Draw the next frame, small, and work out what of the screen it
+    /// changes.
+    fn next(&mut self, output: Size) {
         // A picture is composed for one screen size. A different one — the
         // output changed, or this is the first frame — composes again.
         if self.picture.as_ref().is_none_or(|(was, _)| *was != output) {
@@ -89,8 +82,8 @@ impl Widget for Saver {
         let pixels = picture.frame(elapsed);
         // Much of a picture is the same from one frame to the next — the sky
         // over a drifting ridge — and rows that are the same need not be
-        // handed to the compositor again. Telling costs a look at the small picture,
-        // which is a sixteenth of the screen or less.
+        // handed to the compositor again. Telling costs a look at the small
+        // picture, which is a sixteenth of the screen or less.
         self.changed = differing(&self.last, pixels, small.width as usize).map(|bands| {
             let screen = |drawn: usize| {
                 i32::try_from(drawn)
@@ -111,12 +104,75 @@ impl Widget for Saver {
         });
         self.last.clear();
         self.last.extend_from_slice(pixels);
-        expand(pixels, small, block, &mut self.row, |y, line| {
-            if let Some(dst) = frame.row_mut(y) {
-                let n = dst.len().min(line.len());
-                dst[..n].copy_from_slice(&line[..n]);
+        self.small = small;
+        self.block = block;
+        self.expanded = None;
+    }
+
+    /// How long it has been up, in milliseconds.
+    fn elapsed(&self) -> u64 {
+        u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX)
+    }
+}
+
+impl Widget for Saver {
+    type Event = ();
+
+    /// Ignored: the host gives a full-screen widget the whole output.
+    fn layout(&mut self, _scale: u32) -> Size {
+        self.picture
+            .as_ref()
+            .map_or(Size::new(1, 1), |(output, _)| *output)
+    }
+
+    fn paint(&mut self, frame: &mut Frame<'_>) {
+        self.next(frame.size());
+        expand(
+            &self.last,
+            self.small,
+            self.block,
+            &mut self.row,
+            |y, line| {
+                if let Some(dst) = frame.row_mut(y) {
+                    let n = dst.len().min(line.len());
+                    dst[..n].copy_from_slice(&line[..n]);
+                }
+            },
+        );
+        self.expanded = None;
+    }
+
+    /// The picture is handed over a row at a time: it is cheap to blow a row
+    /// up and the screen is large, so painting the whole of it somewhere
+    /// first, to be copied from, is the larger half of what a frame costs.
+    fn streams(&mut self, size: Size) -> bool {
+        self.next(size);
+        true
+    }
+
+    fn row(&mut self, y: u32) -> (&[u32], u32) {
+        let block = self.block.max(1);
+        let wide = self
+            .picture
+            .as_ref()
+            .map_or(0, |(output, _)| output.width as usize);
+        let drawn = y / block;
+        if self.expanded != Some(drawn) || self.row.len() != wide {
+            let width = self.small.width as usize;
+            let line = self
+                .last
+                .get(drawn as usize * width..(drawn as usize + 1) * width)
+                .unwrap_or(&[]);
+            self.row.clear();
+            for px in line {
+                self.row.extend(std::iter::repeat_n(*px, block as usize));
             }
-        });
+            // What the blocks do not reach, where they do not divide the
+            // screen, and all of a row past the last: the sky's own colour.
+            self.row.resize(wide, backdrop());
+            self.expanded = Some(drawn);
+        }
+        (&self.row, block - y % block)
     }
 
     fn changed(&self) -> Option<&[Rect]> {
@@ -310,6 +366,56 @@ mod tests {
             Some(&[Rect::new(0, 4, 16, 4)][..]),
             "one drawn row, four high on the screen"
         );
+    }
+
+    #[test]
+    fn a_row_asked_for_is_the_row_painting_would_have_put_there() {
+        // A picture whose every drawn pixel is different, on a screen its
+        // blocks do not divide.
+        fn stripes() -> Saver {
+            Saver::new(Box::new(|_| {
+                Box::new(Flat {
+                    small: Size::new(4, 3),
+                    block: 3,
+                    pixels: (0..12).map(|n| 0xFF00_0000 | n).collect(),
+                })
+            }))
+        }
+        let size = Size::new(11, 8);
+        let mut painted = vec![0u32; 11 * 8];
+        {
+            let mut frame = denise::Frame::new(
+                &mut painted,
+                size,
+                11,
+                denise::PixelFormat::Argb8888,
+                denise::BufferAge::Undefined,
+            )
+            .expect("a frame");
+            stripes().paint(&mut frame);
+        }
+        let mut saver = stripes();
+        assert!(saver.streams(size));
+        // Out of order, and some twice: rows are asked for as they are
+        // wanted.
+        for y in [7, 0, 3, 4, 3, 1, 2, 6, 5] {
+            let (row, same) = saver.row(y);
+            assert_eq!(
+                row,
+                &painted[y as usize * 11..(y as usize + 1) * 11],
+                "row {y}"
+            );
+            assert_eq!(same, 3 - y % 3, "rows the same as row {y}");
+        }
+    }
+
+    #[test]
+    fn a_row_past_the_picture_is_the_sky() {
+        let mut saver = saver();
+        assert!(saver.streams(Size::new(8, 8)));
+        let (row, same) = saver.row(400);
+        assert_eq!(row, [super::backdrop(); 8]);
+        assert!(same >= 1);
     }
 
     #[test]

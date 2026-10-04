@@ -15,7 +15,7 @@
 //! sake; the same says which pixels of each buffer are now old.
 
 use std::fs::File;
-use std::io;
+use std::io::{self, IoSlice};
 use std::ops::Range;
 use std::os::fd::AsFd;
 use std::os::unix::fs::FileExt;
@@ -24,8 +24,8 @@ use rustix::fs::{MemfdFlags, SealFlags, fcntl_add_seals, memfd_create};
 use wayland_client::QueueHandle;
 use wayland_client::protocol::{wl_buffer::WlBuffer, wl_shm, wl_surface::WlSurface};
 
-use crate::Area;
 use crate::state::State;
+use crate::{Area, Pixels, Rows};
 
 /// What of a buffer is older than the picture: for each row, the pixels from
 /// the first that is to past the last, and nothing where the two meet.
@@ -150,20 +150,70 @@ impl Buffer {
         self.stale.mark(area);
     }
 
-    /// Bring it up to `pixels`, the whole picture, by writing what it has
-    /// wrong.
-    pub(crate) fn fill(&mut self, pixels: &[u32]) -> io::Result<()> {
+    /// Bring it up to the picture by writing what it has wrong.
+    pub(crate) fn fill(&mut self, pixels: &mut Pixels<'_>) -> io::Result<()> {
+        let width = self.width.unsigned_abs() as usize;
         for run in self.stale.take() {
-            let start = run.start;
-            let run = pixels
-                .get(run)
-                .ok_or_else(|| io::Error::other("a picture smaller than its buffer"))?;
-            self.file
-                .write_all_at(bytemuck::cast_slice(run), (start * 4) as u64)?;
+            match pixels {
+                Pixels::Whole(pixels) => {
+                    let start = run.start;
+                    let run = pixels
+                        .get(run)
+                        .ok_or_else(|| io::Error::other("a picture smaller than its buffer"))?;
+                    self.file
+                        .write_all_at(bytemuck::cast_slice(run), (start * 4) as u64)?;
+                }
+                Pixels::Rows(rows) => self.fill_from(&mut **rows, run, width)?,
+            }
+        }
+        Ok(())
+    }
+
+    /// Write the pixels `run` of the picture, asking for each row it touches.
+    fn fill_from(&self, rows: &mut dyn Rows, run: Range<usize>, width: usize) -> io::Result<()> {
+        let mut at = run.start;
+        while at < run.end {
+            let from = at % width;
+            let to = width.min(from + (run.end - at));
+            let y = u32::try_from(at / width).map_err(io::Error::other)?;
+            let (row, same) = rows.row(y);
+            let row = row
+                .get(..width)
+                .ok_or_else(|| io::Error::other("a row narrower than its picture"))?;
+            if from == 0 && to == width {
+                // Whole rows, and as many of them as are this one again, in
+                // one write: they lie end to end in the file.
+                let most = (run.end - at) / width;
+                let count = (same.max(1) as usize).min(most).clamp(1, MOST_AT_ONCE);
+                self.write_again(bytemuck::cast_slice(row), count, (at * 4) as u64)?;
+                at += count * width;
+            } else {
+                self.file
+                    .write_all_at(bytemuck::cast_slice(&row[from..to]), (at * 4) as u64)?;
+                at += to - from;
+            }
+        }
+        Ok(())
+    }
+
+    /// Write `row` `count` times over, one after another, from `offset`.
+    fn write_again(&self, row: &[u8], count: usize, offset: u64) -> io::Result<()> {
+        let again = [IoSlice::new(row); MOST_AT_ONCE];
+        let wrote = rustix::io::pwritev(&self.file, &again[..count], offset)?;
+        // All of it, nearly always. What a short write left is written a row
+        // at a time, from wherever in a row it stopped.
+        let mut done = wrote;
+        while done < row.len() * count {
+            let rest = &row[done % row.len()..];
+            self.file.write_all_at(rest, offset + done as u64)?;
+            done += rest.len();
         }
         Ok(())
     }
 }
+
+/// The most rows written in one go. More than any block is tall.
+const MOST_AT_ONCE: usize = 64;
 
 impl Drop for Buffer {
     fn drop(&mut self) {

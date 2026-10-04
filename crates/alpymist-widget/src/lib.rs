@@ -168,6 +168,27 @@ pub trait Widget: 'static {
         None
     }
 
+    /// For a widget that covers the screen and would rather hand its picture
+    /// over a row at a time than paint it: make the next frame, for a screen
+    /// of `size`, and say so. [`Widget::row`] is then asked for the rows that
+    /// are wanted — not all of them, and in no promised order — and
+    /// [`Widget::paint`] is not called.
+    ///
+    /// Worth it where a row is cheap to make and the screen is large:
+    /// painting into memory and handing that over is two passes over the
+    /// screen, and this is one.
+    fn streams(&mut self, size: Size) -> bool {
+        let _ = size;
+        false
+    }
+
+    /// Row `y` of the frame [`Widget::streams`] made, as wide as the screen,
+    /// and how many rows from `y` on are the same as it: at least one.
+    fn row(&mut self, y: u32) -> (&[u32], u32) {
+        let _ = y;
+        (&[], 1)
+    }
+
     /// A key was pressed.
     fn key(&mut self, key: Key) -> Outcome;
 

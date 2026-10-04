@@ -95,13 +95,22 @@ pointer keeps what it wore.
   | a span to each changed row, each told | 16.3% | 22.5% |
   | bands of changed rows, each told | 13.2% | 18.5% to 21.0% |
   | bands of changed rows, one rectangle told | 13.1% | 16.0% |
+  | the same, with rows handed over as they are made | 9.9% | 16.5% |
 
-  So the compositor is where it was, and the screensaver costs four points of
-  a core more than it did with a mapping. Narrower than rows loses: the
-  mountains change in a few hundred small places a frame, a place is a write,
-  and the writes cost more than the bytes they save. What is left of the
-  difference is the copy itself, and the way to have that back is the mapping
-  above.
+  Narrower than rows loses: the mountains change in a few hundred small
+  places a frame, a place is a write, and the writes cost more than the bytes
+  they save.
+
+  The last row of the table is what closed the gap. Timed on the same machine,
+  a frame was 3.2 ms drawing the small picture, 4.6 ms blowing it up into a
+  screen's worth of memory, and 3.9 ms writing that to the compositor: two
+  passes over the screen where a mapping made one. So a widget that covers the
+  screen may hand its picture over a row at a time (`Widget::streams`,
+  `alpymist_wayland::Rows`): the screensaver blows one drawn row up into a few
+  kilobytes that stay in the processor's cache, and that is written as many
+  times as the block is tall, in one call. One pass again, made by the kernel.
+  The screensaver costs 0.7 of a point more than it did with a mapping, and
+  holds 2.7 MB where it held 6.8.
 - Programs hold less memory: a mapped buffer counted against the program as
   well as the compositor. The screensaver went from 26 MB resident to 10, the
   lock from 44 to 19.

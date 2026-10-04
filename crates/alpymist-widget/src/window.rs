@@ -15,8 +15,8 @@
 use crate::Outcome;
 use crate::host::Events;
 use alpymist_wayland::{
-    BTN_LEFT, Event, KeyEvent, Keysym, Modifiers, Picture, PointerEvent, PointerKind, Shape, Timer,
-    Wayland, Window, WindowOptions,
+    BTN_LEFT, Event, KeyEvent, Keysym, Modifiers, Picture, Pixels, PointerEvent, PointerKind,
+    Shape, Timer, Wayland, Window, WindowOptions,
 };
 use denise::geom::{Point, Size};
 use denise::{BufferAge, Frame, PixelFormat};
@@ -315,10 +315,10 @@ impl<A: App> Host<A> {
         }
         let shown = self.wayland.show(
             self.window.surface(),
-            &Picture {
+            Picture {
                 size: (size.width, size.height),
                 scale: self.scale,
-                pixels: &self.canvas,
+                pixels: Pixels::Whole(&self.canvas),
                 opaque: false,
                 damage: None,
                 paced: true,

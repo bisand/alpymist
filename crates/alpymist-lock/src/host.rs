@@ -24,8 +24,8 @@ use crate::finger::{self, Heard};
 use alpymist_greeter::app::{Action, App, Status};
 use alpymist_greeter::clock;
 use alpymist_wayland::{
-    Area, BTN_LEFT, Event, KeyEvent, Keysym, LockSurface, Modifiers, Output, Picture, PointerEvent,
-    PointerKind, Receiver, SessionLock, Shape, Surface, Timer, Wayland,
+    Area, BTN_LEFT, Event, KeyEvent, Keysym, LockSurface, Modifiers, Output, Picture, Pixels,
+    PointerEvent, PointerKind, Receiver, SessionLock, Shape, Surface, Timer, Wayland,
 };
 use denise::geom::Size;
 use denise::{BufferAge, Frame, PixelFormat};
@@ -292,10 +292,10 @@ impl Lock {
         let damage = (!fresh).then_some(&changed[..]);
         let shown = self.wayland.show(
             &surface,
-            &Picture {
+            Picture {
                 size: (size.width, size.height),
                 scale,
-                pixels: &self.shadow[..words],
+                pixels: Pixels::Whole(&self.shadow[..words]),
                 // Opaque: every pixel of this is painted and none of it is
                 // meant to show anything through, and a compositor told
                 // there is an alpha channel has to blend a screen's worth of
