@@ -8,7 +8,7 @@
 //!
 //! Subcommands, options and the values an option lists come from clap's own
 //! description of the command line. What clap cannot know is in [`named`]:
-//! the settings, a setting's values, the screens.
+//! the settings, a setting's values, the screens and their modes.
 
 use alpymist_core::Channel;
 use alpymist_settings::{Kind, Settings};
@@ -244,6 +244,13 @@ fn named(path: &[&str], id: &str, given: &[&str]) -> Option<Vec<Candidate>> {
             .map(|c| Candidate::new(c.name(), ""))
             .collect(),
         (["displays", "set"], "screen") => screens(),
+        (["displays", "set"], "mode") => {
+            let monitors = alpymist_displays::hypr::monitors().unwrap_or_default();
+            crate::displays::modes(&monitors, given.first().copied())
+                .into_iter()
+                .map(|mode| Candidate::new(mode, ""))
+                .collect()
+        }
         (["displays", "set"], "mirror") => {
             let mut found = screens();
             found.push(Candidate::new("none", "A picture of its own"));
@@ -380,6 +387,8 @@ mod tests {
         assert_eq!(offered("channel "), ["stable", "dev"]);
         assert!(offered("open ").contains(&"browser".to_owned()));
         assert_eq!(offered("displays set DP-1 --flip "), ["true", "false"]);
+        // Whatever screens there are to ask about, or none.
+        assert!(offered("displays set DP-1 --mode ").contains(&"preferred".to_owned()));
     }
 
     #[test]

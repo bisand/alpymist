@@ -219,18 +219,28 @@ fn mode_rule(wanted: &str, monitor: &Monitor) -> Result<String, String> {
         Some((size, rate)) => (size, Some(rate.trim_end_matches("Hz"))),
         None => (wanted, None),
     };
-    let offered = monitor.available_modes.iter().find_map(|offer| {
-        let offer = offer.trim_end_matches("Hz");
-        let (offered_size, offered_rate) = offer.split_once('@')?;
-        let rate_matches =
-            rate.is_none_or(
-                |want| match (want.parse::<f64>(), offered_rate.parse::<f64>()) {
-                    (Ok(want), Ok(offered)) => (want - offered).abs() < 0.5,
-                    _ => false,
-                },
-            );
-        (offered_size == size && rate_matches).then(|| offer.to_owned())
-    });
+    // How far each mode of that size is from the rate asked for: the nearest
+    // within half a hertz, so that 59.94 is not taken for the 60 beside it,
+    // and the first the screen lists when no rate was given.
+    let want = rate.map(str::parse::<f64>);
+    let offered = monitor
+        .available_modes
+        .iter()
+        .filter_map(|offer| {
+            let offer = offer.trim_end_matches("Hz");
+            let (offered_size, offered_rate) = offer.split_once('@')?;
+            if offered_size != size {
+                return None;
+            }
+            let off = match &want {
+                None => 0.0,
+                Some(Ok(want)) => (want - offered_rate.parse::<f64>().ok()?).abs(),
+                Some(Err(_)) => return None,
+            };
+            (off < 0.5).then_some((off, offer))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, offer)| offer.to_owned());
     offered.ok_or_else(|| {
         format!(
             "{} does not offer {wanted}; it offers {}",
@@ -238,6 +248,23 @@ fn mode_rule(wanted: &str, monitor: &Monitor) -> Result<String, String> {
             monitor.available_modes.join(", ")
         )
     })
+}
+
+/// What `--mode` can be given for the screen `wanted` names, for Tab to
+/// offer: `preferred`, then each mode it offers, written as [`mode_rule`]
+/// takes them. Only `preferred` when `wanted` names no one screen.
+pub fn modes(monitors: &[Monitor], wanted: Option<&str>) -> Vec<String> {
+    let mut found = vec!["preferred".to_owned()];
+    let names = screen::names(monitors);
+    if let Some(i) = wanted.and_then(|w| find(monitors, &names, w).ok()) {
+        for offer in &monitors[i].available_modes {
+            let offer = offer.trim_end_matches("Hz").to_owned();
+            if !found.contains(&offer) {
+                found.push(offer);
+            }
+        }
+    }
+    found
 }
 
 fn parse_position(text: &str) -> Result<[i32; 2], String> {
@@ -320,7 +347,7 @@ fn list(json: bool) -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{find, mode_rule, parse_position, turns};
+    use super::{find, mode_rule, modes, parse_position, turns};
     use alpymist_displays::screen::Monitor;
 
     fn m(name: &str) -> Monitor {
@@ -343,6 +370,35 @@ mod tests {
         assert_eq!(find(&monitors, &names, "s24e650"), Ok(1));
         assert!(find(&monitors, &names, "Samsung").is_err(), "two of them");
         assert!(find(&monitors, &names, "LG").is_err());
+    }
+
+    #[test]
+    fn tab_offers_a_screens_modes_as_they_are_taken() {
+        let mut tv = m("HDMI-A-1");
+        tv.available_modes = vec![
+            "1920x1080@60.00Hz".into(),
+            "1920x1080@59.94Hz".into(),
+            "1920x1080@60.00Hz".into(),
+            "1280x720@50.00Hz".into(),
+        ];
+        let monitors = [m("eDP-1"), tv];
+        let offered = modes(&monitors, Some("HDMI-A-1"));
+        assert_eq!(
+            offered,
+            [
+                "preferred",
+                "1920x1080@60.00",
+                "1920x1080@59.94",
+                "1280x720@50.00"
+            ]
+        );
+        // Each means itself, the two rates a hair apart among them.
+        for mode in &offered {
+            assert_eq!(&mode_rule(mode, &monitors[1]).unwrap(), mode);
+        }
+        // No screen named yet, or none by that name: what any screen takes.
+        assert_eq!(modes(&monitors, None), ["preferred"]);
+        assert_eq!(modes(&monitors, Some("LG")), ["preferred"]);
     }
 
     #[test]
