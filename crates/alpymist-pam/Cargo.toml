@@ -1,0 +1,15 @@
+[package]
+name = "alpymist-pam"
+description = "Asks PAM whether somebody is who they say. One of the two crates in Alpymist permitted to use unsafe."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Nothing: libpam is linked, and the allocator PAM frees replies with is the
+# C library's, which std already links.
+[dependencies]
+
+[lints]
+workspace = true

@@ -52,3 +52,12 @@ runtime, which is in the base system by definition. In exchange, anything we
 ship can load an optional system library at runtime rather than hard-linking
 against it — which is what lets `alpymistctl` run on a machine with no Mesa
 installed at all, and simply report that it learned nothing.
+
+## Addendum, 2026-10-04: a second crate
+
+The first section says all `unsafe` in the project lives in
+`crates/alpymist-glesprobe/src/ffi.rs`, and that a second crate needing it
+would be worth another ADR. [ADR 0024](0024-pam-bindings-of-our-own.md) is
+that one: `crates/alpymist-pam/src/ffi.rs` is the second place, for the lock
+screen's conversation with PAM, on the same terms. Every other crate still
+carries `#![forbid(unsafe_code)]`.

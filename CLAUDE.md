@@ -42,6 +42,16 @@ they disagree; Release runs it with `--expect <tag>`. `pkgrel` is the CI run
 number, set by `ci/build-packages.sh` from `BUILD`; the committed value is `0`
 and stays `0`. See [ADR 0008](docs/adr/0008-versions-and-build-numbers.md).
 
+**`unsafe` lives in two files and nowhere else.**
+`crates/alpymist-glesprobe/src/ffi.rs`, for EGL, and
+`crates/alpymist-pam/src/ffi.rs`, for the lock screen's conversation with
+PAM. Every other crate is `#![forbid(unsafe_code)]`. `alpymist-pam` declares
+`pam_start`, `pam_authenticate` and `pam_end` and nothing more: a lock screen
+that needs another of libpam's functions is a change to argue for, and a third
+place for `unsafe` is an ADR. See
+[ADR 0004](docs/adr/0004-unsafe-and-musl-linking.md) and
+[ADR 0024](docs/adr/0024-pam-bindings-of-our-own.md).
+
 **A new dependency is a line in `xtask/src/deps.rs`, with its reason.**
 As little as possible that is not ours, from crates.io, and well known.
 `cargo xtask deps` fails on a locked package from anywhere else, on a

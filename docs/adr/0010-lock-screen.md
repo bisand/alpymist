@@ -208,3 +208,14 @@ beside it as `.bak-lock`. A Hyprland already running is told to read its
 configuration again, since it does not notice the file replaced. Any other
 lock command, swaylock with other arguments included, is somebody's choice
 and is left alone, as `power.toml` accepting any command always meant.
+
+## Addendum — 2026-10-04: the PAM bindings are ours
+
+The decision above declined writing the PAM conversation ourselves, and took
+`nonstick` so that no `unsafe` was first-party. That is reversed.
+`alpymist-pam` is the conversation, written here, and the second crate
+permitted `unsafe`; `nonstick` is gone. What it gave up is said plainly in
+[ADR 0024](0024-pam-bindings-of-our-own.md): ADR 0004's one place is now two.
+What it bought is that the code between a password and the account is code
+that has been read. The lock's services, and what it asks of PAM, are
+unchanged, and `alpymist-lock` still carries `#![forbid(unsafe_code)]`.

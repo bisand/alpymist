@@ -10,7 +10,7 @@ license="MIT OR Apache-2.0"
 # The screen is drawn by Denise on the CPU into wl_shm, as the menu's is, so it
 # needs the same keymap library; the password goes through libpam, which is
 # what linux-pam-dev is for. Nothing is generated at build time: the PAM
-# bindings are written out, not produced by bindgen, so there is no clang here.
+# bindings are alpymist-pam's, written out, so there is no clang here.
 makedepends="cargo libxkbcommon-dev linux-pam-dev"
 # linux-pam is the stack /etc/pam.d/alpymist-lock includes, and pam_unix's
 # setuid unix_chkpwd is what lets this read a password as the account itself
