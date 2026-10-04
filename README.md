@@ -21,7 +21,8 @@ inspiration from:
   on, knowing what it gives up. See
   [ADR 0011](docs/adr/0011-secure-by-default.md).
 
-All first-party code is Rust with `unsafe` forbidden. Packaging metadata
+All first-party code is Rust with `unsafe` forbidden, outside the two small
+modules that speak to C. Packaging metadata
 (`APKBUILD`) is shell because Alpine's build system requires it; it contains no
 logic beyond build recipes.
 

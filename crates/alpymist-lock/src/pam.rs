@@ -17,12 +17,8 @@
 //! question nobody asked.
 
 use alpymist_greeter::login::Outcome;
-use nonstick::{
-    AuthnFlags, ConversationAdapter, ErrorCode, Result as PamResult, Transaction,
-    TransactionBuilder,
-};
+use alpymist_pam::{Conversation, Error};
 use std::cell::Cell;
-use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -62,35 +58,35 @@ struct Answers {
     said: Arc<Mutex<Vec<String>>>,
 }
 
-impl ConversationAdapter for Answers {
-    fn prompt(&self, _request: impl AsRef<OsStr>) -> PamResult<OsString> {
+impl Conversation for Answers {
+    fn prompt(&self, _request: &str) -> Result<String, Error> {
         // Anything shown as it is typed is the username; the password is the
         // masked one below, and there is no field here for a third thing.
-        Ok(OsString::from(&self.user))
+        Ok(self.user.clone())
     }
 
-    fn masked_prompt(&self, _request: impl AsRef<OsStr>) -> PamResult<OsString> {
+    fn masked_prompt(&self, _request: &str) -> Result<String, Error> {
         if self.asked.replace(true) {
             // A second hidden prompt is a one-time code or a second factor.
             // Sending the password again would answer a different question
             // with it, so the attempt ends here instead.
-            return Err(ErrorCode::ConversationError);
+            return Err(Error::Conversation);
         }
-        Ok(OsString::from(&self.password))
+        Ok(self.password.clone())
     }
 
-    fn error_msg(&self, message: impl AsRef<OsStr>) {
+    fn error(&self, message: &str) {
         self.note(message);
     }
 
-    fn info_msg(&self, message: impl AsRef<OsStr>) {
+    fn info(&self, message: &str) {
         self.note(message);
     }
 }
 
 impl Answers {
-    fn note(&self, message: impl AsRef<OsStr>) {
-        let message = message.as_ref().to_string_lossy().trim().to_owned();
+    fn note(&self, message: &str) {
+        let message = message.trim().to_owned();
         if message.is_empty() {
             return;
         }
@@ -114,14 +110,7 @@ pub fn check(user: &str, password: &str) -> (Outcome, Vec<String>) {
         asked: Cell::new(false),
         said: Arc::clone(&said),
     };
-    let mut transaction = match TransactionBuilder::new_with_service(SERVICE)
-        .username(user)
-        .build(answers.into_conversation())
-    {
-        Ok(transaction) => transaction,
-        Err(e) => return (broken(e), Vec::new()),
-    };
-    let result = transaction.authenticate(AuthnFlags::empty());
+    let result = alpymist_pam::authenticate(SERVICE, user, &answers);
     let said = said.lock().map(|said| said.clone()).unwrap_or_default();
     match result {
         Ok(()) => (Outcome::Started, said),
@@ -130,17 +119,15 @@ pub fn check(user: &str, password: &str) -> (Outcome, Vec<String>) {
 }
 
 /// What to tell somebody standing at a locked screen.
-fn outcome(e: ErrorCode) -> Outcome {
+fn outcome(e: Error) -> Outcome {
     match e {
         // The ordinary answer, in the login screen's words.
-        ErrorCode::AuthenticationError
-        | ErrorCode::CredentialsInsufficient
-        | ErrorCode::PermissionDenied
-        | ErrorCode::UserUnknown => Outcome::Rejected("That password is not right.".into()),
-        ErrorCode::MaxTries => {
-            Outcome::Rejected("Too many tries. Wait a moment and try again.".into())
-        }
-        ErrorCode::AuthInfoUnavailable => {
+        Error::Authentication
+        | Error::CredentialsInsufficient
+        | Error::PermissionDenied
+        | Error::UserUnknown => Outcome::Rejected("That password is not right.".into()),
+        Error::MaxTries => Outcome::Rejected("Too many tries. Wait a moment and try again.".into()),
+        Error::AuthInfoUnavailable => {
             Outcome::Failed("The password could not be checked from here.".into())
         }
         e => broken(e),
@@ -149,30 +136,27 @@ fn outcome(e: ErrorCode) -> Outcome {
 
 /// PAM could not do its job at all, which is worth saying differently: the
 /// password may well be right, and the way back in is a text console.
-fn broken(e: ErrorCode) -> Outcome {
+fn broken(e: Error) -> Outcome {
     Outcome::Failed(format!("The password check is broken: {e}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ErrorCode, outcome};
+    use super::{Error, outcome};
     use alpymist_greeter::login::Outcome;
 
     #[test]
     fn a_wrong_password_is_a_wrong_password_and_not_a_fault() {
         assert!(matches!(
-            outcome(ErrorCode::AuthenticationError),
+            outcome(Error::Authentication),
             Outcome::Rejected(_)
         ));
-        assert!(matches!(
-            outcome(ErrorCode::UserUnknown),
-            Outcome::Rejected(_),
-        ));
+        assert!(matches!(outcome(Error::UserUnknown), Outcome::Rejected(_),));
     }
 
     #[test]
     fn a_broken_stack_says_so_rather_than_blaming_the_typing() {
-        let Outcome::Failed(why) = outcome(ErrorCode::Abort) else {
+        let Outcome::Failed(why) = outcome(Error::Abort) else {
             panic!("a broken PAM is not a rejection");
         };
         assert!(why.contains("broken"), "{why}");

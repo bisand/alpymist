@@ -14,11 +14,7 @@
 //! trying, and the lock stops listening to the reader until it is unlocked
 //! with the password.
 
-use nonstick::{
-    AuthnFlags, ConversationAdapter, ErrorCode, Result as PamResult, Transaction,
-    TransactionBuilder,
-};
-use std::ffi::{OsStr, OsString};
+use alpymist_pam::{Conversation, Error};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -74,7 +70,7 @@ pub fn listen(user: &str, heard: &(impl Fn(Heard) -> bool + Sync)) {
                 heard(Heard::Matched);
                 return;
             }
-            Err(ErrorCode::MaxTries) => {
+            Err(Error::MaxTries) => {
                 heard(Heard::GaveUp(TOO_MANY.into()));
                 return;
             }
@@ -96,12 +92,8 @@ pub fn listen(user: &str, heard: &(impl Fn(Heard) -> bool + Sync)) {
 }
 
 /// One `pam_fprintd` attempt.
-fn check(user: &str, heard: &(impl Fn(Heard) -> bool + Sync)) -> PamResult<()> {
-    let answers = Answers { heard };
-    let mut transaction = TransactionBuilder::new_with_service(SERVICE)
-        .username(user)
-        .build(answers.into_conversation())?;
-    transaction.authenticate(AuthnFlags::empty())
+fn check(user: &str, heard: &(impl Fn(Heard) -> bool + Sync)) -> Result<(), Error> {
+    alpymist_pam::authenticate(SERVICE, user, &Answers { heard })
 }
 
 /// This end of `pam_fprintd`'s conversation: it only ever says things.
@@ -109,26 +101,26 @@ struct Answers<'a, F> {
     heard: &'a F,
 }
 
-impl<F: Fn(Heard) -> bool + Sync> ConversationAdapter for Answers<'_, F> {
+impl<F: Fn(Heard) -> bool + Sync> Conversation for Answers<'_, F> {
     // Nothing is asked for here: a password belongs to the other service,
     // and a stack that asks for one in this service is not what Settings
     // wrote.
-    fn prompt(&self, _request: impl AsRef<OsStr>) -> PamResult<OsString> {
-        Err(ErrorCode::ConversationError)
+    fn prompt(&self, _request: &str) -> Result<String, Error> {
+        Err(Error::Conversation)
     }
 
-    fn masked_prompt(&self, _request: impl AsRef<OsStr>) -> PamResult<OsString> {
-        Err(ErrorCode::ConversationError)
+    fn masked_prompt(&self, _request: &str) -> Result<String, Error> {
+        Err(Error::Conversation)
     }
 
     /// "Failed to match fingerprint", or a scan to try again.
-    fn error_msg(&self, _message: impl AsRef<OsStr>) {
+    fn error(&self, _message: &str) {
         (self.heard)(Heard::NotThatFinger);
     }
 
     /// "Place your finger on …", "Verification timed out".
-    fn info_msg(&self, message: impl AsRef<OsStr>) {
-        let message = message.as_ref().to_string_lossy().to_ascii_lowercase();
+    fn info(&self, message: &str) {
+        let message = message.to_ascii_lowercase();
         if message.contains("finger") {
             (self.heard)(Heard::Waiting);
         }

@@ -1,6 +1,6 @@
 [package]
 name = "alpymist-glesprobe"
-description = "Queries OpenGL ES capability via EGL. The only crate in Alpymist permitted to use unsafe."
+description = "Queries OpenGL ES capability via EGL. One of the two crates in Alpymist permitted to use unsafe."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

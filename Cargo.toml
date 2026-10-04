@@ -14,6 +14,7 @@ members = [
     "crates/alpymist-install",
     "crates/alpymist-lock",
     "crates/alpymist-menu",
+    "crates/alpymist-pam",
     "crates/alpymist-power",
     "crates/alpymist-saver-mountains",
     "crates/alpymist-saver-starfield",
@@ -50,6 +51,7 @@ alpymist-displays = { path = "crates/alpymist-displays" }
 alpymist-glesprobe = { path = "crates/alpymist-glesprobe" }
 alpymist-greeter = { path = "crates/alpymist-greeter", default-features = false }
 alpymist-hwprobe = { path = "crates/alpymist-hwprobe" }
+alpymist-pam = { path = "crates/alpymist-pam" }
 alpymist-power = { path = "crates/alpymist-power", default-features = false }
 alpymist-saver-mountains = { path = "crates/alpymist-saver-mountains" }
 alpymist-saver-starfield = { path = "crates/alpymist-saver-starfield" }

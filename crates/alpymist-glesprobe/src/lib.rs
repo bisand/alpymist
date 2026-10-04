@@ -2,11 +2,11 @@
 //!
 //! # Why this crate exists separately
 //!
-//! Every other crate in Alpymist is `#![forbid(unsafe_code)]`. Asking EGL what
-//! the GPU can do requires calling into a C library, and there is no safe way
-//! to `dlopen` one. Rather than weaken the rule everywhere, all `unsafe` in the
-//! project is confined to the [`ffi`] module below — a few dozen lines that can
-//! be audited in one sitting.
+//! Every other crate in Alpymist but `alpymist-pam` is
+//! `#![forbid(unsafe_code)]`. Asking EGL what the GPU can do requires calling
+//! into a C library, and there is no safe way to `dlopen` one. Rather than
+//! weaken the rule everywhere, the `unsafe` this needs is confined to the
+//! [`ffi`] module below — a few dozen lines that can be audited in one sitting.
 //!
 //! libEGL is loaded *dynamically*. Nothing links against it, so `alpymist`
 //! still runs on a system with no Mesa installed; the probe just reports

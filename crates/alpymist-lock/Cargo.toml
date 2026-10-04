@@ -26,9 +26,9 @@ denise-render = { workspace = true }
 # crate is the account lookup and the snapshot, which build anywhere.
 [target.'cfg(target_os = "linux")'.dependencies]
 bytemuck = "1"
-# PAM, safely: nonstick is a safe wrapper over libpam with no bindgen in the
-# build, so the builder needs linux-pam-dev and nothing else.
-nonstick = "0.1.2"
+# PAM, through bindings of our own: the three functions the lock uses,
+# written out, so the builder needs linux-pam-dev and nothing else.
+alpymist-pam = { workspace = true }
 smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop", "xkbcommon"] }
 
 [dev-dependencies]

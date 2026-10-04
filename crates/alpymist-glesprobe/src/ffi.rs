@@ -1,4 +1,4 @@
-//! The only `unsafe` code in Alpymist.
+//! The `unsafe` code in Alpymist, but for `alpymist-pam`'s.
 //!
 //! Keep this module small enough to audit in one sitting. It does exactly one
 //! thing: load libEGL, stand up a throwaway GL ES context, read three strings
