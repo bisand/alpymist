@@ -18,7 +18,6 @@
 
 pub mod bar;
 
-use rustix::process::{Signal, set_parent_process_death_signal};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -82,7 +81,8 @@ pub fn watch(name: &str) -> Result<(), String> {
         .find(|w| w.name == name)
         .ok_or_else(|| format!("no watch called {name}"))?;
     // A watch does not outlive the watchdog that started it.
-    let _ = set_parent_process_death_signal(Some(Signal::TERM));
+    #[cfg(target_os = "linux")]
+    let _ = rustix::process::set_parent_process_death_signal(Some(rustix::process::Signal::TERM));
     (watch.run)()
 }
 

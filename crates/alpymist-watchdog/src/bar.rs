@@ -12,7 +12,10 @@
 //! that never listened — one of the account's own, with no Hyprland modules
 //! — is left alone, as is everything when the kernel cannot be asked.
 
-use rustix::net::{AddressFamily, RecvFlags, SendFlags, SocketType, netlink};
+// Built off Linux only to be checked: what asks the kernel is left out
+// there, and what it would have used is then used by the tests alone.
+#![cfg_attr(not(target_os = "linux"), allow(dead_code))]
+
 use rustix::process::{Pid, Signal, kill_process};
 use std::collections::HashMap;
 use std::path::Path;
@@ -204,7 +207,9 @@ fn read(data: &[u8], name: &[u8], found: &mut Listeners) -> Option<bool> {
 
 /// The socket at `socket` and those connected to it, as the kernel has them
 /// now; `None` when it could not be asked.
+#[cfg(target_os = "linux")]
 fn listeners(socket: &Path) -> Option<Listeners> {
+    use rustix::net::{AddressFamily, RecvFlags, SendFlags, SocketType, netlink};
     use std::os::unix::ffi::OsStrExt as _;
     let fd = rustix::net::socket(
         AddressFamily::NETLINK,
@@ -229,6 +234,13 @@ fn listeners(socket: &Path) -> Option<Listeners> {
             return Some(found);
         }
     }
+}
+
+/// Only Linux's kernel can be asked: anywhere else, where this is built to
+/// be checked and never run, it could not be.
+#[cfg(not(target_os = "linux"))]
+fn listeners(_socket: &Path) -> Option<Listeners> {
+    None
 }
 
 /// Every bar of this account's that is running, with the inodes of the
