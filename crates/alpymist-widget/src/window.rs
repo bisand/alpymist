@@ -322,6 +322,7 @@ impl<A: App> Host<A> {
                 opaque: false,
                 damage: None,
                 paced: true,
+                enlarged: None,
             },
         );
         if let Err(e) = shown {

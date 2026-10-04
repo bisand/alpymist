@@ -14,7 +14,7 @@
 use crate::paint::{Compose, FRAME, Painting};
 use crate::scene::expand;
 use alpymist_ui::palette::Palette;
-use alpymist_widget::{Key, Outcome, Widget};
+use alpymist_widget::{Key, Outcome, Streamed, Widget};
 use denise::Frame;
 use denise::geom::{Point, Rect, Size};
 use std::time::Instant;
@@ -35,6 +35,11 @@ pub struct Saver {
     /// How small the picture in `last` is, and how far it is blown up.
     small: Size,
     block: u32,
+    /// How far a row handed over is blown up here, and how wide it is: all
+    /// the way and the screen's width, unless the compositor does the rest.
+    by: u32,
+    wide: usize,
+
     /// Which drawn row `row` holds, blown up, when it holds one.
     expanded: Option<u32>,
     started: Instant,
@@ -58,15 +63,18 @@ impl Saver {
             changed: None,
             small: Size::new(0, 0),
             block: 1,
+            by: 1,
+            wide: 0,
             expanded: None,
             started: Instant::now(),
             pointer: None,
         }
     }
 
-    /// Draw the next frame, small, and work out what of the screen it
-    /// changes.
-    fn next(&mut self, output: Size) {
+    /// Draw the next frame, small, and work out what it changes of what is
+    /// handed over: the screen, or with `enlarge` a picture half the screen's
+    /// size each way.
+    fn next(&mut self, output: Size, enlarge: bool) {
         // A picture is composed for one screen size. A different one — the
         // output changed, or this is the first frame — composes again.
         if self.picture.as_ref().is_none_or(|(was, _)| *was != output) {
@@ -79,6 +87,7 @@ impl Saver {
         };
         let small = picture.small();
         let block = picture.block();
+        let by = handed_over(block, enlarge);
         let pixels = picture.frame(elapsed);
         // Much of a picture is the same from one frame to the next — the sky
         // over a drifting ridge — and rows that are the same need not be
@@ -88,7 +97,7 @@ impl Saver {
             let screen = |drawn: usize| {
                 i32::try_from(drawn)
                     .unwrap_or(i32::MAX)
-                    .saturating_mul(i32::try_from(block).unwrap_or(1))
+                    .saturating_mul(i32::try_from(by).unwrap_or(1))
             };
             bands
                 .into_iter()
@@ -106,6 +115,12 @@ impl Saver {
         self.last.extend_from_slice(pixels);
         self.small = small;
         self.block = block;
+        self.by = by;
+        self.wide = if by == block {
+            output.width as usize
+        } else {
+            (small.width * by) as usize
+        };
         self.expanded = None;
     }
 
@@ -126,7 +141,7 @@ impl Widget for Saver {
     }
 
     fn paint(&mut self, frame: &mut Frame<'_>) {
-        self.next(frame.size());
+        self.next(frame.size(), false);
         expand(
             &self.last,
             self.small,
@@ -145,19 +160,26 @@ impl Widget for Saver {
     /// The picture is handed over a row at a time: it is cheap to blow a row
     /// up and the screen is large, so painting the whole of it somewhere
     /// first, to be copied from, is the larger half of what a frame costs.
-    fn streams(&mut self, size: Size) -> bool {
-        self.next(size);
-        true
+    fn streams(&mut self, size: Size, may_enlarge: bool) -> Streamed {
+        self.next(size, may_enlarge);
+        if self.by == self.block {
+            return Streamed::Whole;
+        }
+        // The blocks may overhang the screen; only what is over it is shown.
+        let over = |screen: u32| f64::from(screen) * f64::from(self.by) / f64::from(self.block);
+        Streamed::Small {
+            size: Size::new(self.small.width * self.by, self.small.height * self.by),
+            shown: (
+                over(size.width).min(f64::from(self.small.width * self.by)),
+                over(size.height).min(f64::from(self.small.height * self.by)),
+            ),
+        }
     }
 
     fn row(&mut self, y: u32) -> (&[u32], u32) {
-        let block = self.block.max(1);
-        let wide = self
-            .picture
-            .as_ref()
-            .map_or(0, |(output, _)| output.width as usize);
-        let drawn = y / block;
-        if self.expanded != Some(drawn) || self.row.len() != wide {
+        let by = self.by.max(1);
+        let drawn = y / by;
+        if self.expanded != Some(drawn) || self.row.len() != self.wide {
             let width = self.small.width as usize;
             let line = self
                 .last
@@ -165,14 +187,14 @@ impl Widget for Saver {
                 .unwrap_or(&[]);
             self.row.clear();
             for px in line {
-                self.row.extend(std::iter::repeat_n(*px, block as usize));
+                self.row.extend(std::iter::repeat_n(*px, by as usize));
             }
             // What the blocks do not reach, where they do not divide the
             // screen, and all of a row past the last: the sky's own colour.
-            self.row.resize(wide, backdrop());
+            self.row.resize(self.wide, backdrop());
             self.expanded = Some(drawn);
         }
-        (&self.row, block - y % block)
+        (&self.row, by - y % by)
     }
 
     fn changed(&self) -> Option<&[Rect]> {
@@ -228,6 +250,24 @@ impl Widget for Saver {
     }
 }
 
+/// How far a picture drawn in blocks of `block` is blown up here, when the
+/// compositor may do the rest: to half its size on the screen, so that the
+/// compositor doubles it.
+///
+/// Doubling is the most it is left. A compositor smooths what it enlarges,
+/// and the more of the enlarging is its own the softer a block's edges come
+/// out: left all of it, a block of six is visibly blurred; left a doubling,
+/// an edge is a pixel soft and looks as it always did (ADR 0026). A block
+/// that does not halve is blown up all the way here, as before.
+fn handed_over(block: u32, enlarge: bool) -> u32 {
+    let block = block.max(1);
+    if enlarge && block.is_multiple_of(2) {
+        block / 2
+    } else {
+        block
+    }
+}
+
 /// The rows `now` has different from `before`, in rows of `width`, as bands
 /// of rows that lie together. `None` when they cannot be compared: no picture
 /// before, or one of another size.
@@ -267,7 +307,7 @@ pub fn backdrop() -> u32 {
 mod tests {
     use super::Saver;
     use crate::paint::{FRAME, Painting};
-    use alpymist_widget::{Key, Outcome, Widget};
+    use alpymist_widget::{Key, Outcome, Streamed, Widget};
     use denise::geom::{Point, Rect, Size};
 
     /// A picture of one flat colour, to exercise the host with no scene behind it.
@@ -395,7 +435,7 @@ mod tests {
             stripes().paint(&mut frame);
         }
         let mut saver = stripes();
-        assert!(saver.streams(size));
+        assert_eq!(saver.streams(size, true), Streamed::Whole);
         // Out of order, and some twice: rows are asked for as they are
         // wanted.
         for y in [7, 0, 3, 4, 3, 1, 2, 6, 5] {
@@ -410,9 +450,50 @@ mod tests {
     }
 
     #[test]
+    fn the_compositor_is_left_a_doubling_and_no_more() {
+        use super::handed_over;
+        assert_eq!(handed_over(6, true), 3);
+        assert_eq!(handed_over(4, true), 2);
+        assert_eq!(handed_over(2, true), 1);
+        assert_eq!(handed_over(5, true), 5, "a block that does not halve");
+        assert_eq!(handed_over(1, true), 1);
+        assert_eq!(handed_over(6, false), 6, "a compositor that cannot");
+        assert_eq!(handed_over(0, true), 1);
+    }
+
+    #[test]
+    fn a_picture_the_compositor_doubles_is_handed_over_at_half_size() {
+        let mut saver = Saver::new(Box::new(|_| {
+            Box::new(Flat {
+                small: Size::new(4, 3),
+                block: 4,
+                pixels: (0..12).map(|n| 0xFF00_0000 | n).collect(),
+            })
+        }));
+        // A screen fifteen wide under blocks that reach sixteen: half a
+        // handed-over pixel hangs off it.
+        assert_eq!(
+            saver.streams(Size::new(15, 11), true),
+            Streamed::Small {
+                size: Size::new(8, 6),
+                shown: (7.5, 5.5),
+            }
+        );
+        assert_eq!(
+            saver.row(3).0,
+            [4, 4, 5, 5, 6, 6, 7, 7].map(|n| 0xFF00_0000 | n)
+        );
+        assert_eq!(saver.row(2).1, 2, "two rows to a drawn one");
+        assert_eq!(saver.row(3).1, 1);
+        // A compositor that cannot enlarge gets the whole picture.
+        assert_eq!(saver.streams(Size::new(15, 11), false), Streamed::Whole);
+        assert_eq!(saver.row(0).0.len(), 15);
+    }
+
+    #[test]
     fn a_row_past_the_picture_is_the_sky() {
         let mut saver = saver();
-        assert!(saver.streams(Size::new(8, 8)));
+        assert_eq!(saver.streams(Size::new(8, 8), false), Streamed::Whole);
         let (row, same) = saver.row(400);
         assert_eq!(row, [super::backdrop(); 8]);
         assert!(same >= 1);

@@ -303,6 +303,7 @@ impl Lock {
                 opaque: true,
                 damage,
                 paced: true,
+                enlarged: None,
             },
         );
         if let Err(e) = shown {

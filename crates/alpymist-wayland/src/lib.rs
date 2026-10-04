@@ -284,6 +284,21 @@ pub struct Picture<'a> {
     pub damage: Option<&'a [Area]>,
     /// Whether to be told, with [`Event::Frame`], when the next is wanted.
     pub paced: bool,
+    /// Have the compositor enlarge the picture: it is smaller than the
+    /// surface, and this is how it is to cover it. Only where
+    /// [`Wayland::enlarges`]; `scale` is then not looked at.
+    pub enlarged: Option<Enlarged>,
+}
+
+/// How a small picture covers a surface.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Enlarged {
+    /// How much of the picture is shown, from its top left corner, in its
+    /// own pixels. Not all of it where the picture's blocks overhang the
+    /// screen.
+    pub of: (f64, f64),
+    /// The surface's size, in logical pixels.
+    pub to: (u32, u32),
 }
 
 /// A layer surface. Dropping it takes it off the screen.
@@ -421,6 +436,7 @@ impl Wayland {
         state.decorations = globals.bind(&qh, 1..=1, ()).ok();
         state.activation = globals.bind(&qh, 1..=1, ()).ok();
         state.cursor_shapes = globals.bind(&qh, 1..=1, ()).ok();
+        state.viewporter = globals.bind(&qh, 1..=1, ()).ok();
         state.lock_manager = globals.bind(&qh, 1..=1, ()).ok();
         for global in globals.contents().clone_list() {
             if global.interface == wl_seat::WlSeat::interface().name {
@@ -598,6 +614,15 @@ impl Wayland {
         })
     }
 
+    /// Whether the compositor can enlarge a picture smaller than its surface.
+    ///
+    /// How it does is the compositor's to choose: most smooth, and what was
+    /// drawn in hard-edged blocks comes out with soft ones.
+    #[must_use]
+    pub fn enlarges(&self) -> bool {
+        self.state.viewporter.is_some()
+    }
+
     /// Put a picture on a surface.
     ///
     /// # Errors
@@ -640,6 +665,22 @@ impl Wayland {
             state.buffers.push(buffer);
             state.buffers.len() - 1
         };
+        let scale = if picture.enlarged.is_some() {
+            1
+        } else {
+            i32::try_from(picture.scale).unwrap_or(1).max(1)
+        };
+        if let Some(enlarged) = picture.enlarged {
+            state.enlarge(&surface.0, &self.qh, enlarged);
+        }
+        if let Some(known) = state.surfaces.iter_mut().find(|k| k.surface == surface.0)
+            && known.buffer_scale != scale
+        {
+            // Only when it changes: a surface told its scale again has been
+            // told something about every pixel of itself.
+            known.buffer_scale = scale;
+            surface.0.set_buffer_scale(scale);
+        }
         // Every buffer this surface has is now behind by what changed, the
         // one about to be written included.
         for buffer in state.buffers.iter_mut().filter(|b| b.owner == surface.0) {
@@ -653,48 +694,8 @@ impl Wayland {
             .fill(&mut picture.pixels)
             .map_err(|e| format!("shared memory: {e}"))?;
 
-        let scale = i32::try_from(picture.scale).unwrap_or(1).max(1);
-        if let Some(known) = state.surfaces.iter_mut().find(|k| k.surface == surface.0)
-            && known.buffer_scale != scale
-        {
-            // Only when it changes: a surface told its scale again has been
-            // told something about every pixel of itself.
-            known.buffer_scale = scale;
-            surface.0.set_buffer_scale(scale);
-        }
         surface.0.attach(Some(&buffer.wl), 0, 0);
-        // The compositor is told of one rectangle, around all of them.
-        // Measured on the Atom (ADR 0026): Hyprland given a few dozen bands
-        // a frame spends more on being told than it saves on what it need
-        // not repaint.
-        let around = picture.damage.map_or(
-            Some(Area {
-                x: 0,
-                y: 0,
-                width,
-                height,
-            }),
-            |areas| {
-                areas
-                    .iter()
-                    .filter(|area| area.width > 0 && area.height > 0)
-                    .map(|area| {
-                        (
-                            area.x,
-                            area.y,
-                            area.x.saturating_add(area.width),
-                            area.y.saturating_add(area.height),
-                        )
-                    })
-                    .reduce(|a, b| (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3)))
-                    .map(|(left, top, right, bottom)| Area {
-                        x: left,
-                        y: top,
-                        width: right - left,
-                        height: bottom - top,
-                    })
-            },
-        );
+        let around = around(picture.damage, width, height);
         if let Some(area) = around {
             surface
                 .0
@@ -900,4 +901,37 @@ impl Wayland {
         self.state.surfaces.retain(|k| k.surface.is_alive());
         self.state.buffers.retain(|b| b.owner.is_alive());
     }
+}
+
+/// One rectangle around everything that changed: what the compositor is told.
+///
+/// Measured on the Atom (ADR 0026): Hyprland given a few dozen bands a frame
+/// spends more on being told than it saves on what it need not repaint.
+fn around(damage: Option<&[Area]>, width: i32, height: i32) -> Option<Area> {
+    let Some(areas) = damage else {
+        return Some(Area {
+            x: 0,
+            y: 0,
+            width,
+            height,
+        });
+    };
+    areas
+        .iter()
+        .filter(|area| area.width > 0 && area.height > 0)
+        .map(|area| {
+            (
+                area.x,
+                area.y,
+                area.x.saturating_add(area.width),
+                area.y.saturating_add(area.height),
+            )
+        })
+        .reduce(|a, b| (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3)))
+        .map(|(left, top, right, bottom)| Area {
+            x: left,
+            y: top,
+            width: right - left,
+            height: bottom - top,
+        })
 }

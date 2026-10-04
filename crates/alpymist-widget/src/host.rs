@@ -17,10 +17,10 @@
 //! A widget's own threads — reading a daemon, running a command that blocks
 //! — post into the event loop through the [`Events`] channel, which wakes it.
 
-use crate::{Key, Outcome, Widget};
+use crate::{Key, Outcome, Streamed, Widget};
 use alpymist_wayland::{
-    Area, BTN_LEFT, Event, KeyEvent, Keysym, Layer, LayerOptions, Modifiers, Output, Picture,
-    Pixels, PointerEvent, PointerKind, Rows, Shape, Stratum, Surface, Timer, Wayland,
+    Area, BTN_LEFT, Enlarged, Event, KeyEvent, Keysym, Layer, LayerOptions, Modifiers, Output,
+    Picture, Pixels, PointerEvent, PointerKind, Rows, Shape, Stratum, Surface, Timer, Wayland,
 };
 use denise::geom::{Point, Rect};
 use denise::{BufferAge, Frame, PixelFormat};
@@ -345,6 +345,7 @@ impl<W: Widget> Host<W> {
                 opaque: false,
                 damage: None,
                 paced: false,
+                enlarged: None,
             },
         );
     }
@@ -458,7 +459,12 @@ impl<W: Widget> Host<W> {
             && panel.height == i32::try_from(size.height).unwrap_or(-1);
         // A widget that covers the screen may hand its picture over a row
         // at a time, and then none of it is painted here at all.
-        let streams = self.placement == Placement::FullScreen && fits && self.widget.streams(size);
+        let streamed = if self.placement == Placement::FullScreen && fits {
+            self.widget.streams(size, self.wayland.enlarges())
+        } else {
+            Streamed::No
+        };
+        let streams = streamed != Streamed::No;
         if !streams {
             let words = usize::try_from(w).unwrap_or(0) * usize::try_from(h).unwrap_or(0);
             self.canvas.resize(words, 0);
@@ -487,36 +493,23 @@ impl<W: Widget> Host<W> {
             }
         }
 
-        // What changed is where the panel was and where it is; with a
-        // backdrop, the backdrop too, the first time.
-        let whole = Rect::new(0, 0, w, h);
-        let area = |rect: Rect| Area {
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height,
-        };
-        let damage: Vec<Area> = match (self.drawn, self.widget.changed()) {
-            (None, _) if self.backdrop != 0 => vec![area(whole)],
-            (None, _) => vec![area(panel)],
-            // The panel has not moved, and the widget says which parts of it
-            // changed: those, where they are on the surface.
-            (Some(old), Some(parts)) if old == panel => parts
-                .iter()
-                .filter_map(|part| {
-                    Rect::new(panel.x + part.x, panel.y + part.y, part.width, part.height)
-                        .intersect(&panel)
-                })
-                .map(area)
-                .collect(),
-            (Some(old), _) => vec![area(old.union(&panel))],
-        };
+        let damage = self.damage(streamed, Rect::new(0, 0, w, h), panel);
         let mut asked = Asked(&mut self.widget);
         let shown = self.wayland.show(
             self.layer.surface(),
             Picture {
-                size: (sw * self.scale, sh * self.scale),
+                size: match streamed {
+                    Streamed::Small { size, .. } => (size.width, size.height),
+                    _ => (sw * self.scale, sh * self.scale),
+                },
                 scale: self.scale,
+                enlarged: match streamed {
+                    Streamed::Small { shown, .. } => Some(Enlarged {
+                        of: shown,
+                        to: (sw, sh),
+                    }),
+                    _ => None,
+                },
                 pixels: if streams {
                     Pixels::Rows(&mut asked)
                 } else {
@@ -536,6 +529,47 @@ impl<W: Widget> Host<W> {
         self.frame_pending = true;
         self.dirty = false;
         self.arm_timer();
+    }
+
+    /// What of the picture about to be shown differs from the one before.
+    fn damage(&self, streamed: Streamed, whole: Rect, panel: Rect) -> Vec<Area> {
+        // What changed is where the panel was and where it is; with a
+        // backdrop, the backdrop too, the first time.
+        let area = |rect: Rect| Area {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+        };
+        match (self.drawn, self.widget.changed()) {
+            // A small picture's parts are in its own pixels, and the
+            // widget's to say; with nothing said, all of it.
+            (drawn, parts) if matches!(streamed, Streamed::Small { .. }) => {
+                match (drawn, parts, streamed) {
+                    (Some(_), Some(parts), _) => parts.iter().copied().map(area).collect(),
+                    (_, _, Streamed::Small { size, .. }) => vec![Area {
+                        x: 0,
+                        y: 0,
+                        width: i32::try_from(size.width).unwrap_or(0),
+                        height: i32::try_from(size.height).unwrap_or(0),
+                    }],
+                    _ => Vec::new(),
+                }
+            }
+            (None, _) if self.backdrop != 0 => vec![area(whole)],
+            (None, _) => vec![area(panel)],
+            // The panel has not moved, and the widget says which parts of it
+            // changed: those, where they are on the surface.
+            (Some(old), Some(parts)) if old == panel => parts
+                .iter()
+                .filter_map(|part| {
+                    Rect::new(panel.x + part.x, panel.y + part.y, part.width, part.height)
+                        .intersect(&panel)
+                })
+                .map(area)
+                .collect(),
+            (Some(old), _) => vec![area(old.union(&panel))],
+        }
     }
 
     /// Keep painting while the widget animates.

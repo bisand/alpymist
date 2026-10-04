@@ -138,6 +138,23 @@ pub enum Key {
     Clear,
 }
 
+/// How a widget that covers the screen hands its picture over.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Streamed {
+    /// It does not: it paints.
+    No,
+    /// A row at a time, each as wide as the screen.
+    Whole,
+    /// A row at a time of a smaller picture, for the compositor to enlarge.
+    /// [`Widget::changed`] is then in this picture's pixels.
+    Small {
+        /// The picture's size.
+        size: Size,
+        /// How much of it covers the screen, from its top left corner.
+        shown: (f64, f64),
+    },
+}
+
 /// A popup the [`host`] can run.
 ///
 /// Coordinates are physical pixels relative to the panel's top left corner.
@@ -177,9 +194,12 @@ pub trait Widget: 'static {
     /// Worth it where a row is cheap to make and the screen is large:
     /// painting into memory and handing that over is two passes over the
     /// screen, and this is one.
-    fn streams(&mut self, size: Size) -> bool {
-        let _ = size;
-        false
+    ///
+    /// `may_enlarge` is whether the compositor can blow a smaller picture up
+    /// to the screen itself, which is what [`Streamed::Small`] asks of it.
+    fn streams(&mut self, size: Size, may_enlarge: bool) -> Streamed {
+        let _ = (size, may_enlarge);
+        Streamed::No
     }
 
     /// Row `y` of the frame [`Widget::streams`] made, as wide as the screen,
