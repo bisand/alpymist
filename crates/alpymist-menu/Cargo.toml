@@ -24,8 +24,7 @@ toml = { workspace = true }
 # toolkit to start, which is most of why it is on screen within a frame or two.
 # Linux only, so the logic and the offscreen preview still build on a Mac.
 [target.'cfg(target_os = "linux")'.dependencies]
-bytemuck = { workspace = true }
-smithay-client-toolkit = { workspace = true }
+alpymist-wayland = { workspace = true }
 
 [dev-dependencies]
 png = { workspace = true }

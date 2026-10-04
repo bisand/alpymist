@@ -29,6 +29,7 @@ members = [
     "crates/alpymist-ui",
     "crates/alpymist-wallpaper",
     "crates/alpymist-watchdog",
+    "crates/alpymist-wayland",
     "crates/alpymist-widget",
     "crates/alpymist-wifi",
     "crates/alpymist-hwprobe",
@@ -62,6 +63,7 @@ alpymist-settings = { path = "crates/alpymist-settings" }
 alpymist-theme = { path = "crates/alpymist-theme" }
 alpymist-ui = { path = "crates/alpymist-ui" }
 alpymist-watchdog = { path = "crates/alpymist-watchdog" }
+alpymist-wayland = { path = "crates/alpymist-wayland" }
 alpymist-widget = { path = "crates/alpymist-widget" }
 alpymist-wifi = { path = "crates/alpymist-wifi", default-features = false }
 # Every third-party crate the workspace uses is declared here, once, and
@@ -90,8 +92,11 @@ rustix = { version = "1", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 signal-hook = "0.3"
-smithay-client-toolkit = { version = "0.21", default-features = false, features = ["calloop", "xkbcommon"] }
 toml = { version = "1", default-features = false, features = ["parse", "serde", "std"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+xkbcommon = { version = "0.8", default-features = false }
 zeroize = "1"
 zune-core = "0.5"
 zune-jpeg = "0.5"

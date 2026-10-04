@@ -99,7 +99,7 @@ mod lock {
     pub fn now() -> Result<(), String> {
         let user = preflight()?;
         let fingers = finger::enabled().then(|| {
-            let (sender, fingers) = smithay_client_toolkit::reexports::calloop::channel::channel();
+            let (sender, fingers) = alpymist_wayland::channel();
             let name = user.name.clone();
             std::thread::spawn(move || {
                 finger::listen(&name, &|heard| sender.send(heard).is_ok());
