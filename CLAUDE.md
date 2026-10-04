@@ -23,6 +23,7 @@ cargo test --workspace --features alpymist-ui/render
 cargo clippy --no-default-features --features drm -p alpymist-greeter \
   -p alpymist-install -p alpymist-splash --all-targets -- -D warnings
 cargo run -q -p xtask -- version          # every pkgver must equal the workspace version
+cargo run -q -p xtask -- deps             # every crate from crates.io, every third-party one on the list
 ```
 
 ## Invariants
@@ -40,6 +41,16 @@ to every `aports/*/APKBUILD`. `cargo xtask version` with no argument fails if
 they disagree; Release runs it with `--expect <tag>`. `pkgrel` is the CI run
 number, set by `ci/build-packages.sh` from `BUILD`; the committed value is `0`
 and stays `0`. See [ADR 0008](docs/adr/0008-versions-and-build-numbers.md).
+
+**A new dependency is a line in `xtask/src/deps.rs`, with its reason.**
+As little as possible that is not ours, from crates.io, and well known.
+`cargo xtask deps` fails on a locked package from anywhere else, on a
+third-party crate a manifest names that `ALLOWED` does not, on one `ALLOWED`
+names that nothing uses, and on a lockfile grown past `LOCKED`. Denise's
+crates are ours and listed by name in `OURS`, never by prefix. Adding a line
+to make the check pass is not the fix when something of ours, or something
+already there, does the job; raising `LOCKED` wants a reason too. See
+[ADR 0023](docs/adr/0023-dependencies.md).
 
 **Two lists of independent packages must agree.** `INDEPENDENT` in
 `ci/build-packages.sh` and `INDEPENDENT` in `xtask/src/version.rs` both hold
