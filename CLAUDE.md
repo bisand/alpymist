@@ -52,6 +52,16 @@ place for `unsafe` is an ADR. See
 [ADR 0004](docs/adr/0004-unsafe-and-musl-linking.md) and
 [ADR 0024](docs/adr/0024-pam-bindings-of-our-own.md).
 
+**Wayland is spoken through `alpymist-wayland`, and through nothing above
+`wayland-client`.** The menu, the popups, the windows and the lock screen ask
+it for surfaces and read its events; no host binds a global or implements a
+`Dispatch` of its own, and no toolkit, event-loop crate or cursor-theme loader
+comes back to do it for them. Pictures are painted in the host's own memory
+and written to the compositor, not drawn in a mapping: mapping is `unsafe`,
+and that is what it would take to change it. A protocol a host needs is added
+there, once, with the order its objects are destroyed in. See
+[ADR 0026](docs/adr/0026-wayland-without-a-toolkit.md).
+
 **The bus is spoken to with `alpymist-dbus`, and it does little.**
 Calls, signals, properties and a few served methods on the system bus, for
 iwd, the fingerprint daemon and polkit: blocking, over a unix socket, with no

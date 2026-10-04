@@ -1,0 +1,19 @@
+[package]
+name = "alpymist-wayland"
+description = "What Alpymist's popups, windows and lock screen stand on: surfaces, shared-memory pictures, a keyboard and a pointer, over wayland-client and nothing else."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+bytemuck = { workspace = true }
+rustix = { workspace = true, features = ["event", "fs", "pipe"] }
+wayland-client = { workspace = true }
+wayland-protocols = { workspace = true }
+wayland-protocols-wlr = { workspace = true }
+xkbcommon = { workspace = true }
+
+[lints]
+workspace = true

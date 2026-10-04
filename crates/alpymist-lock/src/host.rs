@@ -23,43 +23,14 @@
 use crate::finger::{self, Heard};
 use alpymist_greeter::app::{Action, App, Status};
 use alpymist_greeter::clock;
+use alpymist_wayland::{
+    Area, BTN_LEFT, Event, KeyEvent, Keysym, LockSurface, Modifiers, Output, Picture, PointerEvent,
+    PointerKind, Receiver, SessionLock, Shape, Surface, Timer, Wayland,
+};
 use denise::geom::Size;
 use denise::{BufferAge, Frame, PixelFormat};
 use denise_render::Canvas;
-use smithay_client_toolkit::reexports::calloop::channel::{self, Channel};
-use smithay_client_toolkit::reexports::calloop::timer::{TimeoutAction, Timer};
-use smithay_client_toolkit::reexports::calloop::{EventLoop, LoopHandle};
-use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
-use smithay_client_toolkit::reexports::client::globals::registry_queue_init;
-use smithay_client_toolkit::reexports::client::protocol::{
-    wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface,
-};
-use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
-use smithay_client_toolkit::reexports::protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::{
-    Shape, WpCursorShapeDeviceV1,
-};
-use smithay_client_toolkit::seat::pointer::cursor_shape::CursorShapeManager;
-use smithay_client_toolkit::{
-    compositor::{CompositorHandler, FrameCallbackData, CompositorState, Region},
-    delegate_dispatch2, delegate_registry,
-    output::{OutputHandler, OutputState},
-    registry::{ProvidesRegistryState, RegistryState},
-    registry_handlers,
-    seat::{
-        Capability, SeatHandler, SeatState,
-        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
-        pointer::{PointerEvent, PointerEventKind, PointerHandler},
-    },
-    session_lock::{
-        SessionLock, SessionLockHandler, SessionLockState, SessionLockSurface,
-        SessionLockSurfaceConfigure,
-    },
-    shm::{Shm, ShmHandler, slot::SlotPool},
-};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-/// `BTN_LEFT` from linux/input-event-codes.h.
-const BTN_LEFT: u32 = 0x110;
 
 /// How often a password being checked is asked after. PAM waits a couple of
 /// seconds before admitting a password was wrong, and this is what turns that
@@ -101,8 +72,8 @@ pub enum Ending {
 // The flags are the frame-pacing state machine, as in the widget host's.
 #[allow(clippy::struct_excessive_bools)]
 struct Screen {
-    output: wl_output::WlOutput,
-    surface: SessionLockSurface,
+    output: Output,
+    surface: LockSurface,
     /// What the compositor asked for, in logical pixels.
     size: (u32, u32),
     scale: u32,
@@ -113,47 +84,33 @@ struct Screen {
     /// says "the rest is as it was", and before the first commit there is no
     /// "as it was".
     fresh: bool,
-    /// Whether a frame is owed and something is already waiting to draw it
-    /// without being asked. See [`IMPATIENCE`].
-    impatient: bool,
+    /// What is waiting to draw a frame that is owed without being asked,
+    /// when something is. See [`IMPATIENCE`].
+    impatient: Option<Timer>,
 }
 
 struct Lock {
-    registry: RegistryState,
-    seats: SeatState,
-    outputs: OutputState,
-    shm: Shm,
-    pool: SlotPool,
-    compositor: CompositorState,
+    wayland: Wayland,
     /// The lock itself, for as long as the compositor grants it.
     session: Option<SessionLock>,
     screens: Vec<Screen>,
-    cursor_shapes: Option<CursorShapeManager>,
-    cursor: Option<WpCursorShapeDeviceV1>,
-    loop_handle: LoopHandle<'static, Lock>,
-    qh: QueueHandle<Lock>,
 
     app: App,
     /// One frame in ordinary memory, as wide and as tall as the largest
     /// surface drawn so far.
     ///
-    /// Nothing rasterises into a mapping it does not own. `alpymist_ui`'s
-    /// `Screen` says why for the DRM scanout, and a shm buffer has the same
-    /// shape of problem for a different reason: a slot fresh from the pool is
-    /// cold, so every scattered write faults a page in and every alpha blend
-    /// reads it back. The screen is painted here, where the memory is warm and
-    /// the same memory every frame, and copied across in one sequential pass —
-    /// the trade the installer made when it went from five frames a second to
-    /// sixty.
+    /// Painted here, in memory that is warm and the same every frame, and
+    /// handed to the compositor whole. `alpymist_ui`'s `Screen` says why for
+    /// the DRM scanout, and `alpymist_wayland` does the same for a surface.
     shadow: Vec<u32>,
-    keyboard: Option<wl_keyboard::WlKeyboard>,
-    pointer: Option<wl_pointer::WlPointer>,
     modifiers: Modifiers,
     /// Called once, when the compositor grants the lock: what tells a `-f` run
     /// that the screen is covered and it may return.
     covered: Option<Box<dyn FnOnce()>>,
-    /// Whether a password being checked is already being waited for.
-    polling: bool,
+    /// What asks after a password being checked, while one is.
+    polling: Option<Timer>,
+    /// What turns the clock's minute over.
+    minute: Option<Timer>,
     ending: Ending,
     exit: bool,
 }
@@ -173,88 +130,72 @@ struct Lock {
 pub fn run(
     app: App,
     covered: Box<dyn FnOnce()>,
-    fingers: Option<Channel<Heard>>,
+    fingers: Option<Receiver<Heard>>,
 ) -> Result<Ending, String> {
-    let conn = Connection::connect_to_env().map_err(|e| format!("no Wayland session: {e}"))?;
-    let (globals, event_queue) =
-        registry_queue_init::<Lock>(&conn).map_err(|e| format!("Wayland registry: {e}"))?;
-    let qh = event_queue.handle();
-    let mut event_loop: EventLoop<'static, Lock> =
-        EventLoop::try_new().map_err(|e| format!("event loop: {e}"))?;
-    WaylandSource::new(conn.clone(), event_queue)
-        .insert(event_loop.handle())
-        .map_err(|e| format!("event loop: {e}"))?;
-
-    let compositor =
-        CompositorState::bind(&globals, &qh).map_err(|_| "the compositor has no wl_compositor")?;
-    let shm = Shm::bind(&globals, &qh).map_err(|_| "the compositor has no wl_shm")?;
-    // It grows to whatever the outputs turn out to need; a screen's worth
-    // cannot be guessed before the first configure says how big one is.
-    let pool = SlotPool::new(4096, &shm).map_err(|e| format!("shared memory: {e}"))?;
-    let locks = SessionLockState::new(&globals, &qh);
+    let mut wayland = Wayland::connect()?;
     // From here on the session is the compositor's to cover: anything that
     // fails now leaves the screen locked with nothing on it, so nothing is
     // left to fail but drawing.
-    let lock = locks
-        .lock(&qh)
-        .map_err(|_| "this compositor cannot lock a session: it has no ext-session-lock-v1")?;
+    let lock = wayland.lock()?;
 
     let mut host = Lock {
-        registry: RegistryState::new(&globals),
-        seats: SeatState::new(&globals, &qh),
-        outputs: OutputState::new(&globals, &qh),
-        shm,
-        pool,
-        compositor,
+        wayland,
         session: Some(lock),
         screens: Vec::new(),
-        cursor_shapes: CursorShapeManager::bind(&globals, &qh).ok(),
-        cursor: None,
-        loop_handle: event_loop.handle(),
-        qh: qh.clone(),
         app,
         shadow: Vec::new(),
-        keyboard: None,
-        pointer: None,
         modifiers: Modifiers::default(),
         covered: Some(covered),
-        polling: false,
+        polling: None,
+        minute: None,
         ending: Ending::Refused,
         exit: false,
     };
     host.follow_the_clock();
-    if let Some(fingers) = fingers {
-        event_loop
-            .handle()
-            .insert_source(fingers, |event, (), host: &mut Lock| {
-                if let channel::Event::Msg(heard) = event {
-                    host.heard(heard);
-                }
-            })
-            .map_err(|e| format!("event loop: {e}"))?;
-    }
+    let heard = match &fingers {
+        Some(fingers) => Some(
+            host.wayland
+                .watch(fingers.fd())
+                .map_err(|e| format!("event loop: {e}"))?,
+        ),
+        None => None,
+    };
 
     while !host.exit {
-        event_loop
-            .dispatch(None, &mut host)
-            .map_err(|e| format!("Wayland: {e}"))?;
+        for event in host.wayland.wait()? {
+            match (event, &fingers) {
+                (Event::Ready(source), Some(fingers)) if Some(source) == heard => {
+                    for said in fingers.take() {
+                        host.heard(said);
+                    }
+                }
+                (event, _) => host.on(event),
+            }
+        }
     }
+
+    // Nobody is listening for a finger any more, and the reader stops when
+    // it finds that out.
+    drop(fingers);
 
     // The compositor is told, and told in the right order: unlocked first,
     // then the surfaces that are no longer wanted. A lock that is dropped
     // without this stays locked, which is the right way for this to fail and
     // the wrong way for it to finish.
     let lock = host.session.take();
-    if host.ending == Ending::Unlocked
-        && let Some(lock) = &lock
-    {
-        lock.unlock();
+    match lock {
+        Some(lock) if host.ending == Ending::Unlocked => {
+            host.wayland.unlock(lock);
+            host.screens.clear();
+        }
+        lock => {
+            host.screens.clear();
+            drop(lock);
+        }
     }
-    host.screens.clear();
-    drop(lock);
     // Without this the process could exit before the compositor has read the
     // unlock, and the session would stay locked with nothing left to unlock it.
-    conn.roundtrip().ok();
+    host.wayland.roundtrip().ok();
     Ok(host.ending)
 }
 
@@ -266,15 +207,14 @@ impl Lock {
     /// a second one for the same output a protocol error, which is what the
     /// first check is for. The second is `finished`: there is no lock left to
     /// hang a surface on.
-    fn cover(&mut self, output: &wl_output::WlOutput) {
-        let Some(lock) = self.session.clone() else {
+    fn cover(&mut self, output: &Output) {
+        let Some(lock) = &self.session else {
             return;
         };
         if self.screens.iter().any(|screen| &screen.output == output) {
             return;
         }
-        let surface = self.compositor.create_surface(&self.qh);
-        let surface = lock.create_lock_surface(surface, output, &self.qh);
+        let surface = self.wayland.cover(lock, output);
         self.screens.push(Screen {
             output: output.clone(),
             surface,
@@ -284,14 +224,14 @@ impl Lock {
             frame_pending: false,
             dirty: false,
             fresh: true,
-            impatient: false,
+            impatient: None,
         });
     }
 
-    fn screen_of(&self, surface: &wl_surface::WlSurface) -> Option<usize> {
+    fn screen_of(&self, surface: &Surface) -> Option<usize> {
         self.screens
             .iter()
-            .position(|screen| screen.surface.wl_surface() == surface)
+            .position(|screen| screen.surface.surface() == surface)
     }
 
     /// Draw one screen, or note that it wants drawing once the frame in flight
@@ -314,11 +254,8 @@ impl Lock {
         let scale = screen.scale.max(1);
         let size = Size::new(screen.size.0 * scale, screen.size.1 * scale);
         let fresh = std::mem::replace(&mut screen.fresh, false);
-        let surface = screen.surface.wl_surface().clone();
-        let (Ok(w), Ok(h)) = (i32::try_from(size.width), i32::try_from(size.height)) else {
-            return;
-        };
-        if w == 0 || h == 0 {
+        let surface = screen.surface.surface().clone();
+        if size.width == 0 || size.height == 0 {
             return;
         }
         let words = size.width as usize * size.height as usize;
@@ -341,46 +278,36 @@ impl Lock {
             let mut painting = Canvas::new(&mut frame);
             self.app.draw(&mut painting)
         };
-        // Xrgb, not Argb: every pixel of this is painted and none of it is
-        // meant to show anything through, and a compositor told there is an
-        // alpha channel has to blend a screen's worth of it over whatever it
-        // thinks is behind.
-        let Ok((buffer, canvas)) = self
-            .pool
-            .create_buffer(w, h, w * 4, wl_shm::Format::Xrgb8888)
-        else {
-            eprintln!("alpymist-lock: could not allocate a buffer for {w}x{h}");
-            return;
-        };
-        let Ok(shared) = bytemuck::try_cast_slice_mut::<u8, u32>(canvas) else {
-            return;
-        };
-        let Some(shared) = shared.get_mut(..words) else {
-            return;
-        };
-        shared.copy_from_slice(&self.shadow[..words]);
-
-        if fresh {
-            // Only when it changes: a surface told its scale again has been
-            // told something about every pixel of itself, and a compositor may
-            // reasonably take that as "all of this is new".
-            surface.set_buffer_scale(i32::try_from(scale).unwrap_or(1));
-        }
         // Every buffer is handed over holding the whole picture, so the
         // compositor may keep whatever it has outside this rectangle: the
         // pixels there are the ones it already has. Telling it otherwise is
         // what makes typing on a machine that composites in software crawl —
         // a screen's worth of upload for a character in a field.
-        if fresh {
-            surface.damage_buffer(0, 0, w, h);
-        } else {
-            surface.damage_buffer(changed.x, changed.y, changed.width, changed.height);
-        }
-        surface.frame(&self.qh, FrameCallbackData(surface.clone()));
-        if buffer.attach_to(&surface).is_err() {
+        let damage = (!fresh).then_some(Area {
+            x: changed.x,
+            y: changed.y,
+            width: changed.width,
+            height: changed.height,
+        });
+        let shown = self.wayland.show(
+            &surface,
+            &Picture {
+                size: (size.width, size.height),
+                scale,
+                pixels: &self.shadow[..words],
+                // Opaque: every pixel of this is painted and none of it is
+                // meant to show anything through, and a compositor told
+                // there is an alpha channel has to blend a screen's worth of
+                // it over whatever it thinks is behind.
+                opaque: true,
+                damage,
+                paced: true,
+            },
+        );
+        if let Err(e) = shown {
+            eprintln!("alpymist-lock: {e}, for {}x{}", size.width, size.height);
             return;
         }
-        surface.commit();
         if let Some(screen) = self.screens.get_mut(index) {
             screen.frame_pending = true;
             screen.dirty = false;
@@ -392,40 +319,25 @@ impl Lock {
     /// See [`IMPATIENCE`]. One timer at a time per screen: it is armed when a
     /// frame is owed and disarmed by the callback that makes it unnecessary.
     fn wait_for_it(&mut self, index: usize) {
-        let surface = match self.screens.get_mut(index) {
-            Some(screen) if !screen.impatient => {
-                screen.impatient = true;
-                screen.surface.wl_surface().clone()
-            }
-            _ => return,
-        };
-        let armed = self.loop_handle.insert_source(
-            Timer::from_duration(IMPATIENCE),
-            move |_, (), host: &mut Lock| {
-                // By surface, not by place in the list: a screen unplugged
-                // meanwhile moves the ones after it up.
-                let Some(index) = host.screen_of(&surface) else {
-                    return TimeoutAction::Drop;
-                };
-                let Some(screen) = host.screens.get_mut(index) else {
-                    return TimeoutAction::Drop;
-                };
-                screen.impatient = false;
-                if host.exit || !screen.dirty {
-                    return TimeoutAction::Drop;
-                }
-                // The compositor never asked. Draw anyway: what is on screen
-                // is older than what somebody just typed.
-                screen.frame_pending = false;
-                host.draw(index);
-                TimeoutAction::Drop
-            },
-        );
-        if armed.is_err()
-            && let Some(screen) = self.screens.get_mut(index)
+        if let Some(screen) = self.screens.get_mut(index)
+            && screen.impatient.is_none()
         {
-            screen.impatient = false;
+            screen.impatient = Some(self.wayland.after(IMPATIENCE));
         }
+    }
+
+    /// The compositor never asked for the frame a screen owes. Draw anyway:
+    /// what is on screen is older than what somebody just typed.
+    fn out_of_patience(&mut self, index: usize) {
+        let Some(screen) = self.screens.get_mut(index) else {
+            return;
+        };
+        screen.impatient = None;
+        if self.exit || !screen.dirty {
+            return;
+        }
+        screen.frame_pending = false;
+        self.draw(index);
     }
 
     /// Draw every output: what they show is one screen's worth of state.
@@ -481,46 +393,45 @@ impl Lock {
 
     /// Ask after a password being checked until there is an answer.
     fn poll(&mut self) {
-        if self.polling {
+        if self.polling.is_none() {
+            self.polling = Some(self.wayland.after(CHECKING));
+        }
+    }
+
+    fn polled(&mut self) {
+        self.polling = None;
+        if self.exit || !self.app.checking() {
             return;
         }
-        self.polling = true;
-        let armed = self.loop_handle.insert_source(
-            Timer::from_duration(CHECKING),
-            |_, (), host: &mut Lock| {
-                if host.exit || !host.app.checking() {
-                    host.polling = false;
-                    return TimeoutAction::Drop;
-                }
-                let changed = host.app.tick();
-                host.settle(changed);
-                TimeoutAction::ToDuration(CHECKING)
-            },
-        );
-        if armed.is_err() {
-            self.polling = false;
+        let changed = self.app.tick();
+        self.settle(changed);
+        if !self.exit {
+            self.poll();
         }
     }
 
     /// Keep the clock right, waking once a minute rather than once a second.
     fn follow_the_clock(&mut self) {
         let (time, date) = clock::now();
-        self.app.set_time(time, date);
-        self.loop_handle
-            .insert_source(
-                Timer::from_duration(until_the_next_minute()),
-                |_, (), host: &mut Lock| {
-                    if host.exit {
-                        return TimeoutAction::Drop;
-                    }
-                    let (time, date) = clock::now();
-                    if host.app.set_time(time, date) {
-                        host.redraw();
-                    }
-                    TimeoutAction::ToDuration(until_the_next_minute())
-                },
-            )
-            .ok();
+        if self.app.set_time(time, date) {
+            self.redraw();
+        }
+        self.minute = Some(self.wayland.after(until_the_next_minute()));
+    }
+
+    /// A timer ran out: which, and what it was for.
+    fn timed(&mut self, timer: Timer) {
+        if self.polling == Some(timer) {
+            self.polled();
+        } else if self.minute == Some(timer) {
+            self.follow_the_clock();
+        } else if let Some(index) = self
+            .screens
+            .iter()
+            .position(|screen| screen.impatient == Some(timer))
+        {
+            self.out_of_patience(index);
+        }
     }
 
     /// Caps Lock, said where a refused password would be said.
@@ -598,54 +509,102 @@ fn until_the_next_minute() -> Duration {
     Duration::from_secs(60 - second.min(59))
 }
 
-impl SessionLockHandler for Lock {
-    fn locked(&mut self, _: &Connection, _: &QueueHandle<Self>, _: SessionLock) {
-        // The surfaces are made as the outputs are advertised, whether or not
-        // the lock has been granted; this is where an output that was already
-        // known when the lock was asked for is caught up with.
-        for output in self.outputs.outputs() {
-            self.cover(&output);
-        }
-        // And this is the moment somebody waiting on `-f` is waiting for.
-        // Not the first frame: the compositor covers every output the moment
-        // it grants the lock, drawn on or not, so by here the session is
-        // already hidden — and a compositor with no output at all would
-        // otherwise leave the caller waiting for a frame that never comes,
-        // which is a machine that will not suspend.
-        if let Some(covered) = self.covered.take() {
-            covered();
+impl Lock {
+    /// One thing the compositor said.
+    fn on(&mut self, event: Event) {
+        match event {
+            Event::Locked => {
+                // The surfaces are made as the outputs are announced, whether
+                // or not the lock has been granted; this is where an output
+                // that was already known when the lock was asked for is
+                // caught up with.
+                for output in self.wayland.outputs() {
+                    self.cover(&output);
+                }
+                // And this is the moment somebody waiting on `-f` is waiting
+                // for. Not the first frame: the compositor covers every
+                // output the moment it grants the lock, drawn on or not, so
+                // by here the session is already hidden — and a compositor
+                // with no output at all would otherwise leave the caller
+                // waiting for a frame that never comes, which is a machine
+                // that will not suspend.
+                if let Some(covered) = self.covered.take() {
+                    covered();
+                }
+            }
+            Event::Refused => {
+                // Either the compositor refused, or a lock is already up.
+                // Nothing of ours is on screen, and nothing of ours may
+                // unlock what is.
+                //
+                // The lock object is dead from here: asking it for a surface
+                // after this is an invalid object and a protocol error, and
+                // that is not hypothetical — a refusal arrives within a round
+                // trip of the request, which is before the registry has
+                // finished announcing the outputs every one of those surfaces
+                // is for. So the surfaces made while it was alive go now, in
+                // the order the protocol asks for, and `cover` makes no more.
+                self.screens.clear();
+                self.session = None;
+                self.ending = Ending::Refused;
+                self.exit = true;
+            }
+            Event::Configure { surface, size } => self.configure(&surface, size),
+            Event::Scale { surface, scale } => {
+                let Some(index) = self.screen_of(&surface) else {
+                    return;
+                };
+                match self.screens.get_mut(index) {
+                    Some(screen) if screen.scale != scale => {
+                        screen.scale = scale;
+                        screen.fresh = true;
+                    }
+                    _ => return,
+                }
+                self.draw(index);
+            }
+            Event::Frame(surface) => {
+                let Some(index) = self.screen_of(&surface) else {
+                    return;
+                };
+                let dirty = match self.screens.get_mut(index) {
+                    Some(screen) => {
+                        screen.frame_pending = false;
+                        screen.dirty
+                    }
+                    None => return,
+                };
+                if dirty {
+                    self.draw(index);
+                }
+            }
+            // Including the outputs that were there before the lock was
+            // asked for: this is how every one of them is covered, not only
+            // the ones plugged in afterwards.
+            Event::Output(output) => self.cover(&output),
+            Event::OutputGone(output) => self.screens.retain(|screen| screen.output != output),
+            // Pressed, or held long enough to count again: the same.
+            Event::Key(key) => self.on_key(&key),
+            Event::Modifiers(modifiers) => {
+                let changed = modifiers.caps_lock != self.modifiers.caps_lock;
+                self.modifiers = modifiers;
+                if changed {
+                    self.caps_lock(modifiers.caps_lock);
+                }
+            }
+            Event::Pointer(event) => self.on_pointer(&event),
+            Event::Timer(timer) => self.timed(timer),
+            // The keyboard going elsewhere among them. A popup closes when
+            // it does; a lock screen has nowhere else for it to go, and
+            // closing is the one thing it must not do.
+            _ => {}
         }
     }
 
-    fn finished(&mut self, _: &Connection, _: &QueueHandle<Self>, _: SessionLock) {
-        // Either the compositor refused, or a lock is already up. Nothing of
-        // ours is on screen, and nothing of ours may unlock what is.
-        //
-        // The lock object is dead from here: asking it for a surface after
-        // this is an invalid object and a protocol error, and that is not
-        // hypothetical — a refusal arrives within a round trip of the request,
-        // which is before the registry has finished advertising the outputs
-        // every one of those surfaces is for. So the surfaces made while it
-        // was alive go now, in the order the protocol asks for, and `cover`
-        // makes no more.
-        self.screens.clear();
-        self.session = None;
-        self.ending = Ending::Refused;
-        self.exit = true;
-    }
-
-    fn configure(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        surface: SessionLockSurface,
-        configure: SessionLockSurfaceConfigure,
-        _: u32,
-    ) {
-        let Some(index) = self.screen_of(surface.wl_surface()) else {
+    fn configure(&mut self, surface: &Surface, (width, height): (u32, u32)) {
+        let Some(index) = self.screen_of(surface) else {
             return;
         };
-        let (width, height) = configure.new_size;
         if width == 0 || height == 0 {
             return;
         }
@@ -660,304 +619,35 @@ impl SessionLockHandler for Lock {
         // And say that it is opaque, which it is: the mountains reach every
         // edge. A compositor that knows has nothing to blend and nothing
         // behind this to draw at all.
-        if let Ok(region) = Region::new(&self.compositor) {
-            region.add(
-                0,
-                0,
-                i32::try_from(width).unwrap_or(0),
-                i32::try_from(height).unwrap_or(0),
-            );
-            surface
-                .wl_surface()
-                .set_opaque_region(Some(region.wl_region()));
-        }
-        self.draw(index);
-    }
-}
-
-impl CompositorHandler for Lock {
-    fn scale_factor_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        surface: &wl_surface::WlSurface,
-        factor: i32,
-    ) {
-        let scale = u32::try_from(factor).unwrap_or(1).max(1);
-        let Some(index) = self.screen_of(surface) else {
-            return;
-        };
-        match self.screens.get_mut(index) {
-            Some(screen) if screen.scale != scale => {
-                screen.scale = scale;
-                screen.fresh = true;
-            }
-            _ => return,
-        }
+        self.wayland.opaque(surface, width, height);
         self.draw(index);
     }
 
-    fn transform_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_surface::WlSurface,
-        _: wl_output::Transform,
-    ) {
-    }
-
-    fn frame(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        surface: &wl_surface::WlSurface,
-        _: u32,
-    ) {
-        let Some(index) = self.screen_of(surface) else {
+    fn on_pointer(&mut self, event: &PointerEvent) {
+        let Some(index) = self.screen_of(&event.surface) else {
             return;
         };
-        let dirty = match self.screens.get_mut(index) {
-            Some(screen) => {
-                screen.frame_pending = false;
-                screen.dirty
+        match event.kind {
+            PointerKind::Enter { serial } => {
+                // Whatever the pointer was wearing over a window it can no
+                // longer reach is not what it should wear here. The
+                // compositor draws it, and nothing on this screen needs to
+                // know where it is until it is clicked: following it would
+                // mean a frame per motion event, and a screen's worth of
+                // compositing behind every one of them.
+                self.wayland.cursor(serial, Shape::Default);
             }
-            None => return,
-        };
-        if dirty {
-            self.draw(index);
-        }
-    }
-
-    fn surface_enter(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_surface::WlSurface,
-        _: &wl_output::WlOutput,
-    ) {
-    }
-
-    fn surface_leave(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_surface::WlSurface,
-        _: &wl_output::WlOutput,
-    ) {
-    }
-}
-
-impl OutputHandler for Lock {
-    fn output_state(&mut self) -> &mut OutputState {
-        &mut self.outputs
-    }
-
-    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, output: wl_output::WlOutput) {
-        // Including the outputs that were there before the lock was asked for:
-        // this is how every one of them is covered, not only the ones plugged
-        // in afterwards.
-        self.cover(&output);
-    }
-
-    fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
-
-    fn output_destroyed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        output: wl_output::WlOutput,
-    ) {
-        self.screens.retain(|screen| screen.output != output);
-    }
-}
-
-impl SeatHandler for Lock {
-    fn seat_state(&mut self) -> &mut SeatState {
-        &mut self.seats
-    }
-
-    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
-
-    fn new_capability(
-        &mut self,
-        _: &Connection,
-        qh: &QueueHandle<Self>,
-        seat: wl_seat::WlSeat,
-        capability: Capability,
-    ) {
-        if capability == Capability::Keyboard && self.keyboard.is_none() {
-            let handle = self.loop_handle.clone();
-            self.keyboard = self
-                .seats
-                .get_keyboard_with_repeat(
-                    qh,
-                    &seat,
-                    None,
-                    handle,
-                    Box::new(|host: &mut Self, _, event| host.on_key(&event)),
-                )
-                .ok();
-        }
-        if capability == Capability::Pointer && self.pointer.is_none() {
-            self.pointer = self.seats.get_pointer(qh, &seat).ok();
-            if let (Some(pointer), Some(shapes)) = (&self.pointer, &self.cursor_shapes) {
-                self.cursor = Some(shapes.get_shape_device(pointer, qh));
+            PointerKind::Press { button } if button == BTN_LEFT => {
+                let at = self.physical(index, event.position);
+                // Where the card is depends on the screen's size: ask with
+                // the layout of the screen that was clicked.
+                let screen = &self.screens[index];
+                let scale = screen.scale.max(1);
+                self.app
+                    .resize(screen.size.0 * scale, screen.size.1 * scale);
+                self.act(Action::ClickAt(at.0, at.1));
             }
-        }
-    }
-
-    fn remove_capability(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: wl_seat::WlSeat,
-        capability: Capability,
-    ) {
-        if capability == Capability::Keyboard
-            && let Some(keyboard) = self.keyboard.take()
-        {
-            keyboard.release();
-        }
-        if capability == Capability::Pointer
-            && let Some(pointer) = self.pointer.take()
-        {
-            pointer.release();
-        }
-    }
-
-    fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
-}
-
-impl KeyboardHandler for Lock {
-    fn enter(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
-        _: &wl_surface::WlSurface,
-        _: u32,
-        _: &[u32],
-        _: &[Keysym],
-    ) {
-    }
-
-    fn leave(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
-        _: &wl_surface::WlSurface,
-        _: u32,
-    ) {
-        // A popup closes when the keyboard goes elsewhere. A lock screen has
-        // nowhere else for it to go, and closing is the one thing it must not
-        // do.
-    }
-
-    fn press_key(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
-        _: u32,
-        event: KeyEvent,
-    ) {
-        self.on_key(&event);
-    }
-
-    /// A key held, repeated by the compositor itself where it does that:
-    /// the same as the toolkit's own repeat, which is the same as a press.
-    fn repeat_key(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
-        _: u32,
-        event: KeyEvent,
-    ) {
-        self.on_key(&event);
-    }
-
-    fn release_key(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
-        _: u32,
-        _: KeyEvent,
-    ) {
-    }
-
-    fn update_modifiers(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
-        _: u32,
-        modifiers: Modifiers,
-        _: RawModifiers,
-        _: u32,
-    ) {
-        let changed = modifiers.caps_lock != self.modifiers.caps_lock;
-        self.modifiers = modifiers;
-        if changed {
-            self.caps_lock(modifiers.caps_lock);
+            _ => {}
         }
     }
 }
-
-impl PointerHandler for Lock {
-    fn pointer_frame(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_pointer::WlPointer,
-        events: &[PointerEvent],
-    ) {
-        for event in events {
-            let Some(index) = self.screen_of(&event.surface) else {
-                continue;
-            };
-            match event.kind {
-                PointerEventKind::Enter { serial } => {
-                    // Whatever the pointer was wearing over a window it can no
-                    // longer reach is not what it should wear here. The
-                    // compositor draws it, and nothing on this screen needs
-                    // to know where it is until it is clicked: following it
-                    // would mean a frame per motion event, and a screen's
-                    // worth of compositing behind every one of them.
-                    if let Some(cursor) = &self.cursor {
-                        cursor.set_shape(serial, Shape::Default);
-                    }
-                }
-                PointerEventKind::Press { button, .. } if button == BTN_LEFT => {
-                    let at = self.physical(index, event.position);
-                    // Where the card is depends on the screen's size: ask
-                    // with the layout of the screen that was clicked.
-                    let screen = &self.screens[index];
-                    let scale = screen.scale.max(1);
-                    self.app
-                        .resize(screen.size.0 * scale, screen.size.1 * scale);
-                    self.act(Action::ClickAt(at.0, at.1));
-                }
-                _ => {}
-            }
-        }
-    }
-}
-
-impl ShmHandler for Lock {
-    fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
-    }
-}
-
-impl ProvidesRegistryState for Lock {
-    fn registry(&mut self) -> &mut RegistryState {
-        &mut self.registry
-    }
-    registry_handlers![OutputState, SeatState];
-}
-
-delegate_dispatch2!(Lock);
-delegate_registry!(Lock);

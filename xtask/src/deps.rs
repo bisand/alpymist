@@ -39,10 +39,10 @@ const OURS: [&str; 10] = [
 /// Every third-party crate a manifest in this workspace may name, and what it
 /// is for. Adding a line is the review: say why nothing of ours, and nothing
 /// already here, does the job. Those with an issue beside them are to go.
-const ALLOWED: [(&str, &str); 16] = [
+const ALLOWED: [(&str, &str); 19] = [
     (
         "bytemuck",
-        "a shared buffer's bytes as pixels, without unsafe",
+        "a picture's pixels as the bytes that are sent, without unsafe",
     ),
     ("clap", "the command line, and what completion is made from"),
     (
@@ -66,8 +66,17 @@ const ALLOWED: [(&str, &str); 16] = [
         "signal-hook",
         "a signal handler on a bare console, without unsafe",
     ),
-    ("smithay-client-toolkit", "Wayland surfaces and input. #113"),
     ("toml", "every settings file"),
+    ("wayland-client", "the Wayland protocol itself"),
+    (
+        "wayland-protocols",
+        "windows, the session lock, cursor shapes",
+    ),
+    (
+        "wayland-protocols-wlr",
+        "layer surfaces: the menu and popups",
+    ),
+    ("xkbcommon", "what a key means, from libxkbcommon"),
     ("zeroize", "a password wiped from memory once handed on"),
     ("zune-core", "zune-jpeg's options"),
     ("zune-jpeg", "decoding the boot picture, in pure Rust"),
@@ -78,10 +87,10 @@ const ALLOWED: [(&str, &str); 16] = [
 /// crude figure, but one that cannot grow without being edited here. When the
 /// lockfile shrinks, bring it down.
 ///
-/// Four of them are the old smithay-client-toolkit and what it alone needs:
-/// winit, under the desktop preview, still wants it, so the lockfile holds
-/// that and the current one the Wayland hosts use. What ships holds one.
-const LOCKED: usize = 267;
+/// smithay-client-toolkit is still among them, with calloop and the cursor
+/// themes: winit wants it, under the desktop preview. Nothing that ships
+/// links it (ADR 0026).
+const LOCKED: usize = 262;
 
 /// Check the workspace at `root` against all of the above.
 pub fn deps(root: &Path) -> Result<()> {
