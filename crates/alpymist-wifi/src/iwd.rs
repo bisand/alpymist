@@ -17,13 +17,11 @@
 //! nowhere else — no file written, no root needed.
 
 use crate::model::{Link, Network, Radio, Security, State, Station};
-use agent::Agent;
+use alpymist_dbus::{Connection, Error, Failure, Proxy, Rule, Value};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
-use zbus::blocking::{Connection, MessageIterator, Proxy};
-use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue};
 
 const SERVICE: &str = "net.connman.iwd";
 const ADAPTER: &str = "net.connman.iwd.Adapter";
@@ -33,9 +31,12 @@ const DIAGNOSTIC: &str = "net.connman.iwd.StationDiagnostic";
 const NETWORK: &str = "net.connman.iwd.Network";
 const KNOWN: &str = "net.connman.iwd.KnownNetwork";
 const AGENT_PATH: &str = "/org/alpymist/wifi/agent";
+const AGENT: &str = "net.connman.iwd.Agent";
 
-type Properties = HashMap<String, OwnedValue>;
-type Objects = HashMap<OwnedObjectPath, HashMap<String, Properties>>;
+/// An interface's properties, as the bus has them: `a{sv}`.
+type Properties = Value;
+/// Every object, by its path, and its interfaces by their names.
+type Objects = HashMap<String, HashMap<String, Properties>>;
 
 /// A connection to iwd.
 pub struct Iwd {
@@ -73,12 +74,11 @@ impl Iwd {
     /// not an error: joining a saved network needs none.
     pub fn with_agent() -> Result<Self, String> {
         let iwd = Self::connect()?;
-        let agent = Agent {
-            passphrase: Arc::clone(&iwd.passphrase),
-        };
+        let passphrase = Arc::clone(&iwd.passphrase);
         iwd.conn
-            .object_server()
-            .at(AGENT_PATH, agent)
+            .serve(AGENT_PATH, AGENT, move |call| {
+                agent(call.member.as_deref(), &passphrase)
+            })
             .map_err(|e| format!("agent: {e}"))?;
         iwd.register_agent();
         Ok(iwd)
@@ -88,39 +88,34 @@ impl Iwd {
     /// registration, and after iwd restarts the first is gone.
     fn register_agent(&self) {
         if let Ok(manager) = self.proxy("/net/connman/iwd", "net.connman.iwd.AgentManager") {
-            let path = ObjectPath::from_static_str_unchecked(AGENT_PATH);
-            let _ = manager.call_method("RegisterAgent", &(path,));
+            let _ = manager.call("RegisterAgent", vec![Value::path(AGENT_PATH)]);
         }
     }
 
-    fn proxy<'a>(&'a self, path: &'a str, interface: &'a str) -> zbus::Result<Proxy<'a>> {
-        zbus::blocking::proxy::Builder::new(&self.conn)
-            .destination(SERVICE)?
-            .path(path)?
-            .interface(interface)?
-            .cache_properties(zbus::proxy::CacheProperties::No)
-            .build()
+    // In a `Result` for what it is chained with: the call that follows it is
+    // what can fail.
+    #[allow(clippy::unnecessary_wraps)]
+    fn proxy(&self, path: &str, interface: &str) -> Result<Proxy, Error> {
+        Ok(self.conn.proxy(SERVICE, path, interface))
     }
 
     fn objects(&self) -> Option<Objects> {
-        let manager = zbus::blocking::fdo::ObjectManagerProxy::builder(&self.conn)
-            .destination(SERVICE)
-            .ok()?
-            .path("/")
-            .ok()?
-            .cache_properties(zbus::proxy::CacheProperties::No)
-            .build()
+        let managed = self
+            .conn
+            .proxy(SERVICE, "/", "org.freedesktop.DBus.ObjectManager")
+            .ask("GetManagedObjects", Vec::new())
             .ok()?;
-        let objects = manager.get_managed_objects().ok()?;
         Some(
-            objects
-                .into_iter()
-                .map(|(path, interfaces)| {
+            managed
+                .entries()
+                .filter_map(|(path, interfaces)| {
                     let interfaces = interfaces
-                        .into_iter()
-                        .map(|(name, props)| (name.to_string(), props))
+                        .entries()
+                        .filter_map(|(name, props)| {
+                            Some((name.as_str()?.to_owned(), props.clone()))
+                        })
                         .collect();
-                    (path, interfaces)
+                    Some((path.as_path()?.to_owned(), interfaces))
                 })
                 .collect(),
         )
@@ -151,17 +146,27 @@ impl Iwd {
         }
 
         // iwd ranks by signal and band together; out of range is left out.
-        let ordered: Vec<(OwnedObjectPath, i16)> = self
+        let ordered = self
             .proxy(station_path, STATION)
-            .and_then(|p| p.call("GetOrderedNetworks", &()))
-            .unwrap_or_default();
-        for (path, signal) in ordered {
-            let Some(props) = objects.get(&path).and_then(|i| i.get(NETWORK)) else {
+            .and_then(|p| p.ask("GetOrderedNetworks", Vec::new()))
+            .unwrap_or(Value::Array("(on)".into(), Vec::new()));
+        for entry in ordered.items() {
+            // Each is a network's path and its signal, in hundredths of a dBm.
+            let [path, signal] = entry.items() else {
+                continue;
+            };
+            let (Some(path), Some(signal)) = (
+                path.as_path(),
+                signal.as_i64().and_then(|n| i16::try_from(n).ok()),
+            ) else {
+                continue;
+            };
+            let Some(props) = objects.get(path).and_then(|i| i.get(NETWORK)) else {
                 continue;
             };
             let known_path = object_path(props, "KnownNetwork");
             let network = Network {
-                path: path.to_string(),
+                path: path.to_owned(),
                 name: string(props, "Name").unwrap_or_default().to_owned(),
                 security: Security::parse(string(props, "Type").unwrap_or("psk")),
                 signal_dbm: signal / 100,
@@ -205,15 +210,15 @@ impl Iwd {
     fn diagnostics(&self, station: &str) -> Link {
         let props: Properties = self
             .proxy(station, DIAGNOSTIC)
-            .and_then(|p| p.call("GetDiagnostics", &()))
-            .unwrap_or_default();
+            .and_then(|p| p.ask("GetDiagnostics", Vec::new()))
+            .unwrap_or(Value::Array("{sv}".into(), Vec::new()));
         // Bitrates are in units of 100 kbit/s.
         let mbit = |key| u32_of(&props, key).map(|r| r / 10);
         Link {
             frequency_mhz: u32_of(&props, "Frequency"),
-            channel: props.get("Channel").and_then(|v| u16::try_from(v).ok()),
+            channel: number(&props, "Channel"),
             security: string(&props, "Security").map(str::to_owned),
-            rssi_dbm: props.get("RSSI").and_then(|v| i16::try_from(v).ok()),
+            rssi_dbm: number(&props, "RSSI"),
             rx_mbit: mbit("RxBitrate"),
             tx_mbit: mbit("TxBitrate"),
             mode: string(&props, "RxMode").map(str::to_owned),
@@ -236,7 +241,7 @@ impl Iwd {
         let station = self.paths()?.station.ok_or("Wi-Fi is off")?;
         match self
             .proxy(&station, STATION)
-            .and_then(|p| p.call_method("Scan", &()))
+            .and_then(|p| p.call("Scan", Vec::new()))
         {
             Ok(_) => Ok(()),
             Err(e) if error_name(&e) == Some("net.connman.iwd.Busy") => Ok(()),
@@ -309,7 +314,7 @@ impl Iwd {
             .unwrap_or_else(PoisonError::into_inner) = passphrase;
         let result = self
             .proxy(path, NETWORK)
-            .and_then(|p| p.call_method("Connect", &()));
+            .and_then(|p| p.call("Connect", Vec::new()));
         *self
             .passphrase
             .lock()
@@ -338,7 +343,7 @@ impl Iwd {
     pub fn disconnect(&self) -> Result<(), String> {
         let station = self.paths()?.station.ok_or("Wi-Fi is off")?;
         self.proxy(&station, STATION)
-            .and_then(|p| p.call_method("Disconnect", &()))
+            .and_then(|p| p.call("Disconnect", Vec::new()))
             .map(|_| ())
             .map_err(|e| describe(&e))
     }
@@ -350,7 +355,7 @@ impl Iwd {
     /// iwd refused.
     pub fn forget(&self, known_path: &str) -> Result<(), String> {
         self.proxy(known_path, KNOWN)
-            .and_then(|p| p.call_method("Forget", &()))
+            .and_then(|p| p.call("Forget", Vec::new()))
             .map(|_| ())
             .map_err(|e| describe(&e))
     }
@@ -369,8 +374,8 @@ impl Iwd {
         let set = |path: &str, interface: &str| {
             self.proxy(path, interface)
                 .map_err(|e| describe(&e))?
-                .set_property("Powered", on)
-                .map_err(|e| describe(&zbus::Error::from(e)))
+                .set("Powered", on.into())
+                .map_err(|e| describe(&e))
         };
         if on && !adapter_on {
             set(&adapter, ADAPTER)?;
@@ -389,24 +394,13 @@ impl Iwd {
     /// # Errors
     /// The bus would not take the match rule.
     pub fn changes(&self) -> Result<Receiver<()>, String> {
-        let from_iwd = zbus::MatchRule::builder()
-            .msg_type(zbus::message::Type::Signal)
-            .sender(SERVICE)
-            .map_err(|e| e.to_string())?
-            .build();
-        let owner = zbus::MatchRule::builder()
-            .msg_type(zbus::message::Type::Signal)
-            .sender("org.freedesktop.DBus")
-            .map_err(|e| e.to_string())?
+        let from_iwd = Rule::from(SERVICE);
+        let owner = Rule::from("org.freedesktop.DBus")
             .member("NameOwnerChanged")
-            .map_err(|e| e.to_string())?
-            .arg(0, SERVICE)
-            .map_err(|e| e.to_string())?
-            .build();
+            .arg0(SERVICE);
         let (tx, rx) = channel();
         for rule in [from_iwd, owner] {
-            let messages = MessageIterator::for_match_rule(rule, &self.conn, Some(64))
-                .map_err(|e| e.to_string())?;
+            let messages = self.conn.signals(rule).map_err(|e| e.to_string())?;
             let tx = tx.clone();
             std::thread::spawn(move || {
                 for _ in messages {
@@ -476,63 +470,23 @@ impl std::fmt::Display for JoinError {
     }
 }
 
-mod agent {
-    // iwd's interface fixes every signature, used or not, and the interface
-    // macro passes lints on an impl's attributes by.
-    #![allow(clippy::unused_self, clippy::used_underscore_binding)]
-
-    use std::sync::{Arc, Mutex, PoisonError};
-    use zbus::zvariant::OwnedObjectPath;
-
-    /// The agent iwd asks for secrets.
-    pub(super) struct Agent {
-        pub(super) passphrase: Arc<Mutex<Option<String>>>,
-    }
-
-    #[derive(Debug, zbus::DBusError)]
-    #[zbus(prefix = "net.connman.iwd.Agent.Error")]
-    enum AgentError {
-        #[zbus(error)]
-        ZBus(zbus::Error),
-        /// Nothing to answer with: the network needs something not given.
-        Canceled(String),
-    }
-
-    #[zbus::interface(name = "net.connman.iwd.Agent")]
-    impl Agent {
-        fn release(&self) {}
-
-        fn request_passphrase(&self, _network: OwnedObjectPath) -> Result<String, AgentError> {
-            self.passphrase
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .clone()
-                .ok_or_else(|| AgentError::Canceled("no passphrase given".into()))
-        }
-
-        fn request_private_key_passphrase(
-            &self,
-            _network: OwnedObjectPath,
-        ) -> Result<String, AgentError> {
-            Err(AgentError::Canceled("not supported".into()))
-        }
-
-        fn request_user_name_and_password(
-            &self,
-            _network: OwnedObjectPath,
-        ) -> Result<(String, String), AgentError> {
-            Err(AgentError::Canceled("not supported".into()))
-        }
-
-        fn request_user_password(
-            &self,
-            _network: OwnedObjectPath,
-            _user: String,
-        ) -> Result<String, AgentError> {
-            Err(AgentError::Canceled("not supported".into()))
-        }
-
-        fn cancel(&self, _reason: String) {}
+/// The agent iwd asks for secrets: what it answers each of iwd's questions
+/// with. The passphrase is the one handed to [`Iwd::join`] and nothing else
+/// is known here, so everything else iwd may ask for is declined.
+fn agent(member: Option<&str>, passphrase: &Mutex<Option<String>>) -> Result<Vec<Value>, Failure> {
+    let declined = |why: &str| Failure::new("net.connman.iwd.Agent.Error.Canceled", why);
+    match member {
+        // Told, not asked: the agent is let go, or a request called off.
+        Some("Release" | "Cancel") => Ok(Vec::new()),
+        Some("RequestPassphrase") => passphrase
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+            .map(|passphrase| vec![passphrase.into()])
+            .ok_or_else(|| declined("no passphrase given")),
+        // A private key's passphrase, a user name and password: enterprise
+        // networks, which are set up by hand.
+        _ => Err(declined("not supported")),
     }
 }
 
@@ -547,16 +501,16 @@ fn paths(objects: &Objects) -> Paths {
             && paths.adapter.is_none()
         {
             let powered = boolean(props, "Powered").unwrap_or(false);
-            paths.adapter = Some((path.to_string(), powered));
+            paths.adapter = Some((path.clone(), powered));
         }
         if let Some(props) = interfaces.get(DEVICE)
             && paths.device.is_none()
         {
             let name = string(props, "Name").unwrap_or_default().to_owned();
             let powered = boolean(props, "Powered").unwrap_or(false);
-            paths.device = Some((path.to_string(), name, powered));
+            paths.device = Some((path.clone(), name, powered));
             if interfaces.contains_key(STATION) {
-                paths.station = Some(path.to_string());
+                paths.station = Some(path.clone());
             }
         }
     }
@@ -572,39 +526,42 @@ fn radio(paths: &Paths) -> Radio {
 }
 
 fn string<'a>(props: &'a Properties, key: &str) -> Option<&'a str> {
-    props.get(key).and_then(|v| <&str>::try_from(v).ok())
+    props.get(key).and_then(Value::as_str)
 }
 
 fn boolean(props: &Properties, key: &str) -> Option<bool> {
-    props.get(key).and_then(|v| bool::try_from(v).ok())
+    props.get(key).and_then(Value::as_bool)
 }
 
 fn u32_of(props: &Properties, key: &str) -> Option<u32> {
-    props.get(key).and_then(|v| u32::try_from(v).ok())
+    props.get(key).and_then(Value::as_u32)
+}
+
+/// A number of whatever width iwd sends it in, where it fits in a `T`.
+fn number<T: TryFrom<i64>>(props: &Properties, key: &str) -> Option<T> {
+    props
+        .get(key)
+        .and_then(Value::as_i64)
+        .and_then(|n| T::try_from(n).ok())
 }
 
 fn object_path(props: &Properties, key: &str) -> Option<String> {
-    props
-        .get(key)
-        .and_then(|v| v.downcast_ref::<ObjectPath<'_>>().ok())
-        .map(|p| p.to_string())
+    props.get(key).and_then(Value::as_path).map(str::to_owned)
 }
 
-fn error_name(error: &zbus::Error) -> Option<&str> {
-    match error {
-        zbus::Error::MethodError(name, _, _) => Some(name.as_str()),
-        _ => None,
-    }
+fn error_name(error: &Error) -> Option<&str> {
+    error.name()
 }
 
 /// An error in words, for when there are no better ones.
-fn describe(error: &zbus::Error) -> String {
+fn describe(error: &Error) -> String {
     match error {
-        zbus::Error::MethodError(name, Some(message), _) if !message.is_empty() => {
-            format!("iwd: {message}")
-        }
-        zbus::Error::MethodError(name, _, _) => {
-            let short = name.as_str().rsplit('.').next().unwrap_or(name.as_str());
+        Error::Method {
+            message: Some(message),
+            ..
+        } if !message.is_empty() => format!("iwd: {message}"),
+        Error::Method { name, .. } => {
+            let short = name.rsplit('.').next().unwrap_or(name);
             if short == "ServiceUnknown" {
                 "iwd is not running".to_owned()
             } else {
@@ -612,5 +569,102 @@ fn describe(error: &zbus::Error) -> String {
             }
         }
         other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Objects, Value, agent, describe, object_path, paths, string};
+    use alpymist_dbus::Error;
+    use std::sync::Mutex;
+
+    #[test]
+    fn the_agent_answers_with_the_passphrase_it_was_given_and_nothing_else() {
+        let given = Mutex::new(Some("correct horse".to_owned()));
+        assert_eq!(
+            agent(Some("RequestPassphrase"), &given),
+            Ok(vec!["correct horse".into()])
+        );
+        assert_eq!(agent(Some("Release"), &given), Ok(Vec::new()));
+        assert_eq!(agent(Some("Cancel"), &given), Ok(Vec::new()));
+        // An enterprise network's questions, and anything not known of.
+        for member in [
+            Some("RequestPrivateKeyPassphrase"),
+            Some("RequestUserNameAndPassword"),
+            Some("RequestUserPassword"),
+            Some("Introspect"),
+            None,
+        ] {
+            let declined = agent(member, &given).unwrap_err();
+            assert_eq!(declined.name, "net.connman.iwd.Agent.Error.Canceled");
+        }
+        // And with none given, iwd is told so and does not get an empty one.
+        let none = Mutex::new(None);
+        assert!(agent(Some("RequestPassphrase"), &none).is_err());
+    }
+
+    #[test]
+    fn what_iwd_publishes_is_read_by_name_and_kind() {
+        let station = Value::named([("State", "connected".into())]);
+        let device = Value::named([("Name", "wlan0".into()), ("Powered", true.into())]);
+        let network = Value::named([
+            ("Name", "Fjellheim".into()),
+            ("KnownNetwork", Value::path("/net/connman/iwd/known")),
+            // A string where a path is meant is not taken for one.
+            ("Device", "/net/connman/iwd/0/3".into()),
+        ]);
+        assert_eq!(string(&network, "Name"), Some("Fjellheim"));
+        assert_eq!(
+            object_path(&network, "KnownNetwork").as_deref(),
+            Some("/net/connman/iwd/known")
+        );
+        assert_eq!(object_path(&network, "Device"), None);
+        assert_eq!(string(&network, "Missing"), None);
+
+        let mut objects = Objects::new();
+        objects.insert(
+            "/net/connman/iwd/0".into(),
+            [(
+                super::ADAPTER.to_owned(),
+                Value::named([("Powered", true.into())]),
+            )]
+            .into(),
+        );
+        objects.insert(
+            "/net/connman/iwd/0/3".into(),
+            [
+                (super::DEVICE.to_owned(), device),
+                (super::STATION.to_owned(), station),
+            ]
+            .into(),
+        );
+        let found = paths(&objects);
+        assert_eq!(found.adapter, Some(("/net/connman/iwd/0".into(), true)));
+        assert_eq!(
+            found.device,
+            Some(("/net/connman/iwd/0/3".into(), "wlan0".into(), true))
+        );
+        assert_eq!(found.station.as_deref(), Some("/net/connman/iwd/0/3"));
+    }
+
+    #[test]
+    fn an_error_is_said_in_iwds_words_or_the_buss() {
+        let method = |name: &str, message: Option<&str>| Error::Method {
+            name: name.to_owned(),
+            message: message.map(str::to_owned),
+        };
+        assert_eq!(
+            describe(&method("net.connman.iwd.Failed", Some("Operation failed"))),
+            "iwd: Operation failed"
+        );
+        assert_eq!(describe(&method("net.connman.iwd.Busy", None)), "iwd: Busy");
+        assert_eq!(
+            describe(&method(
+                "org.freedesktop.DBus.Error.ServiceUnknown",
+                Some("")
+            )),
+            "iwd is not running"
+        );
+        assert_eq!(describe(&Error::Closed), "the connection to the bus closed");
     }
 }

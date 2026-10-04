@@ -13,17 +13,13 @@
 //! anything but its own process: polkitd only accepts an agent for a process
 //! of the same user, and routes to it only that process's authentications.
 
-// polkit's interface fixes the signatures, and the interface macro passes
-// lints on an impl's attributes by.
-#![allow(clippy::used_underscore_binding)]
-
 use crate::request::{Identity, Request, identity};
+use alpymist_dbus::{Connection, Failure, Message, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, PoisonError};
-use zbus::zvariant::{OwnedValue, Value};
 
 /// Where the agent is served on the bus.
 pub const PATH: &str = "/org/alpymist/AuthenticationAgent";
@@ -37,29 +33,62 @@ struct Agent {
     running: Running,
 }
 
-#[derive(Debug, zbus::DBusError)]
-#[zbus(prefix = "org.freedesktop.PolicyKit1.Error")]
-enum AgentError {
-    #[zbus(error)]
-    ZBus(zbus::Error),
-    /// Not authorised: cancelled, or the password was not accepted.
-    Cancelled(String),
-    /// The prompt could not be shown.
-    Failed(String),
+/// The interface polkitd calls an agent by.
+const INTERFACE: &str = "org.freedesktop.PolicyKit1.AuthenticationAgent";
+
+/// Not authorised: cancelled, or the password was not accepted.
+fn cancelled(why: &str) -> Failure {
+    Failure::new("org.freedesktop.PolicyKit1.Error.Cancelled", why)
 }
 
-#[zbus::interface(name = "org.freedesktop.PolicyKit1.AuthenticationAgent")]
+/// The prompt could not be shown.
+fn failed(why: &str) -> Failure {
+    Failure::new("org.freedesktop.PolicyKit1.Error.Failed", why)
+}
+
 impl Agent {
-    async fn begin_authentication(
+    /// Answer one of polkitd's calls. Each comes on a thread of its own, so
+    /// a prompt somebody is reading keeps nothing else waiting: not the bus,
+    /// and not the call that takes the prompt away.
+    fn answer(&self, call: &Message) -> Result<Vec<Value>, Failure> {
+        let text = |i: usize| call.body.get(i).and_then(Value::as_str).unwrap_or_default();
+        match call.member.as_deref() {
+            // The action, its message, an icon, the details, the cookie and
+            // who may authorise: `sssa{ss}sa(sa{sv})`.
+            Some("BeginAuthentication") => {
+                let details = call
+                    .body
+                    .get(3)
+                    .into_iter()
+                    .flat_map(Value::entries)
+                    .filter_map(|(key, value)| {
+                        Some((key.as_str()?.to_owned(), value.as_str()?.to_owned()))
+                    })
+                    .collect();
+                let nobody = Value::Array("(sa{sv})".into(), Vec::new());
+                let identities = call.body.get(5).unwrap_or(&nobody);
+                self.begin_authentication(text(0), text(1), details, text(4), identities)
+                    .map(|()| Vec::new())
+            }
+            Some("CancelAuthentication") => {
+                self.cancel_authentication(text(0));
+                Ok(Vec::new())
+            }
+            _ => Err(Failure::new(
+                "org.freedesktop.DBus.Error.UnknownMethod",
+                "not something an authentication agent is asked",
+            )),
+        }
+    }
+
+    fn begin_authentication(
         &self,
-        action_id: String,
-        message: String,
-        _icon_name: String,
-        details: HashMap<String, String>,
-        cookie: String,
-        identities: Vec<(String, HashMap<String, OwnedValue>)>,
-    ) -> Result<(), AgentError> {
-        let mut details: BTreeMap<String, String> = details.into_iter().collect();
+        action_id: &str,
+        message: &str,
+        mut details: BTreeMap<String, String>,
+        cookie: &str,
+        identities: &Value,
+    ) -> Result<(), Failure> {
         // polkit no longer passes pkexec's command to agents; the pkexec
         // waiting for this answer still has it, and it is root's, so what it
         // says it will run is what it will run.
@@ -72,35 +101,35 @@ impl Agent {
             details.insert("command_line".into(), command);
         }
         let request = Request {
-            action: action_id,
-            message,
-            cookie: cookie.clone(),
+            action: action_id.to_owned(),
+            message: message.to_owned(),
+            cookie: cookie.to_owned(),
             details,
-            identities: expand(&identities),
+            identities: expand(identities),
         };
         if request.identities.is_empty() {
-            return Err(AgentError::Failed("no account may authorise this".into()));
+            return Err(failed("no account may authorise this"));
         }
-        let input = serde_json::to_vec(&request).map_err(|e| AgentError::Failed(e.to_string()))?;
+        let input = serde_json::to_vec(&request).map_err(|e| failed(&e.to_string()))?;
         let mut child = Command::new(&self.prompt)
             .arg("prompt")
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .spawn()
-            .map_err(|e| AgentError::Failed(format!("{}: {e}", self.prompt.display())))?;
+            .map_err(|e| failed(&format!("{}: {e}", self.prompt.display())))?;
         if let Some(mut stdin) = child.stdin.take() {
             // Dropped at the end of this block: the prompt reads to the end.
             stdin
                 .write_all(&input)
-                .map_err(|e| AgentError::Failed(e.to_string()))?;
+                .map_err(|e| failed(&e.to_string()))?;
         }
         let child = Arc::new(Mutex::new(child));
-        lock(&self.running).insert(cookie.clone(), Arc::clone(&child));
-        let status = Waited::on(move || wait(&child)).await;
-        lock(&self.running).remove(&cookie);
+        lock(&self.running).insert(cookie.to_owned(), Arc::clone(&child));
+        let status = wait(&child);
+        lock(&self.running).remove(cookie);
         match status {
             Some(true) => Ok(()),
-            _ => Err(AgentError::Cancelled("not authorised".into())),
+            _ => Err(cancelled("not authorised")),
         }
     }
 
@@ -113,45 +142,6 @@ impl Agent {
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-/// What a thread of its own is busy finding out, to be awaited: the bus is
-/// served by one thread, and a prompt somebody is reading must not hold it.
-struct Waited<T>(Arc<Mutex<(Option<T>, Option<std::task::Waker>)>>);
-
-impl<T: Send + 'static> Waited<T> {
-    /// Run `work` on a thread of its own.
-    fn on(work: impl FnOnce() -> T + Send + 'static) -> Self {
-        let shared = Self(Arc::new(Mutex::new((None, None))));
-        let theirs = Arc::clone(&shared.0);
-        std::thread::spawn(move || {
-            let found = work();
-            let mut state = lock(&theirs);
-            state.0 = Some(found);
-            if let Some(waker) = state.1.take() {
-                waker.wake();
-            }
-        });
-        shared
-    }
-}
-
-impl<T> std::future::Future for Waited<T> {
-    type Output = T;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        context: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<T> {
-        let mut state = lock(&self.0);
-        if let Some(found) = state.0.take() {
-            return std::task::Poll::Ready(found);
-        }
-        // Under the lock the thread takes to finish, so it cannot finish
-        // between the look above and the waker being left.
-        state.1 = Some(context.waker().clone());
-        std::task::Poll::Pending
-    }
 }
 
 /// Wait for a prompt without holding its lock, so it can be cancelled.
@@ -216,7 +206,7 @@ fn parse_pkexec(status: &str, cmdline: &[u8]) -> Option<String> {
 /// polkit's identities as accounts: users as they are, groups as their
 /// members, root last, since a password for root is rarely what anyone
 /// means to type.
-fn expand(identities: &[(String, HashMap<String, OwnedValue>)]) -> Vec<Identity> {
+fn expand(identities: &Value) -> Vec<Identity> {
     let groups = std::fs::read_to_string("/etc/group").unwrap_or_default();
     let passwd = std::fs::read_to_string("/etc/passwd").unwrap_or_default();
     let mut out: Vec<Identity> = Vec::new();
@@ -227,11 +217,15 @@ fn expand(identities: &[(String, HashMap<String, OwnedValue>)]) -> Vec<Identity>
             out.push(who);
         }
     };
-    for (kind, fields) in identities {
-        let number = |key: &str| fields.get(key).and_then(|v| u32::try_from(v).ok());
+    // Each is a kind and what it is known by: `(sa{sv})`.
+    for one in identities.items() {
+        let [kind, fields] = one.items() else {
+            continue;
+        };
+        let number = |key: &str| fields.get(key).and_then(Value::as_u32);
         match kind.as_str() {
-            "unix-user" => add(number("uid").and_then(identity)),
-            "unix-group" => {
+            Some("unix-user") => add(number("uid").and_then(identity)),
+            Some("unix-group") => {
                 if let Some(gid) = number("gid") {
                     for name in members(&groups, &passwd, gid) {
                         add(uid_of(&passwd, &name).and_then(identity));
@@ -293,7 +287,7 @@ fn start_time() -> Option<u64> {
 /// The agent, for as long as it is kept: dropping it closes the connection,
 /// and polkitd forgets the agent.
 pub struct Registration {
-    _connection: zbus::blocking::Connection,
+    _connection: Connection,
 }
 
 /// Register an agent for this process that asks with `prompt`: the
@@ -306,25 +300,31 @@ pub fn register(prompt: PathBuf) -> Result<Registration, String> {
         prompt,
         running: Arc::default(),
     };
-    let connection = zbus::blocking::connection::Builder::system()
-        .and_then(|b| b.serve_at(PATH, agent))
-        .and_then(zbus::blocking::connection::Builder::build)
+    let connection = Connection::system().map_err(|e| format!("the system bus: {e}"))?;
+    connection
+        .serve(PATH, INTERFACE, move |call| agent.answer(call))
         .map_err(|e| format!("the system bus: {e}"))?;
     let pid = std::process::id();
     let uid = crate::request::own_uid().ok_or("could not read this process's user")?;
     let start = start_time().ok_or("could not read when this process started")?;
-    let mut subject: HashMap<&str, Value<'_>> = HashMap::new();
-    subject.insert("pid", Value::from(pid));
-    subject.insert("start-time", Value::from(start));
-    subject.insert("uid", Value::from(i32::try_from(uid).unwrap_or(-1)));
+    // Who the agent speaks for: this process and no other, by what polkitd
+    // can check for itself.
+    let subject = Value::Struct(vec![
+        "unix-process".into(),
+        Value::named([
+            ("pid", pid.into()),
+            ("start-time", start.into()),
+            ("uid", i32::try_from(uid).unwrap_or(-1).into()),
+        ]),
+    ]);
     let locale = std::env::var("LANG").unwrap_or_else(|_| "C".into());
     connection
-        .call_method(
-            Some("org.freedesktop.PolicyKit1"),
+        .call(
+            "org.freedesktop.PolicyKit1",
             "/org/freedesktop/PolicyKit1/Authority",
-            Some("org.freedesktop.PolicyKit1.Authority"),
+            "org.freedesktop.PolicyKit1.Authority",
             "RegisterAuthenticationAgent",
-            &(("unix-process", subject), locale.as_str(), PATH),
+            vec![subject, locale.into(), PATH.into()],
         )
         .map_err(|e| format!("polkit: {e}"))?;
     Ok(Registration {
@@ -334,46 +334,7 @@ pub fn register(prompt: PathBuf) -> Result<Registration, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Waited, members, parse_pkexec, uid_of};
-    use std::future::Future as _;
-    use std::sync::Arc;
-    use std::task::{Context, Poll, Wake, Waker};
-    use std::time::Duration;
-
-    /// A waker that wakes the thread the test runs on.
-    struct Unpark(std::thread::Thread);
-
-    impl Wake for Unpark {
-        fn wake(self: Arc<Self>) {
-            self.0.unpark();
-        }
-    }
-
-    #[test]
-    fn what_a_thread_finds_out_is_awaited_and_wakes_whoever_waits() {
-        let waker = Waker::from(Arc::new(Unpark(std::thread::current())));
-        let mut context = Context::from_waker(&waker);
-
-        // Still at work when first asked: pending, and woken when done.
-        let mut slow = std::pin::pin!(Waited::on(|| {
-            std::thread::sleep(Duration::from_millis(100));
-            7
-        }));
-        assert_eq!(slow.as_mut().poll(&mut context), Poll::Pending);
-        let found = loop {
-            if let Poll::Ready(found) = slow.as_mut().poll(&mut context) {
-                break found;
-            }
-            // Returns when woken; and at once, if that was before this.
-            std::thread::park_timeout(Duration::from_secs(10));
-        };
-        assert_eq!(found, 7);
-
-        // Done before anybody asked: ready at the first asking.
-        let mut quick = std::pin::pin!(Waited::on(|| "done"));
-        std::thread::sleep(Duration::from_millis(100));
-        assert_eq!(quick.as_mut().poll(&mut context), Poll::Ready("done"));
-    }
+    use super::{members, parse_pkexec, uid_of};
 
     #[test]
     fn only_a_root_pkexec_is_believed() {

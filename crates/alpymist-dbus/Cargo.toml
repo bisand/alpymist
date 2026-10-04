@@ -1,0 +1,14 @@
+[package]
+name = "alpymist-dbus"
+description = "A small blocking D-Bus client: calls, signals, properties and a few served methods on the system bus. What iwd, fprintd and polkit are spoken to with."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Nothing: a unix socket, threads and channels are all std's.
+[dependencies]
+
+[lints]
+workspace = true
