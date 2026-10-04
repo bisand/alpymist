@@ -19,6 +19,7 @@ use wayland_protocols::ext::session_lock::v1::client::{
 use wayland_protocols::wp::cursor_shape::v1::client::{
     wp_cursor_shape_device_v1, wp_cursor_shape_manager_v1,
 };
+use wayland_protocols::wp::viewporter::client::{wp_viewport, wp_viewporter};
 use wayland_protocols::xdg::activation::v1::client::{xdg_activation_token_v1, xdg_activation_v1};
 use wayland_protocols::xdg::decoration::zv1::client::{
     zxdg_decoration_manager_v1, zxdg_toplevel_decoration_v1,
@@ -47,6 +48,8 @@ pub(crate) struct Known {
     pub(crate) scale: i32,
     /// The scale its last buffer was said to be at.
     pub(crate) buffer_scale: i32,
+    /// What enlarges its buffer to its size, once it has been asked to.
+    pub(crate) viewport: Option<wp_viewport::WpViewport>,
     /// The outputs it is on, for a compositor too old to say the scale.
     on: Vec<wl_output::WlOutput>,
     /// A toplevel's size, said before the configure it belongs to.
@@ -59,6 +62,7 @@ impl Known {
             surface,
             scale: 1,
             buffer_scale: 1,
+            viewport: None,
             on: Vec::new(),
             pending: (0, 0),
         }
@@ -108,6 +112,7 @@ pub(crate) struct State {
     pub(crate) decorations: Option<zxdg_decoration_manager_v1::ZxdgDecorationManagerV1>,
     pub(crate) activation: Option<xdg_activation_v1::XdgActivationV1>,
     pub(crate) cursor_shapes: Option<wp_cursor_shape_manager_v1::WpCursorShapeManagerV1>,
+    pub(crate) viewporter: Option<wp_viewporter::WpViewporter>,
     pub(crate) lock_manager: Option<ext_session_lock_manager_v1::ExtSessionLockManagerV1>,
     /// Whether the compositor has granted a session lock that is still up.
     pub(crate) locked: bool,
@@ -142,6 +147,7 @@ impl State {
             decorations: None,
             activation: None,
             cursor_shapes: None,
+            viewporter: None,
             lock_manager: None,
             locked: false,
             surfaces: Vec::new(),
@@ -210,6 +216,29 @@ impl State {
             let seat = registry.bind(name, version.min(SEAT), qh, ());
             self.seats.push((name, seat));
         }
+    }
+
+    /// Have the compositor enlarge what is on `surface` from here on.
+    pub(crate) fn enlarge(
+        &mut self,
+        surface: &wl_surface::WlSurface,
+        qh: &QueueHandle<Self>,
+        enlarged: crate::Enlarged,
+    ) {
+        let (Some(viewporter), Some(known)) = (
+            &self.viewporter,
+            self.surfaces.iter_mut().find(|k| &k.surface == surface),
+        ) else {
+            return;
+        };
+        let viewport = known
+            .viewport
+            .get_or_insert_with(|| viewporter.get_viewport(surface, qh, ()));
+        viewport.set_source(0.0, 0.0, enlarged.of.0, enlarged.of.1);
+        viewport.set_destination(
+            i32::try_from(enlarged.to.0).unwrap_or(1).max(1),
+            i32::try_from(enlarged.to.1).unwrap_or(1).max(1),
+        );
     }
 
     fn known(&mut self, surface: &wl_surface::WlSurface) -> Option<&mut Known> {
@@ -855,6 +884,8 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
 }
 
 delegate_noop!(State: ignore wl_compositor::WlCompositor);
+delegate_noop!(State: ignore wp_viewporter::WpViewporter);
+delegate_noop!(State: ignore wp_viewport::WpViewport);
 delegate_noop!(State: ignore wl_shm::WlShm);
 delegate_noop!(State: ignore wl_shm_pool::WlShmPool);
 delegate_noop!(State: ignore wl_region::WlRegion);

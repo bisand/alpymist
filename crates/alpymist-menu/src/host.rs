@@ -207,6 +207,7 @@ impl Host {
                 opaque: false,
                 damage: None,
                 paced: true,
+                enlarged: None,
             },
         );
         if let Err(e) = shown {

@@ -111,6 +111,30 @@ pointer keeps what it wore.
   times as the block is tall, in one call. One pass again, made by the kernel.
   The screensaver costs 0.7 of a point more than it did with a mapping, and
   holds 2.7 MB where it held 6.8.
+- **The compositor doubles a screensaver's picture.** A screensaver draws
+  small and blows the picture up in blocks. With `wp-viewporter` the
+  compositor can do the blowing up, on the graphics card it already draws
+  with: what is handed over is smaller, and so is what the compositor has to
+  take in. The same machine, the same picture, two runs of twenty seconds:
+
+  | handed over | screensaver | Hyprland | on the screen |
+  |---|---|---|---|
+  | the whole screen | 10.1% | 16.5% to 18.3% | as drawn |
+  | half the screen each way | 7.7% | 11.4% to 12.3% | as drawn, to the eye |
+  | a third | 7.1% | 7.9% | a little soft |
+  | the drawn picture, a sixth | 6.7% | 5.8% | blurred |
+
+  Hyprland smooths what it enlarges, so the more is left to it the softer a
+  block's edges come out. Left a doubling, an edge is a pixel soft and was
+  judged, on the machine's own screen, to look as it always had. So a
+  doubling is what it is left and no more: a picture is handed over at half
+  its size on the screen where its block halves, and whole where it does not
+  or where the compositor cannot enlarge. Together the two cost 19% to 20% of a core
+  where they cost 26% with the toolkit.
+
+  The look is now partly the compositor's. One that enlarged without
+  smoothing would show the blocks exactly; one that smoothed more than
+  Hyprland does would soften them more, and this would want looking at again.
 - Programs hold less memory: a mapped buffer counted against the program as
   well as the compositor. The screensaver went from 26 MB resident to 10, the
   lock from 44 to 19.
