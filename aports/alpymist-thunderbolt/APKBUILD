@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-thunderbolt
-pkgver=0.3.5
+pkgver=0.3.6
 pkgrel=0
 pkgdesc="Alpymist Thunderbolt: asks before a dock or any other Thunderbolt or USB4 device is let in"
 url="https://github.com/bisand/alpymist"
