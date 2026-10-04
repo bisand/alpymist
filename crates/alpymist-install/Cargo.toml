@@ -28,7 +28,7 @@ denise-layout = { workspace = true }
 denise-winit = { workspace = true, optional = true }
 denise-drm = { workspace = true, optional = true }
 denise-evdev = { workspace = true, optional = true }
-signal-hook = { version = "0.3", optional = true }
+signal-hook = { workspace = true, optional = true }
 
 # Timing probes, not shipped. The DRM one needs a display, so it is kept off
 # the default build where `cargo clippy --all-targets` would try to compile it
@@ -44,7 +44,7 @@ winit = ["dep:denise-winit"]
 drm = ["alpymist-ui/drm", "dep:denise-drm", "dep:denise-evdev", "dep:signal-hook"]
 
 [dev-dependencies]
-png = "0.17"
+png = { workspace = true }
 
 [lints]
 workspace = true

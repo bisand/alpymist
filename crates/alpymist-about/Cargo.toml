@@ -23,7 +23,7 @@ denise-render = { workspace = true }
 denise-text = { workspace = true }
 
 [dev-dependencies]
-png = "0.17"
+png = { workspace = true }
 
 [lints]
 workspace = true

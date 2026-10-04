@@ -37,14 +37,14 @@ denise-text = { workspace = true, optional = true }
 serde_json = { workspace = true }
 # iwd is spoken to over the system bus: structured answers, change signals,
 # and an agent for passphrases, none of which iwctl's tables give.
-zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
+zbus = { workspace = true }
 
 # The address is not on iwd's bus; the kernel is asked for it.
 [target.'cfg(target_os = "linux")'.dependencies]
-rustix = { version = "1", default-features = false, features = ["std", "net"] }
+rustix = { workspace = true, features = ["net"] }
 
 [dev-dependencies]
-png = "0.17"
+png = { workspace = true }
 
 [lints]
 workspace = true

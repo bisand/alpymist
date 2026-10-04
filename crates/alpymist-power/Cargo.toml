@@ -42,15 +42,15 @@ denise-render = { workspace = true, optional = true }
 denise-text = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
+toml = { workspace = true }
 
 # Charger and battery changes arrive as kernel uevents; configuration changes
 # as inotify events. Both are polled together.
 [target.'cfg(target_os = "linux")'.dependencies]
-rustix = { version = "1", default-features = false, features = ["std", "event", "fs", "net"] }
+rustix = { workspace = true, features = ["event", "fs", "net"] }
 
 [dev-dependencies]
-png = "0.17"
+png = { workspace = true }
 
 [lints]
 workspace = true

@@ -9,7 +9,7 @@ repository.workspace = true
 
 [dependencies]
 alpymist-displays = { workspace = true }
-rustix = { version = "1", default-features = false, features = ["std", "net", "process"] }
+rustix = { workspace = true, features = ["net", "process"] }
 
 [lints]
 workspace = true

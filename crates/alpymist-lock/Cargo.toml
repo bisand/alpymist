@@ -25,15 +25,15 @@ denise-render = { workspace = true }
 # The session lock and the password check are both Linux's. Without them the
 # crate is the account lookup and the snapshot, which build anywhere.
 [target.'cfg(target_os = "linux")'.dependencies]
-bytemuck = "1"
+bytemuck = { workspace = true }
 # PAM, through bindings of our own: the three functions the lock uses,
 # written out, so the builder needs linux-pam-dev and nothing else.
 alpymist-pam = { workspace = true }
-smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop", "xkbcommon"] }
+smithay-client-toolkit = { workspace = true }
 
 [dev-dependencies]
 # The snapshot example: the lock screen rendered to a PNG for review.
-png = "0.17"
+png = { workspace = true }
 
 [lints]
 workspace = true

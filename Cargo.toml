@@ -62,6 +62,9 @@ alpymist-ui = { path = "crates/alpymist-ui" }
 alpymist-watchdog = { path = "crates/alpymist-watchdog" }
 alpymist-widget = { path = "crates/alpymist-widget" }
 alpymist-wifi = { path = "crates/alpymist-wifi", default-features = false }
+# Every third-party crate the workspace uses is declared here, once, and
+# named by `workspace = true` where it is used: `cargo xtask deps` holds the
+# members to that, and to the list in xtask/src/deps.rs (ADR 0023).
 clap = { version = "4", features = ["derive"] }
 # DeniseUI: direct rendering to DRM/KMS or the framebuffer, no compositor.
 # "0.31" accepts 0.31.x, so patch releases arrive via `cargo update`.
@@ -74,8 +77,27 @@ denise-evdev = "0.31"
 denise-layout = "0.31"
 denise-fbdev = "0.31"
 denise-winit = "0.31"
+# What is not ours. Each is on the list in xtask/src/deps.rs, with its reason.
+blocking = "1"
+bytemuck = "1"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+jiff = { version = "0.2", default-features = false, features = ["std"] }
+jpeg-encoder = { version = "0.7.1", default-features = false, features = ["std"] }
+khronos-egl = { version = "6", features = ["dynamic"] }
+libloading = "0.8"
+png = "0.18"
+quick-xml = "0.41"
+rustix = { version = "1", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha1_smol = "1"
+signal-hook = "0.3"
+smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop", "xkbcommon"] }
+toml = { version = "1", default-features = false, features = ["parse", "serde", "std"] }
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
+zeroize = "1"
+zune-core = "0.5"
+zune-jpeg = "0.5"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

@@ -55,7 +55,11 @@ impl Picture {
         // Palettes and sixteen bits a channel come out as eight-bit RGB or RGBA.
         decoder.set_transformations(png::Transformations::normalize_to_color8());
         let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
-        let mut buf = vec![0; reader.output_buffer_size()];
+        // None is a picture too large for this machine's memory to address.
+        let size = reader
+            .output_buffer_size()
+            .ok_or("the picture is too large")?;
+        let mut buf = vec![0; size];
         let info = reader.next_frame(&mut buf).map_err(|e| e.to_string())?;
         buf.truncate(info.buffer_size());
         let rgb = match info.color_type {

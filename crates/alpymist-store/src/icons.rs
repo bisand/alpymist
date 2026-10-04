@@ -82,7 +82,7 @@ pub fn decode(source: impl std::io::BufRead + std::io::Seek, max_pixels: u64) ->
     if u64::from(width) * u64::from(height) > max_pixels {
         return None;
     }
-    let mut buf = vec![0; reader.output_buffer_size()];
+    let mut buf = vec![0; reader.output_buffer_size()?];
     let info = reader.next_frame(&mut buf).ok()?;
     let channels = match info.color_type {
         png::ColorType::Grayscale => 1,

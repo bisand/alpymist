@@ -61,3 +61,13 @@ parser there would be a dependency of the check on dependencies.
   in CI, and a decision of its own.
 - squint and validity-fprintd are built from their own repositories with
   their own lockfiles, and this check does not see them.
+
+## Addendum, 2026-10-04: declared once
+
+The check gained a fifth failure: a member that names a third-party crate
+with a version of its own. Every such crate is now declared once, in
+`[workspace.dependencies]`, and named by `workspace = true` where it is used,
+with whatever features that member adds. `png = "0.17"` had been written in
+seventeen manifests and `toml` in eleven, with three lists of features; that
+is how a workspace comes to lock two versions of a thing without anybody
+choosing to.

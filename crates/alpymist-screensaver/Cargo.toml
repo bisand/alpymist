@@ -35,7 +35,7 @@ alpymist-displays = { workspace = true, optional = true }
 denise = { workspace = true, optional = true }
 denise-render = { workspace = true, optional = true }
 serde = { workspace = true }
-toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
+toml = { workspace = true }
 
 [lints]
 workspace = true

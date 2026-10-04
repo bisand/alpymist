@@ -4,7 +4,8 @@
 //! a habit; this makes it a check. `deps` fails when a locked package comes
 //! from anywhere but crates.io, when a manifest names a third-party crate
 //! that [`ALLOWED`] does not, when [`ALLOWED`] names one nothing uses any
-//! more, and when the lockfile has grown past [`LOCKED`]. So a new dependency
+//! more, when a member gives a crate a version of its own and not the
+//! workspace's, and when the lockfile has grown past [`LOCKED`]. So a new dependency
 //! is an edit here, with its reason beside it, and not a side effect of
 //! another change.
 //!
@@ -93,21 +94,25 @@ const ALLOWED: [(&str, &str); 21] = [
 /// is about half of it: the desktop preview's winit is most of the rest. A
 /// crude figure, but one that cannot grow without being edited here. When the
 /// lockfile shrinks, bring it down.
-const LOCKED: usize = 312;
+const LOCKED: usize = 310;
 
 /// Check the workspace at `root` against all of the above.
 pub fn deps(root: &Path) -> Result<()> {
     let manifest = read(&root.join("Cargo.toml"))?;
     let mut members = BTreeSet::new();
     let mut named: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for name in dependencies(&manifest) {
+    for (name, _) in dependencies(&manifest) {
         named.entry(name).or_default().push("Cargo.toml".to_owned());
     }
+    let mut apart = Vec::new();
     for dir in workspace_members(&manifest) {
         let text = read(&root.join(&dir).join("Cargo.toml"))?;
         let package =
             package_name(&text).with_context(|| format!("{dir}/Cargo.toml names no package"))?;
-        for name in dependencies(&text) {
+        for (name, shared) in dependencies(&text) {
+            if !shared {
+                apart.push((name.clone(), package.clone()));
+            }
             named.entry(name).or_default().push(package.clone());
         }
         members.insert(package);
@@ -117,6 +122,16 @@ pub fn deps(root: &Path) -> Result<()> {
     let locked = locked(&read(&root.join("Cargo.lock"))?);
     let third_party = locked.iter().filter(|p| p.source.is_some()).count();
     let mut wrong = problems(&members, &named, &locked);
+    // One version of each, written once: a member that writes its own is how
+    // two of them end up in the lockfile.
+    for (name, package) in apart {
+        if !members.contains(&name) {
+            wrong.push(format!(
+                "{package} gives {name} a version of its own; declare it in \
+                 [workspace.dependencies] and name it with `workspace = true`"
+            ));
+        }
+    }
     if third_party > LOCKED {
         wrong.push(format!(
             "Cargo.lock holds {third_party} third-party packages, and {LOCKED} is the most \
@@ -243,8 +258,9 @@ fn package_name(manifest: &str) -> Option<String> {
 
 /// Every crate a manifest names as a dependency of any kind: plain, dev and
 /// build, for every target, and the workspace's own table. By the name the
-/// registry knows it by, where a `package =` gives it another.
-fn dependencies(manifest: &str) -> Vec<String> {
+/// registry knows it by, where a `package =` gives it another; and with it,
+/// whether it is taken from the workspace's table with `workspace = true`.
+fn dependencies(manifest: &str) -> Vec<(String, bool)> {
     let mut out = Vec::new();
     let mut inside = false;
     for line in manifest.lines() {
@@ -254,7 +270,7 @@ fn dependencies(manifest: &str) -> Vec<String> {
                 .iter()
                 .find_map(|kind| table.strip_prefix(kind)?.strip_prefix('.'));
             if let Some(name) = own {
-                out.push(name.to_owned());
+                out.push((name.to_owned(), false));
             }
             inside = KINDS
                 .iter()
@@ -276,7 +292,11 @@ fn dependencies(manifest: &str) -> Vec<String> {
         let renamed = rest
             .split_once("package = \"")
             .and_then(|(_, after)| after.split('"').next());
-        out.push(renamed.map_or(key, str::to_owned));
+        let shared = rest.starts_with(".workspace")
+            || rest
+                .split_once("workspace")
+                .is_some_and(|(_, after)| after.trim_start().starts_with("= true"));
+        out.push((renamed.map_or(key, str::to_owned), shared));
     }
     out
 }
@@ -364,8 +384,10 @@ workspace = true
 
     #[test]
     fn every_kind_of_dependency_is_found_and_nothing_else() {
+        let found = dependencies(MANIFEST);
+        let names: Vec<&str> = found.iter().map(|(name, _)| name.as_str()).collect();
         assert_eq!(
-            dependencies(MANIFEST),
+            names,
             [
                 "alpymist-core",
                 "denise",
@@ -376,6 +398,9 @@ workspace = true
                 "cc"
             ]
         );
+        // Only the first two are taken from the workspace's table.
+        let shared: Vec<bool> = found.iter().map(|(_, shared)| *shared).collect();
+        assert_eq!(shared, [true, true, false, false, false, false, false]);
         assert_eq!(package_name(MANIFEST).as_deref(), Some("alpymist-lock"));
     }
 
@@ -386,7 +411,8 @@ workspace = true
                     [workspace.dependencies]\na = { path = \"crates/a\" }\nserde = \"1\"\n\n\
                     [profile.release]\nlto = true\n";
         assert_eq!(workspace_members(root), ["crates/a", "xtask"]);
-        assert_eq!(dependencies(root), ["a", "serde"]);
+        let names: Vec<String> = dependencies(root).into_iter().map(|(n, _)| n).collect();
+        assert_eq!(names, ["a", "serde"]);
     }
 
     const LOCK: &str = "version = 4\n\n[[package]]\nname = \"alpymist\"\nversion = \"0.3.4\"\n\

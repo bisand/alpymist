@@ -47,10 +47,10 @@ denise = { workspace = true, optional = true }
 denise-render = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-toml = { version = "0.9", default-features = false, features = ["parse", "display", "serde", "std"] }
+toml = { workspace = true, features = ["display"] }
 
 [dev-dependencies]
-png = "0.17"
+png = { workspace = true }
 
 [lints]
 workspace = true
