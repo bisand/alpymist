@@ -11,7 +11,7 @@ use smithay_client_toolkit::reexports::client::globals::registry_queue_init;
 use smithay_client_toolkit::reexports::client::protocol::wl_output;
 use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
 use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
-use smithay_client_toolkit::{delegate_output, delegate_registry, registry_handlers};
+use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
 
 struct Outputs {
     registry: RegistryState,
@@ -98,5 +98,5 @@ impl ProvidesRegistryState for Outputs {
     registry_handlers![OutputState];
 }
 
-delegate_output!(Outputs);
+delegate_dispatch2!(Outputs);
 delegate_registry!(Outputs);

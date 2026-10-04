@@ -32,16 +32,13 @@ use smithay_client_toolkit::reexports::protocols::wp::cursor_shape::v1::client::
 };
 use smithay_client_toolkit::seat::pointer::cursor_shape::CursorShapeManager;
 use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState},
-    delegate_activation, delegate_compositor, delegate_keyboard, delegate_output,
-    delegate_pointer, delegate_registry, delegate_seat, delegate_shm, delegate_xdg_shell,
-    delegate_xdg_window,
-    output::{OutputHandler, OutputState},
+    compositor::{CompositorHandler, FrameCallbackData, CompositorState},
+    delegate_dispatch2, delegate_registry, output::{OutputHandler, OutputState},
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
         Capability, SeatHandler, SeatState,
-        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers},
+        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
         pointer::{PointerEvent, PointerEventKind, PointerHandler},
     },
     shell::{
@@ -403,7 +400,7 @@ impl<A: App> Host<A> {
         }
         let surface = self.window.wl_surface();
         surface.damage_buffer(0, 0, w, h);
-        surface.frame(&self.qh, surface.clone());
+        surface.frame(&self.qh, FrameCallbackData(surface.clone()));
         if buffer.attach_to(surface).is_err() {
             return;
         }
@@ -471,6 +468,7 @@ impl<A: App> Host<A> {
                     seat_and_serial: None,
                     surface: Some(self.window.wl_surface().clone()),
                     app_id: Some(self.app_id.clone()),
+                    udata: (),
                 },
             );
         }
@@ -618,9 +616,9 @@ impl<A: App> WindowHandler for Host<A> {
 }
 
 impl<A: App> ActivationHandler for Host<A> {
-    type RequestData = RequestData;
+    type RequestUdata = ();
 
-    fn new_token(&mut self, token: String, _: &Self::RequestData) {
+    fn new_token(&mut self, token: String, _: &RequestData<()>) {
         if let Some(activation) = &self.activation {
             activation.activate::<Self>(self.window.wl_surface(), token);
         }
@@ -718,6 +716,19 @@ impl<A: App> KeyboardHandler for Host<A> {
         self.on_key(&event);
     }
 
+    /// A key held, repeated by the compositor itself where it does that:
+    /// the same as the toolkit's own repeat, which is the same as a press.
+    fn repeat_key(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: u32,
+        event: KeyEvent,
+    ) {
+        self.on_key(&event);
+    }
+
     fn release_key(
         &mut self,
         _: &Connection,
@@ -735,6 +746,7 @@ impl<A: App> KeyboardHandler for Host<A> {
         _: &wl_keyboard::WlKeyboard,
         _: u32,
         modifiers: Modifiers,
+        _: RawModifiers,
         _: u32,
     ) {
         self.modifiers = modifiers;
@@ -810,13 +822,5 @@ impl<A: App> ProvidesRegistryState for Host<A> {
     registry_handlers![OutputState, SeatState];
 }
 
-delegate_compositor!(@<A: App> Host<A>);
-delegate_output!(@<A: App> Host<A>);
-delegate_shm!(@<A: App> Host<A>);
-delegate_seat!(@<A: App> Host<A>);
-delegate_keyboard!(@<A: App> Host<A>);
-delegate_pointer!(@<A: App> Host<A>);
-delegate_xdg_shell!(@<A: App> Host<A>);
-delegate_xdg_window!(@<A: App> Host<A>);
-delegate_activation!(@<A: App> Host<A>);
+delegate_dispatch2!(@<A: App> Host<A>);
 delegate_registry!(@<A: App> Host<A>);
