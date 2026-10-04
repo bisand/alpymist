@@ -42,7 +42,7 @@ toml = { version = "0.9", default-features = false, features = ["parse", "displa
 
 # Devices arriving are kernel uevents on a netlink socket any user may read.
 [target.'cfg(target_os = "linux")'.dependencies]
-nix = { version = "0.29", default-features = false, features = ["socket", "poll"] }
+rustix = { version = "1", default-features = false, features = ["std", "event", "net"] }
 
 [lints]
 workspace = true

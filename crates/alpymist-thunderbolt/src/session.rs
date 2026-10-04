@@ -79,27 +79,26 @@ impl Changes {
     #[cfg(target_os = "linux")]
     #[allow(clippy::must_use_candidate)]
     pub fn wait(&self, timeout: Duration) -> bool {
-        use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
-        use std::os::fd::{AsFd, AsRawFd};
+        use rustix::event::{PollFd, PollFlags, Timespec, poll};
+        use rustix::net::{RecvFlags, recv};
 
         let Some(u) = &self.uevents else {
             std::thread::sleep(timeout);
             return false;
         };
-        let mut fds = [PollFd::new(u.as_fd(), PollFlags::POLLIN)];
-        let limit = PollTimeout::try_from(timeout).unwrap_or(PollTimeout::MAX);
-        if poll(&mut fds, limit).unwrap_or(0) <= 0 {
+        let mut fds = [PollFd::new(u, PollFlags::IN)];
+        let limit = Timespec {
+            tv_sec: i64::try_from(timeout.as_secs()).unwrap_or(i64::MAX),
+            tv_nsec: timeout.subsec_nanos().into(),
+        };
+        if poll(&mut fds, Some(&limit)).unwrap_or(0) == 0 {
             return false;
         }
         // A dock arrives as a burst: the device, then what is behind it.
         std::thread::sleep(Duration::from_millis(300));
         let mut buf = [0u8; 4096];
         let mut changed = false;
-        while let Ok(n) = nix::sys::socket::recv(
-            u.as_raw_fd(),
-            &mut buf,
-            nix::sys::socket::MsgFlags::MSG_DONTWAIT,
-        ) {
+        while let Ok((n, _)) = recv(u, &mut buf[..], RecvFlags::DONTWAIT) {
             if n == 0 {
                 break;
             }
@@ -125,19 +124,17 @@ impl Default for Changes {
 
 #[cfg(target_os = "linux")]
 fn uevents() -> Option<std::os::fd::OwnedFd> {
-    use nix::sys::socket::{
-        AddressFamily, NetlinkAddr, SockFlag, SockProtocol, SockType, bind, socket,
-    };
-    use std::os::fd::AsRawFd;
-    let fd = socket(
-        AddressFamily::Netlink,
-        SockType::Datagram,
-        SockFlag::SOCK_CLOEXEC | SockFlag::SOCK_NONBLOCK,
-        SockProtocol::NetlinkKObjectUEvent,
+    use rustix::net::netlink::{KOBJECT_UEVENT, SocketAddrNetlink};
+    use rustix::net::{AddressFamily, SocketFlags, SocketType, bind, socket_with};
+    let fd = socket_with(
+        AddressFamily::NETLINK,
+        SocketType::DGRAM,
+        SocketFlags::CLOEXEC | SocketFlags::NONBLOCK,
+        Some(KOBJECT_UEVENT),
     )
     .ok()?;
     // Group 1 is the kernel's own broadcast; udev's rebroadcast is another.
-    bind(fd.as_raw_fd(), &NetlinkAddr::new(0, 1)).ok()?;
+    bind(&fd, &SocketAddrNetlink::new(0, 1)).ok()?;
     Some(fd)
 }
 

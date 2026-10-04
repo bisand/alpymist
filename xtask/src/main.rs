@@ -8,14 +8,15 @@
 
 mod build_order;
 mod deps;
+mod error;
 mod installer_data;
 mod publish;
 mod qemu;
 mod serial;
 mod version;
 
+use crate::error::{Context, Result, bail};
 use alpymist_core::Channel;
-use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use std::time::Duration;

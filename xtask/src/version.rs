@@ -10,7 +10,7 @@
 //! build that produced the package, so this resets it to 0 on a bump and
 //! leaves it alone otherwise.
 
-use anyhow::{Context, Result, bail, ensure};
+use crate::error::{Context, Result, bail, ensure};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};

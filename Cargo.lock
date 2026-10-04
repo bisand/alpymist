@@ -109,7 +109,6 @@ name = "alpymist-core"
 version = "0.3.6"
 dependencies = [
  "serde",
- "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -141,7 +140,6 @@ dependencies = [
  "alpymist-core",
  "khronos-egl",
  "libloading",
- "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -222,7 +220,7 @@ dependencies = [
 
 [[package]]
 name = "alpymist-pam"
-version = "0.3.5"
+version = "0.3.6"
 
 [[package]]
 name = "alpymist-power"
@@ -232,8 +230,8 @@ dependencies = [
  "denise",
  "denise-render",
  "denise-text",
- "nix",
  "png",
+ "rustix 1.1.5",
  "serde",
  "serde_json",
  "toml",
@@ -357,7 +355,7 @@ dependencies = [
  "denise",
  "denise-render",
  "denise-text",
- "nix",
+ "rustix 1.1.5",
  "serde",
  "toml",
 ]
@@ -419,8 +417,8 @@ dependencies = [
  "denise",
  "denise-render",
  "denise-text",
- "nix",
  "png",
+ "rustix 1.1.5",
  "serde_json",
  "zbus",
 ]
@@ -499,12 +497,6 @@ dependencies = [
  "once_cell_polyfill",
  "windows-sys 0.61.2",
 ]
-
-[[package]]
-name = "anyhow"
-version = "1.0.104"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "arrayref"
@@ -1745,7 +1737,6 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
- "memoffset",
 ]
 
 [[package]]
@@ -3323,7 +3314,6 @@ name = "xtask"
 version = "0.3.6"
 dependencies = [
  "alpymist-core",
- "anyhow",
  "clap",
 ]
 

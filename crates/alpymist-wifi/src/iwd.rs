@@ -193,7 +193,7 @@ impl Iwd {
         {
             let mut link = self.diagnostics(station_path);
             link.name = name;
-            link.ipv4 = state.device.as_deref().and_then(ipv4);
+            link.ipv4 = state.device.as_deref().and_then(crate::address::ipv4);
             if link.rssi_dbm.is_none() {
                 link.rssi_dbm = state.network(&link.name).map(|n| n.signal_dbm);
             }
@@ -613,12 +613,4 @@ fn describe(error: &zbus::Error) -> String {
         }
         other => other.to_string(),
     }
-}
-
-/// The interface's first IPv4 address.
-fn ipv4(interface: &str) -> Option<String> {
-    nix::ifaddrs::getifaddrs()
-        .ok()?
-        .filter(|a| a.interface_name == interface)
-        .find_map(|a| a.address?.as_sockaddr_in().map(|s| s.ip().to_string()))
 }
