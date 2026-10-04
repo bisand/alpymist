@@ -33,15 +33,13 @@ use smithay_client_toolkit::reexports::client::protocol::{
 };
 use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
 use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
-    delegate_registry, delegate_seat, delegate_shm,
-    output::{OutputHandler, OutputState},
+    compositor::{CompositorHandler, FrameCallbackData, CompositorState},
+    delegate_dispatch2, delegate_registry, output::{OutputHandler, OutputState},
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
         Capability, SeatHandler, SeatState,
-        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers},
+        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
         pointer::{PointerEvent, PointerEventKind, PointerHandler},
     },
     shell::{
@@ -617,7 +615,7 @@ impl<W: Widget> Host<W> {
             Some(old) => old.union(&panel),
         };
         surface.damage_buffer(damage.x, damage.y, damage.width, damage.height);
-        surface.frame(&self.qh, surface.clone());
+        surface.frame(&self.qh, FrameCallbackData(surface.clone()));
         if buffer.attach_to(surface).is_err() {
             return;
         }
@@ -976,6 +974,19 @@ impl<W: Widget> KeyboardHandler for Host<W> {
         self.on_key(&event);
     }
 
+    /// A key held, repeated by the compositor itself where it does that:
+    /// the same as the toolkit's own repeat, which is the same as a press.
+    fn repeat_key(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: u32,
+        event: KeyEvent,
+    ) {
+        self.on_key(&event);
+    }
+
     fn release_key(
         &mut self,
         _: &Connection,
@@ -993,6 +1004,7 @@ impl<W: Widget> KeyboardHandler for Host<W> {
         _: &wl_keyboard::WlKeyboard,
         _: u32,
         modifiers: Modifiers,
+        _: RawModifiers,
         _: u32,
     ) {
         let caps = modifiers.caps_lock != self.modifiers.caps_lock;
@@ -1096,11 +1108,5 @@ impl<W: Widget> ProvidesRegistryState for Host<W> {
     registry_handlers![OutputState, SeatState];
 }
 
-delegate_compositor!(@<W: Widget> Host<W>);
-delegate_output!(@<W: Widget> Host<W>);
-delegate_shm!(@<W: Widget> Host<W>);
-delegate_seat!(@<W: Widget> Host<W>);
-delegate_keyboard!(@<W: Widget> Host<W>);
-delegate_pointer!(@<W: Widget> Host<W>);
-delegate_layer!(@<W: Widget> Host<W>);
+delegate_dispatch2!(@<W: Widget> Host<W>);
 delegate_registry!(@<W: Widget> Host<W>);

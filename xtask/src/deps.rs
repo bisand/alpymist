@@ -78,7 +78,12 @@ const ALLOWED: [(&str, &str); 17] = [
 /// is about half of it: the desktop preview's winit is most of the rest. A
 /// crude figure, but one that cannot grow without being edited here. When the
 /// lockfile shrinks, bring it down.
-const LOCKED: usize = 299;
+///
+/// It went up by four, from 299, when the Wayland hosts moved to the current
+/// smithay-client-toolkit: winit, under the desktop preview, still wants the
+/// old one, so the lockfile holds both. What ships holds one, and lost its
+/// second rustix, linux-raw-sys and memmap2 by the move.
+const LOCKED: usize = 303;
 
 /// Check the workspace at `root` against all of the above.
 pub fn deps(root: &Path) -> Result<()> {

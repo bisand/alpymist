@@ -40,15 +40,14 @@ use smithay_client_toolkit::reexports::protocols::wp::cursor_shape::v1::client::
 };
 use smithay_client_toolkit::seat::pointer::cursor_shape::CursorShapeManager;
 use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState, Region},
-    delegate_compositor, delegate_keyboard, delegate_output, delegate_pointer, delegate_registry,
-    delegate_seat, delegate_session_lock, delegate_shm,
+    compositor::{CompositorHandler, FrameCallbackData, CompositorState, Region},
+    delegate_dispatch2, delegate_registry,
     output::{OutputHandler, OutputState},
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
         Capability, SeatHandler, SeatState,
-        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers},
+        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
         pointer::{PointerEvent, PointerEventKind, PointerHandler},
     },
     session_lock::{
@@ -377,7 +376,7 @@ impl Lock {
         } else {
             surface.damage_buffer(changed.x, changed.y, changed.width, changed.height);
         }
-        surface.frame(&self.qh, surface.clone());
+        surface.frame(&self.qh, FrameCallbackData(surface.clone()));
         if buffer.attach_to(&surface).is_err() {
             return;
         }
@@ -866,6 +865,19 @@ impl KeyboardHandler for Lock {
         self.on_key(&event);
     }
 
+    /// A key held, repeated by the compositor itself where it does that:
+    /// the same as the toolkit's own repeat, which is the same as a press.
+    fn repeat_key(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: u32,
+        event: KeyEvent,
+    ) {
+        self.on_key(&event);
+    }
+
     fn release_key(
         &mut self,
         _: &Connection,
@@ -883,6 +895,7 @@ impl KeyboardHandler for Lock {
         _: &wl_keyboard::WlKeyboard,
         _: u32,
         modifiers: Modifiers,
+        _: RawModifiers,
         _: u32,
     ) {
         let changed = modifiers.caps_lock != self.modifiers.caps_lock;
@@ -946,11 +959,5 @@ impl ProvidesRegistryState for Lock {
     registry_handlers![OutputState, SeatState];
 }
 
-delegate_compositor!(Lock);
-delegate_output!(Lock);
-delegate_shm!(Lock);
-delegate_seat!(Lock);
-delegate_keyboard!(Lock);
-delegate_pointer!(Lock);
-delegate_session_lock!(Lock);
+delegate_dispatch2!(Lock);
 delegate_registry!(Lock);
