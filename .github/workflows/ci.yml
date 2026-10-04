@@ -24,12 +24,12 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libpam0g-dev
       - run: cargo fmt --all --check
       # Every APKBUILD's pkgver is the workspace version (ADR 0008).
-      - run: cargo run -q -p xtask -- version
+      - run: cargo run -q --locked -p xtask -- version
       # Every crate is from crates.io, and every third-party one a manifest
       # names is on the list in xtask/src/deps.rs (ADR 0023).
-      - run: cargo run -q -p xtask -- deps
-      - run: cargo clippy --workspace --all-targets --features alpymist-ui/render -- -D warnings
-      - run: cargo test --workspace --features alpymist-ui/render
+      - run: cargo run -q --locked -p xtask -- deps
+      - run: cargo clippy --locked --workspace --all-targets --features alpymist-ui/render -- -D warnings
+      - run: cargo test --locked --workspace --features alpymist-ui/render
       # What the installer, the splash and the login screen actually ship as.
       # Nothing above compiles them: a workspace build takes each crate's
       # default features, and for these three that is the desktop preview, not
@@ -37,4 +37,4 @@ jobs:
       # share would otherwise be found by the package build, twenty minutes
       # into Dev, which is how it was found once. Linted here too, since clippy
       # above only ever sees the preview.
-      - run: cargo clippy --no-default-features --features drm -p alpymist-greeter -p alpymist-install -p alpymist-splash --all-targets -- -D warnings
+      - run: cargo clippy --locked --no-default-features --features drm -p alpymist-greeter -p alpymist-install -p alpymist-splash --all-targets -- -D warnings

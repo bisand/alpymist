@@ -16,15 +16,21 @@ CI runs exactly this, so run it before pushing:
 
 ```sh
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --features alpymist-ui/render -- -D warnings
-cargo test --workspace --features alpymist-ui/render
+cargo clippy --locked --workspace --all-targets --features alpymist-ui/render -- -D warnings
+cargo test --locked --workspace --features alpymist-ui/render
 # What the installer, splash and greeter ship as. Linux only: the DRM
 # backend does not build on macOS.
-cargo clippy --no-default-features --features drm -p alpymist-greeter \
+cargo clippy --locked --no-default-features --features drm -p alpymist-greeter \
   -p alpymist-install -p alpymist-splash --all-targets -- -D warnings
-cargo run -q -p xtask -- version          # every pkgver must equal the workspace version
-cargo run -q -p xtask -- deps             # every crate from crates.io, every third-party one on the list
+cargo run -q --locked -p xtask -- version # every pkgver must equal the workspace version
+cargo run -q --locked -p xtask -- deps    # every crate from crates.io, every third-party one on the list
 ```
+
+`--locked` everywhere, because the packages are built with it: a `Cargo.lock`
+that is behind the manifests builds fine without and fails the Dev build
+after the merge. A branch that adds a crate and is rebased over a version
+bump is how that happens. `cargo metadata --format-version 1 >/dev/null`
+brings the lockfile up to date; commit what it changes.
 
 ## Invariants
 
