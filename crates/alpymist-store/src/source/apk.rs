@@ -58,7 +58,7 @@ impl Apk {
             .into_iter()
             .map(|(tag, url)| {
                 let index = format!("{}/{arch}/APKINDEX.tar.gz", url.trim_end_matches('/'));
-                let hash = sha1_smol::Sha1::from(index.as_bytes()).digest().to_string();
+                let hash = crate::sha1::hex(index.as_bytes());
                 let label = url
                     .trim_end_matches('/')
                     .rsplit('/')

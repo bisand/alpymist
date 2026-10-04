@@ -39,11 +39,7 @@ const OURS: [&str; 10] = [
 /// Every third-party crate a manifest in this workspace may name, and what it
 /// is for. Adding a line is the review: say why nothing of ours, and nothing
 /// already here, does the job. Those with an issue beside them are to go.
-const ALLOWED: [(&str, &str); 21] = [
-    (
-        "blocking",
-        "one wait off the polkit agent's thread. To go, #115",
-    ),
+const ALLOWED: [(&str, &str); 17] = [
     (
         "bytemuck",
         "a shared buffer's bytes as pixels, without unsafe",
@@ -54,16 +50,8 @@ const ALLOWED: [(&str, &str); 21] = [
         "apk's and Flathub's gzipped indexes, in pure Rust",
     ),
     (
-        "jiff",
-        "the login screen's clock in the machine's zone. #115",
-    ),
-    (
         "jpeg-encoder",
         "the boot menu's picture, at package build time",
-    ),
-    (
-        "khronos-egl",
-        "EGL's entry points for the GL ES probe. To go, #115",
     ),
     ("libloading", "opening libEGL at run time for that probe"),
     (
@@ -74,10 +62,6 @@ const ALLOWED: [(&str, &str); 21] = [
     ("rustix", "system calls std does not reach, without unsafe"),
     ("serde", "every settings file and every JSON answer"),
     ("serde_json", "Hyprland's answers, and the programs' own"),
-    (
-        "sha1_smol",
-        "the names apk and Flatpak give cached files. To go, #115",
-    ),
     (
         "signal-hook",
         "a signal handler on a bare console, without unsafe",
@@ -94,7 +78,7 @@ const ALLOWED: [(&str, &str); 21] = [
 /// is about half of it: the desktop preview's winit is most of the rest. A
 /// crude figure, but one that cannot grow without being edited here. When the
 /// lockfile shrinks, bring it down.
-const LOCKED: usize = 310;
+const LOCKED: usize = 299;
 
 /// Check the workspace at `root` against all of the above.
 pub fn deps(root: &Path) -> Result<()> {

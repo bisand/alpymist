@@ -15,3 +15,4 @@ pub mod login;
 pub mod stopped;
 pub mod users;
 pub mod vt;
+pub mod zone;

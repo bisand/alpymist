@@ -54,7 +54,7 @@ pub fn fetch(url: &str) -> Result<Rgba, String> {
         return Err("not an https address".into());
     }
     let dir = cache_dir().ok_or("no home directory to keep screenshots in")?;
-    let name = sha1_smol::Sha1::from(url.as_bytes()).digest().to_string();
+    let name = crate::sha1::hex(url.as_bytes());
     let path = dir.join(format!("{name}.png"));
     if !path.exists() {
         std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
