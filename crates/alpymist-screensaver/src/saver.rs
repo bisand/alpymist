@@ -16,7 +16,7 @@ use crate::scene::expand;
 use alpymist_ui::palette::Palette;
 use alpymist_widget::{Key, Outcome, Widget};
 use denise::Frame;
-use denise::geom::{Point, Size};
+use denise::geom::{Point, Rect, Size};
 use std::time::Instant;
 
 /// The screensaver: whatever the program handed over, on the screen.
@@ -27,6 +27,11 @@ pub struct Saver {
     picture: Option<(Size, Box<dyn Painting>)>,
     /// One expanded row, reused every row of every frame.
     row: Vec<u32>,
+    /// The small picture as it was last painted, to tell which of its rows
+    /// the next one changes.
+    last: Vec<u32>,
+    /// The parts of the screen the last frame changed. `None` is all of it.
+    changed: Option<Vec<Rect>>,
     started: Instant,
     /// Where the pointer was when it first reached the surface.
     ///
@@ -44,6 +49,8 @@ impl Saver {
             compose,
             picture: None,
             row: Vec::new(),
+            last: Vec::new(),
+            changed: None,
             started: Instant::now(),
             pointer: None,
         }
@@ -71,6 +78,7 @@ impl Widget for Saver {
         // output changed, or this is the first frame — composes again.
         if self.picture.as_ref().is_none_or(|(was, _)| *was != output) {
             self.picture = Some((output, (self.compose)(output)));
+            self.last.clear();
         }
         let elapsed = self.elapsed();
         let Some((_, picture)) = self.picture.as_mut() else {
@@ -79,12 +87,40 @@ impl Widget for Saver {
         let small = picture.small();
         let block = picture.block();
         let pixels = picture.frame(elapsed);
+        // Much of a picture is the same from one frame to the next — the sky
+        // over a drifting ridge — and rows that are the same need not be
+        // handed to the compositor again. Telling costs a look at the small picture,
+        // which is a sixteenth of the screen or less.
+        self.changed = differing(&self.last, pixels, small.width as usize).map(|bands| {
+            let screen = |drawn: usize| {
+                i32::try_from(drawn)
+                    .unwrap_or(i32::MAX)
+                    .saturating_mul(i32::try_from(block).unwrap_or(1))
+            };
+            bands
+                .into_iter()
+                .map(|rows| {
+                    Rect::new(
+                        0,
+                        screen(rows.start),
+                        screen(small.width as usize),
+                        screen(rows.end - rows.start),
+                    )
+                })
+                .collect()
+        });
+        self.last.clear();
+        self.last.extend_from_slice(pixels);
         expand(pixels, small, block, &mut self.row, |y, line| {
             if let Some(dst) = frame.row_mut(y) {
                 let n = dst.len().min(line.len());
                 dst[..n].copy_from_slice(&line[..n]);
             }
         });
+    }
+
+    fn changed(&self) -> Option<&[Rect]> {
+        self.changed.as_deref()
     }
 
     /// Any key at all takes it away.
@@ -136,6 +172,30 @@ impl Widget for Saver {
     }
 }
 
+/// The rows `now` has different from `before`, in rows of `width`, as bands
+/// of rows that lie together. `None` when they cannot be compared: no picture
+/// before, or one of another size.
+///
+/// Whole rows and not the part of each that changed. Measured on the Atom
+/// (ADR 0026): a span to each row is fewer bytes to hand over and hundreds
+/// more writes to hand them over in, and the writes cost more than the bytes
+/// save — for the screensaver and for the compositor, which is told of every
+/// one. Rows that lie together are one write however many they are.
+fn differing(before: &[u32], now: &[u32], width: usize) -> Option<Vec<core::ops::Range<usize>>> {
+    if width == 0 || before.len() != now.len() {
+        return None;
+    }
+    let mut bands: Vec<core::ops::Range<usize>> = Vec::new();
+    let rows = before.chunks(width).zip(now.chunks(width)).enumerate();
+    for (row, _) in rows.filter(|(_, (was, is))| was != is) {
+        match bands.last_mut() {
+            Some(band) if band.end == row => band.end = row + 1,
+            _ => bands.push(row..row + 1),
+        }
+    }
+    Some(bands)
+}
+
 /// The colour behind everything, for the instant before the first frame is
 /// drawn: the top of the sky, opaque — which is the same `0b121e` the lock
 /// screen uses, so one running into the other shows no seam.
@@ -146,11 +206,13 @@ pub fn backdrop() -> u32 {
 }
 
 #[cfg(test)]
+// One band of rows is a list of one range, and is meant.
+#[allow(clippy::single_range_in_vec_init)]
 mod tests {
     use super::Saver;
     use crate::paint::{FRAME, Painting};
     use alpymist_widget::{Key, Outcome, Widget};
-    use denise::geom::{Point, Size};
+    use denise::geom::{Point, Rect, Size};
 
     /// A picture of one flat colour, to exercise the host with no scene behind it.
     struct Flat {
@@ -183,6 +245,71 @@ mod tests {
                 pixels: vec![0xFF_00_00_00; small.width as usize * small.height as usize],
             })
         }))
+    }
+
+    #[test]
+    fn only_the_rows_that_differ_are_said_to_have_changed() {
+        use super::differing;
+        let before = [1, 1, 2, 2, 3, 3, 4, 4];
+        assert_eq!(differing(&before, &before, 2), Some(vec![]));
+        assert_eq!(
+            differing(&before, &[1, 1, 2, 9, 3, 3, 4, 4], 2),
+            Some(vec![1..2])
+        );
+        assert_eq!(
+            differing(&before, &[9, 1, 2, 2, 3, 3, 9, 9], 2),
+            Some(vec![0..1, 3..4]),
+            "two bands with rows between them that did not change"
+        );
+        assert_eq!(
+            differing(&before, &[1, 9, 9, 2, 3, 9, 4, 4], 2),
+            Some(vec![0..3]),
+            "rows that lie together are one band"
+        );
+        assert_eq!(differing(&[], &before, 2), None, "nothing to compare with");
+        assert_eq!(differing(&before, &before[..6], 2), None, "another size");
+    }
+
+    #[test]
+    fn a_frame_says_which_rows_of_the_screen_it_changed() {
+        struct Stripe(Vec<u32>, u64);
+        impl Painting for Stripe {
+            fn small(&self) -> Size {
+                Size::new(4, 4)
+            }
+            fn block(&self) -> u32 {
+                4
+            }
+            fn frame(&mut self, _: u64) -> &[u32] {
+                // One drawn pixel changes with every frame: the second of
+                // the second row.
+                self.1 += 1;
+                self.0[5] = 0xFF00_0000 | u32::try_from(self.1).unwrap_or(0);
+                &self.0
+            }
+        }
+        let mut saver = Saver::new(Box::new(|_| Box::new(Stripe(vec![0xFF00_0000; 16], 0))));
+        let mut pixels = vec![0u32; 16 * 16];
+        let mut paint = |saver: &mut Saver| {
+            let mut frame = denise::Frame::new(
+                &mut pixels,
+                Size::new(16, 16),
+                16,
+                denise::PixelFormat::Argb8888,
+                denise::BufferAge::Undefined,
+            )
+            .expect("a frame");
+            saver.paint(&mut frame);
+        };
+        assert_eq!(saver.changed(), None, "nothing painted yet");
+        paint(&mut saver);
+        assert_eq!(saver.changed(), None, "the first frame is all new");
+        paint(&mut saver);
+        assert_eq!(
+            saver.changed(),
+            Some(&[Rect::new(0, 4, 16, 4)][..]),
+            "one drawn row, four high on the screen"
+        );
     }
 
     #[test]

@@ -63,7 +63,7 @@ pub mod window;
 
 pub use alpymist_menu::config::{Appearance, Colour};
 use denise::Frame;
-use denise::geom::{Point, Size};
+use denise::geom::{Point, Rect, Size};
 
 /// Read the appearance the menu is configured with, so widgets and the menu
 /// look alike.
@@ -155,6 +155,18 @@ pub trait Widget: 'static {
     /// Paint the panel into `frame`, which is the size [`Widget::layout`]
     /// returned.
     fn paint(&mut self, frame: &mut Frame<'_>);
+
+    /// The parts of the panel the last [`Widget::paint`] left different from
+    /// the one before, when the widget knows. `None`, which is the default,
+    /// is all of it; an empty list is none of it.
+    ///
+    /// Worth answering for something that covers the screen and repaints
+    /// many times a second: what did not change is not sent to the
+    /// compositor again. It is believed, so a part left out that did change
+    /// stays as it was on screen.
+    fn changed(&self) -> Option<&[Rect]> {
+        None
+    }
 
     /// A key was pressed.
     fn key(&mut self, key: Key) -> Outcome;

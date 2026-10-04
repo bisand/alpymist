@@ -76,6 +76,32 @@ pointer keeps what it wore.
   draw when something happens rather than twenty times a second, measure the
   same as before. The way back is a mapping, in one more file allowed
   `unsafe`: an addendum to ADR 0004 and to this, not an edit.
+- **Only what changed is written.** A host already says which parts of its
+  picture differ, for the compositor's sake; each buffer keeps count of what
+  it is behind by and is brought up to date with that alone. A widget may say
+  which parts a frame changed, and the screensaver does, from the small
+  picture it draws: the rows that differ, in bands. The compositor is told of
+  one rectangle around them all.
+
+  That shape was measured into, on the Atom this is tested on (x5-Z8350,
+  1366×768, the mountains at 12 frames a second, three runs of twenty seconds
+  each, as shares of one core):
+
+  | | screensaver | Hyprland |
+  |---|---|---|
+  | the toolkit, mapped buffers | 9.2% | 16.6%, some runs 23.4% |
+  | writing every row | 14.1% | 21.9% |
+  | one range of rows, first changed to last | 13.9% | 16.0% |
+  | a span to each changed row, each told | 16.3% | 22.5% |
+  | bands of changed rows, each told | 13.2% | 18.5% to 21.0% |
+  | bands of changed rows, one rectangle told | 13.1% | 16.0% |
+
+  So the compositor is where it was, and the screensaver costs four points of
+  a core more than it did with a mapping. Narrower than rows loses: the
+  mountains change in a few hundred small places a frame, a place is a write,
+  and the writes cost more than the bytes they save. What is left of the
+  difference is the copy itself, and the way to have that back is the mapping
+  above.
 - Programs hold less memory: a mapped buffer counted against the program as
   well as the compositor. The screensaver went from 26 MB resident to 10, the
   lock from 44 to 19.

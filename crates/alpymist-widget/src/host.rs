@@ -485,10 +485,26 @@ impl<W: Widget> Host<W> {
         // What changed is where the panel was and where it is; with a
         // backdrop, the backdrop too, the first time.
         let whole = Rect::new(0, 0, w, h);
-        let damage = match self.drawn {
-            None if self.backdrop != 0 => whole,
-            None => panel,
-            Some(old) => old.union(&panel),
+        let area = |rect: Rect| Area {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+        };
+        let damage: Vec<Area> = match (self.drawn, self.widget.changed()) {
+            (None, _) if self.backdrop != 0 => vec![area(whole)],
+            (None, _) => vec![area(panel)],
+            // The panel has not moved, and the widget says which parts of it
+            // changed: those, where they are on the surface.
+            (Some(old), Some(parts)) if old == panel => parts
+                .iter()
+                .filter_map(|part| {
+                    Rect::new(panel.x + part.x, panel.y + part.y, part.width, part.height)
+                        .intersect(&panel)
+                })
+                .map(area)
+                .collect(),
+            (Some(old), _) => vec![area(old.union(&panel))],
         };
         let shown = self.wayland.show(
             self.layer.surface(),
@@ -497,12 +513,7 @@ impl<W: Widget> Host<W> {
                 scale: self.scale,
                 pixels: &self.canvas,
                 opaque: false,
-                damage: Some(Area {
-                    x: damage.x,
-                    y: damage.y,
-                    width: damage.width,
-                    height: damage.height,
-                }),
+                damage: Some(&damage),
                 paced: true,
             },
         );

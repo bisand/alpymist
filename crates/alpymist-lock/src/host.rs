@@ -283,12 +283,13 @@ impl Lock {
         // pixels there are the ones it already has. Telling it otherwise is
         // what makes typing on a machine that composites in software crawl —
         // a screen's worth of upload for a character in a field.
-        let damage = (!fresh).then_some(Area {
+        let changed = [Area {
             x: changed.x,
             y: changed.y,
             width: changed.width,
             height: changed.height,
-        });
+        }];
+        let damage = (!fresh).then_some(&changed[..]);
         let shown = self.wayland.show(
             &surface,
             &Picture {

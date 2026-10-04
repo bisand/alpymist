@@ -255,8 +255,12 @@ pub struct Picture<'a> {
     /// Whether none of it shows anything through, which saves the compositor
     /// blending a surface's worth over whatever is behind.
     pub opaque: bool,
-    /// The part that differs from the picture before. `None` is all of it.
-    pub damage: Option<Area>,
+    /// The parts that differ from the picture shown on this surface before.
+    /// `None` is all of it, and an empty list none of it.
+    ///
+    /// It is believed: only these are written to the compositor, and
+    /// whatever changed outside them stays as it was on screen.
+    pub damage: Option<&'a [Area]>,
     /// Whether to be told, with [`Event::Frame`], when the next is wanted.
     pub paced: bool,
 }
@@ -612,6 +616,14 @@ impl Wayland {
             state.buffers.push(buffer);
             state.buffers.len() - 1
         };
+        // Every buffer this surface has is now behind by what changed, the
+        // one about to be written included.
+        for buffer in state.buffers.iter_mut().filter(|b| b.owner == surface.0) {
+            match picture.damage {
+                Some(areas) => areas.iter().for_each(|area| buffer.changed(Some(area))),
+                None => buffer.changed(None),
+            }
+        }
         let buffer = &mut state.buffers[index];
         buffer
             .fill(pixels)
@@ -626,16 +638,44 @@ impl Wayland {
             known.buffer_scale = scale;
             surface.0.set_buffer_scale(scale);
         }
-        let damage = picture.damage.unwrap_or(Area {
-            x: 0,
-            y: 0,
-            width,
-            height,
-        });
         surface.0.attach(Some(&buffer.wl), 0, 0);
-        surface
-            .0
-            .damage_buffer(damage.x, damage.y, damage.width, damage.height);
+        // The compositor is told of one rectangle, around all of them.
+        // Measured on the Atom (ADR 0026): Hyprland given a few dozen bands
+        // a frame spends more on being told than it saves on what it need
+        // not repaint.
+        let around = picture.damage.map_or(
+            Some(Area {
+                x: 0,
+                y: 0,
+                width,
+                height,
+            }),
+            |areas| {
+                areas
+                    .iter()
+                    .filter(|area| area.width > 0 && area.height > 0)
+                    .map(|area| {
+                        (
+                            area.x,
+                            area.y,
+                            area.x.saturating_add(area.width),
+                            area.y.saturating_add(area.height),
+                        )
+                    })
+                    .reduce(|a, b| (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3)))
+                    .map(|(left, top, right, bottom)| Area {
+                        x: left,
+                        y: top,
+                        width: right - left,
+                        height: bottom - top,
+                    })
+            },
+        );
+        if let Some(area) = around {
+            surface
+                .0
+                .damage_buffer(area.x, area.y, area.width, area.height);
+        }
         if picture.paced {
             surface.0.frame(&self.qh, surface.0.clone());
         }
