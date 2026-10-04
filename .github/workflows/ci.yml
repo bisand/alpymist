@@ -25,6 +25,9 @@ jobs:
       - run: cargo fmt --all --check
       # Every APKBUILD's pkgver is the workspace version (ADR 0008).
       - run: cargo run -q -p xtask -- version
+      # Every crate is from crates.io, and every third-party one a manifest
+      # names is on the list in xtask/src/deps.rs (ADR 0023).
+      - run: cargo run -q -p xtask -- deps
       - run: cargo clippy --workspace --all-targets --features alpymist-ui/render -- -D warnings
       - run: cargo test --workspace --features alpymist-ui/render
       # What the installer, the splash and the login screen actually ship as.

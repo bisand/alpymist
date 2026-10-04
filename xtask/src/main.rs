@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod build_order;
+mod deps;
 mod installer_data;
 mod publish;
 mod qemu;
@@ -94,6 +95,16 @@ enum Command {
         #[arg(long, default_value = ".")]
         root: PathBuf,
     },
+    /// Check what the workspace depends on that is not ours.
+    ///
+    /// Every locked package has to come from crates.io, and every third-party
+    /// crate a manifest names has to be on the list in xtask/src/deps.rs,
+    /// which is what CI runs (ADR 0023).
+    Deps {
+        /// The workspace to check.
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+    },
     /// Regenerate the installer's keyboard layout and time zone lists.
     ///
     /// Run inside the Alpine builder with kbd-bkeymaps and tzdata installed.
@@ -155,6 +166,7 @@ fn main() -> Result<()> {
         Command::Version { set, expect, root } => {
             version::version(&root, set.as_deref(), expect.as_deref())
         }
+        Command::Deps { root } => deps::deps(&root),
         Command::InstallerData {
             bkeymaps,
             zoneinfo,

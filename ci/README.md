@@ -255,6 +255,17 @@ Still planned:
 2. An install test: install onto a scratch disk and boot the result.
 3. Double-build reproducibility diff as a release gate.
 
+## Dependencies
+
+Every crate comes from crates.io, and every third-party one a manifest names
+is on the list in `xtask/src/deps.rs` with what it is for (ADR 0023). CI runs
+the check; a new dependency is a line added there, in the change that brings
+it.
+
+```sh
+cargo xtask deps                          # CI's check
+```
+
 ## Known limitation: `xtask smoke` on a macOS dev box
 
 The smoke test spawns QEMU as a child process. In at least one sandboxed macOS
