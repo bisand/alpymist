@@ -243,15 +243,36 @@ pub struct Area {
     pub height: i32,
 }
 
+/// A picture handed over a row at a time, by something that can make any
+/// row of it when asked.
+///
+/// For a picture that is cheap to make and covers the screen. Painting it
+/// into memory first and writing that is two passes over the screen; rows
+/// written as they are made are one, and on a slow machine a pass over the
+/// screen is most of what a frame costs.
+pub trait Rows {
+    /// Row `y` of the picture, as wide as the picture is, and how many rows
+    /// from `y` on are the same as it: at least one. Rows that are the same
+    /// go to the compositor in one write.
+    fn row(&mut self, y: u32) -> (&[u32], u32);
+}
+
+/// A picture's pixels: `0xAARRGGBB`, premultiplied.
+pub enum Pixels<'a> {
+    /// Every pixel, row after row.
+    Whole(&'a [u32]),
+    /// Whichever rows are asked for.
+    Rows(&'a mut dyn Rows),
+}
+
 /// A picture for a surface.
-#[derive(Debug, Clone, Copy)]
 pub struct Picture<'a> {
     /// Width and height, in physical pixels.
     pub size: (u32, u32),
     /// Physical pixels to a logical one.
     pub scale: u32,
-    /// Every pixel, row after row: `0xAARRGGBB`, premultiplied.
-    pub pixels: &'a [u32],
+    /// The pixels.
+    pub pixels: Pixels<'a>,
     /// Whether none of it shows anything through, which saves the compositor
     /// blending a surface's worth over whatever is behind.
     pub opaque: bool,
@@ -582,16 +603,19 @@ impl Wayland {
     /// # Errors
     /// A picture of no size, one with fewer pixels than it says, or no memory
     /// to share it in.
-    pub fn show(&mut self, surface: &Surface, picture: &Picture<'_>) -> Result<(), String> {
+    pub fn show(&mut self, surface: &Surface, mut picture: Picture<'_>) -> Result<(), String> {
         let (Ok(width), Ok(height)) =
             (i32::try_from(picture.size.0), i32::try_from(picture.size.1))
         else {
             return Err("a picture too large".into());
         };
         let count = picture.size.0 as usize * picture.size.1 as usize;
-        let Some(pixels) = picture.pixels.get(..count) else {
-            return Err("a picture with fewer pixels than its size".into());
-        };
+        if let Pixels::Whole(pixels) = &mut picture.pixels {
+            let Some(all) = pixels.get(..count) else {
+                return Err("a picture with fewer pixels than its size".into());
+            };
+            *pixels = all;
+        }
         let format = if picture.opaque {
             wl_shm::Format::Xrgb8888
         } else {
@@ -626,7 +650,7 @@ impl Wayland {
         }
         let buffer = &mut state.buffers[index];
         buffer
-            .fill(pixels)
+            .fill(&mut picture.pixels)
             .map_err(|e| format!("shared memory: {e}"))?;
 
         let scale = i32::try_from(picture.scale).unwrap_or(1).max(1);

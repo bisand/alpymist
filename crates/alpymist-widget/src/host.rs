@@ -20,7 +20,7 @@
 use crate::{Key, Outcome, Widget};
 use alpymist_wayland::{
     Area, BTN_LEFT, Event, KeyEvent, Keysym, Layer, LayerOptions, Modifiers, Output, Picture,
-    PointerEvent, PointerKind, Shape, Stratum, Surface, Timer, Wayland,
+    Pixels, PointerEvent, PointerKind, Rows, Shape, Stratum, Surface, Timer, Wayland,
 };
 use denise::geom::{Point, Rect};
 use denise::{BufferAge, Frame, PixelFormat};
@@ -338,10 +338,10 @@ impl<W: Widget> Host<W> {
         let black = vec![COVER; width as usize * height as usize];
         let _ = self.wayland.show(
             cover.layer.surface(),
-            &Picture {
+            Picture {
                 size: (width, height),
                 scale: 1,
-                pixels: &black,
+                pixels: Pixels::Whole(&black),
                 opaque: false,
                 damage: None,
                 paced: false,
@@ -456,30 +456,35 @@ impl<W: Widget> Host<W> {
             + usize::try_from(panel.x).unwrap_or(0);
         let fits = panel.width == i32::try_from(size.width).unwrap_or(-1)
             && panel.height == i32::try_from(size.height).unwrap_or(-1);
-        let words = usize::try_from(w).unwrap_or(0) * usize::try_from(h).unwrap_or(0);
-        self.canvas.resize(words, 0);
-        // Everything outside the panel is transparent, or the backdrop; the
-        // canvas holds the frame before, where the panel may have been
-        // somewhere else, so the whole of it is cleared. A full-screen widget
-        // has nothing outside its panel and paints every visible pixel
-        // itself, and clearing first would be a second pass over the whole
-        // screen for nothing — which on the machines this targets is most of
-        // the cost of a frame.
-        if self.placement != Placement::FullScreen {
-            self.canvas.fill(self.backdrop);
-        }
+        // A widget that covers the screen may hand its picture over a row
+        // at a time, and then none of it is painted here at all.
+        let streams = self.placement == Placement::FullScreen && fits && self.widget.streams(size);
+        if !streams {
+            let words = usize::try_from(w).unwrap_or(0) * usize::try_from(h).unwrap_or(0);
+            self.canvas.resize(words, 0);
+            // Everything outside the panel is transparent, or the backdrop;
+            // the canvas holds the frame before, where the panel may have
+            // been somewhere else, so the whole of it is cleared. A
+            // full-screen widget has nothing outside its panel and paints
+            // every visible pixel itself, and clearing first would be a
+            // second pass over the whole screen for nothing — which on the
+            // machines this targets is most of the cost of a frame.
+            if self.placement != Placement::FullScreen {
+                self.canvas.fill(self.backdrop);
+            }
 
-        if fits
-            && let Some(region) = self.canvas.get_mut(start..)
-            && let Ok(mut frame) = Frame::new(
-                region,
-                size,
-                stride,
-                PixelFormat::Argb8888,
-                BufferAge::Undefined,
-            )
-        {
-            self.widget.paint(&mut frame);
+            if fits
+                && let Some(region) = self.canvas.get_mut(start..)
+                && let Ok(mut frame) = Frame::new(
+                    region,
+                    size,
+                    stride,
+                    PixelFormat::Argb8888,
+                    BufferAge::Undefined,
+                )
+            {
+                self.widget.paint(&mut frame);
+            }
         }
 
         // What changed is where the panel was and where it is; with a
@@ -506,12 +511,17 @@ impl<W: Widget> Host<W> {
                 .collect(),
             (Some(old), _) => vec![area(old.union(&panel))],
         };
+        let mut asked = Asked(&mut self.widget);
         let shown = self.wayland.show(
             self.layer.surface(),
-            &Picture {
+            Picture {
                 size: (sw * self.scale, sh * self.scale),
                 scale: self.scale,
-                pixels: &self.canvas,
+                pixels: if streams {
+                    Pixels::Rows(&mut asked)
+                } else {
+                    Pixels::Whole(&self.canvas)
+                },
                 opaque: false,
                 damage: Some(&damage),
                 paced: true,
@@ -627,6 +637,15 @@ impl<W: Widget> Host<W> {
         let s = f64::from(self.scale);
         #[allow(clippy::cast_possible_truncation)]
         Point::new((x * s) as i32, (y * s) as i32)
+    }
+}
+
+/// A widget, asked for its picture a row at a time.
+struct Asked<'a, W: Widget>(&'a mut W);
+
+impl<W: Widget> Rows for Asked<'_, W> {
+    fn row(&mut self, y: u32) -> (&[u32], u32) {
+        self.0.row(y)
     }
 }
 

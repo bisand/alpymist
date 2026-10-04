@@ -17,8 +17,8 @@ use alpymist_menu::menu::{Key, Menu, Outcome};
 use alpymist_menu::tree::{Alternate, EntryId};
 use alpymist_menu::view::{self, Fonts, Layout};
 use alpymist_wayland::{
-    BTN_LEFT, Event, KeyEvent, Keysym, Layer, LayerOptions, Modifiers, Picture, PointerEvent,
-    PointerKind, Source, Stratum, Wayland,
+    BTN_LEFT, Event, KeyEvent, Keysym, Layer, LayerOptions, Modifiers, Picture, Pixels,
+    PointerEvent, PointerKind, Source, Stratum, Wayland,
 };
 use denise::geom::Point;
 use denise::{BufferAge, Frame, PixelFormat};
@@ -200,10 +200,10 @@ impl Host {
 
         let shown = self.wayland.show(
             self.layer.surface(),
-            &Picture {
+            Picture {
                 size: (size.width, size.height),
                 scale: layout.scale,
-                pixels: &self.canvas,
+                pixels: Pixels::Whole(&self.canvas),
                 opaque: false,
                 damage: None,
                 paced: true,
