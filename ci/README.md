@@ -51,8 +51,9 @@ installer and the splash, built without default features so nothing of the
 desktop's window backend is linked into them, and `desktop`, everything else.
 Within a group cargo gives a crate the features of every package there, not
 of one alone, so the package build no longer catches a crate that only
-compiles with a feature a neighbour turns on (ADR 0006, addendum of
-2026-10-04). A new program is added to its group in that script; a package
+compiles with a feature a neighbour turns on; CI does, with
+`ci/build-programs.sh alone`, which checks each package by itself (ADR 0006,
+addendum of 2026-10-04). A new program is added to its group in that script; a package
 whose program is not there fails at `package()`, with nothing to install.
 squint and validity-fprintd build in their own trees, as upstream wrote them.
 The ISO jobs build no packages at all: they index and sign the ones the
