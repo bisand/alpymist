@@ -1,6 +1,6 @@
 # ADR 0027 — Development for glibc: a box of another distribution, documented and not shipped
 
-**Status:** proposed · **Date:** 2026-10-05
+**Status:** accepted · **Date:** 2026-10-05
 
 ## Context
 
