@@ -35,6 +35,33 @@ remote = "flathub"
 url = "/usr/share/alpymist/flathub.flatpakrepo"
 installation = "user"
 
+# What an application needs before it runs here, done once as the store
+# installs it: `env` is set for it with `flatpak override`, and `file` is
+# written under its own ~/.var/app/<app> with `contents`, unless a file is
+# there already. Alpine has no glibc outside the sandbox, and an application
+# that steps out of it to run finds nothing to run on.
+#
+# Zed starts its editor on the host unless told not to. Kept inside, its
+# terminal would be the sandbox's too, without apk, doas or the account's
+# own programs: host-spawn, which Zed's Flatpak carries, opens the account's
+# shell outside. Its language servers still run inside.
+[[source.adjust]]
+app = "dev.zed.Zed"
+env = { ZED_FLATPAK_NO_ESCAPE = "1" }
+file = "config/zed/settings.json"
+contents = '''
+{
+  "terminal": {
+    "shell": {
+      "with_arguments": {
+        "program": "host-spawn",
+        "args": []
+      }
+    }
+  }
+}
+'''
+
 # Alpine packages from the repositories in /etc/apk/repositories, installed
 # system-wide through alpymist-store-helper. Packages whose names match `hide`
 # are left out of results unless searched for by their exact name: split-off

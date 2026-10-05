@@ -12,7 +12,7 @@ use crate::config::{self, Installation};
 use crate::source::{Op, Source, output, run_command};
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -53,6 +53,32 @@ impl Flatpak {
                 .join(std::env::consts::ARCH)
                 .join("active"),
         )
+    }
+
+    /// What `id` needs before it runs here, from the configuration: done
+    /// once, as it is installed, so what the user changes afterwards stays
+    /// changed.
+    fn adjust(&self, id: &str, progress: &mut dyn FnMut(&str)) -> Result<(), String> {
+        for adjust in self.settings.adjust.iter().filter(|a| a.app == id) {
+            progress("Setting it up to run here");
+            if !adjust.env.is_empty() {
+                let mut command = self.flatpak();
+                command.arg("override");
+                for (name, value) in &adjust.env {
+                    command.arg(format!("--env={name}={value}"));
+                }
+                command.arg(id);
+                output(command)?;
+            }
+            if let Some((file, contents)) = &adjust.file {
+                // Where Flatpak gives every application its own directory,
+                // whichever installation it is in.
+                let home = std::env::var_os("HOME").ok_or("there is no home directory")?;
+                let path = Path::new(&home).join(".var/app").join(id).join(file);
+                write_new(&path, contents)?;
+            }
+        }
+        Ok(())
     }
 
     fn remote_exists(&self) -> bool {
@@ -134,13 +160,32 @@ impl Source for Flatpak {
                 command.args(["update", "--appstream", &self.settings.remote]);
             }
         }
-        run_command(command, progress)
+        run_command(command, progress)?;
+        if let Op::Install(id) = op {
+            self.adjust(id, progress)
+                .map_err(|e| format!("{id} is installed, but was not set up to run here: {e}"))?;
+        }
+        Ok(())
     }
 
     fn launch(&self, id: &str) -> Option<Command> {
         let mut command = Command::new("flatpak");
         command.args(["run", id]);
         Some(command)
+    }
+}
+
+/// Write `contents` to `path` unless something is there already: a file the
+/// user has is theirs, whatever is in it.
+fn write_new(path: &Path, contents: &str) -> Result<(), String> {
+    let failed = |e: std::io::Error| format!("{}: {e}", path.display());
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(failed)?;
+    }
+    match std::fs::File::create_new(path) {
+        Ok(mut file) => file.write_all(contents.as_bytes()).map_err(failed),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(e) => Err(failed(e)),
     }
 }
 
@@ -599,7 +644,7 @@ fn finish(b: Building, icons64: &Path, icons128: &Path) -> Option<Entry> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_appstream, parse_installed};
+    use super::{parse_appstream, parse_installed, write_new};
     use crate::catalog::Category;
     use std::path::Path;
 
@@ -687,6 +732,20 @@ mod tests {
             ],
             "the largest thumbnail that fits, the original without one, and nothing but https"
         );
+    }
+
+    #[test]
+    fn a_file_the_user_has_is_left_as_it_is() {
+        let dir =
+            std::env::temp_dir().join(format!("alpymist-store-adjust-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("config/zed/settings.json");
+        write_new(&path, "ours").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "ours");
+        std::fs::write(&path, "theirs").unwrap();
+        write_new(&path, "ours").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "theirs");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
