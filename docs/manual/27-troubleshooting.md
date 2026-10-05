@@ -217,6 +217,13 @@ application's own settings; see [Security](22-security.md).
 It asks once per session and again after each lock, by design: a locked
 machine holds no unlocked key. A key with no passphrase is never asked for.
 
+## An application from Flathub does not start
+
+Run it from a terminal, with `flatpak run` and its id, to see why. One that
+says "No such file or directory" about a program that is there has stepped
+out of its sandbox, where there is no glibc for it. See
+[A Flathub application built for glibc](17-installing-software.md#a-flathub-application-built-for-glibc).
+
 ## Screenshots do nothing
 
 `grim` and `slurp` take them. Run the command from a terminal to see what it

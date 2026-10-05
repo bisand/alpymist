@@ -102,7 +102,7 @@ items = [
 title = "Install"
 items = [
   { name = "Store", icon = "\U000F10C1", exec = "alpymist-store", detail = "Flathub and Alpine", keywords = ["software", "flatpak", "flathub", "apk", "apps"] },
-  { name = "Application from Flathub", icon = "󰏗", exec = "flatpak remote-add --user --if-not-exists flathub /usr/share/alpymist/flathub.flatpakrepo && printf 'Search Flathub for: '; read -r q && flatpak search \"$q\" && printf '\\nApplication ID to install, or Enter to skip: ' && read -r id && [ -n \"$id\" ] && flatpak install --user flathub \"$id\"", terminal = true, hold = true, keywords = ["flatpak"] },
+  { name = "Application from Flathub", icon = "󰏗", exec = "flatpak remote-add --user --if-not-exists flathub /usr/share/alpymist/flathub.flatpakrepo && printf 'Search Flathub for: '; read -r q && flatpak search \"$q\" && printf '\\nApplication ID to install, or Enter to skip: ' && read -r id && [ -n \"$id\" ] && alpymist-store install flathub \"$id\"", terminal = true, hold = true, keywords = ["flatpak"] },
   { name = "Alpine package", icon = "", exec = "printf 'Package to install: '; read -r p && [ -n \"$p\" ] && doas apk add $p", terminal = true, hold = true, keywords = ["apk"] },
   # Not a package: fetched from Jottacloud, and chosen again it updates. See ADR 0002's addendum of 2026-09-27.
   { name = "Jottacloud", icon = "\U000F0167", exec = "alpymist-jottacloud install", terminal = true, hold = true, detail = "Backup client", keywords = ["jotta", "jotta-cli", "backup", "cloud"] },

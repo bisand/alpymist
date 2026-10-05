@@ -11,7 +11,8 @@
 
 use alpymist_widget::Colour;
 use serde::Deserialize;
-use std::path::{Path, PathBuf};
+use std::collections::BTreeMap;
+use std::path::{Component, Path, PathBuf};
 
 /// The configuration this binary was built with.
 pub const DEFAULT: &str = include_str!("../store.toml");
@@ -65,10 +66,22 @@ struct SourceDef {
     url: Option<String>,
     installation: Option<String>,
     appstream: Option<PathBuf>,
+    adjust: Option<Vec<AdjustDef>>,
     // apk
     root: Option<PathBuf>,
     hide: Option<Vec<String>>,
     protect: Option<Vec<String>>,
+}
+
+/// One `[[source.adjust]]` as written.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AdjustDef {
+    app: String,
+    #[serde(default)]
+    env: BTreeMap<String, String>,
+    file: Option<PathBuf>,
+    contents: Option<String>,
 }
 
 fn yes() -> bool {
@@ -121,6 +134,22 @@ pub struct Flatpak {
     /// it: the directory holding `appstream.xml` and `icons`. For tests and
     /// previews.
     pub appstream: Option<PathBuf>,
+    /// What applications need before they run here, done as each is
+    /// installed.
+    pub adjust: Vec<Adjust>,
+}
+
+/// What one application needs before it runs on a system without glibc
+/// outside the sandbox.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Adjust {
+    /// The application's id.
+    pub app: String,
+    /// Environment variables it is always run with, as a `flatpak override`.
+    pub env: Vec<(String, String)>,
+    /// A file written where the application keeps its own, when it is not
+    /// there: its path under `~/.var/app/<app>`, and what goes in it.
+    pub file: Option<(PathBuf, String)>,
 }
 
 /// A Flatpak installation.
@@ -253,11 +282,18 @@ fn check(def: SourceDef) -> Result<Source, String> {
                     ));
                 }
             };
+            let adjust = def
+                .adjust
+                .unwrap_or_default()
+                .into_iter()
+                .map(|a| check_adjust(a, &here))
+                .collect::<Result<_, _>>()?;
             Kind::Flatpak(Flatpak {
                 remote: def.remote.unwrap_or_else(|| def.id.clone()),
                 url: def.url,
                 installation,
                 appstream: def.appstream,
+                adjust,
             })
         }
         "apk" => {
@@ -265,6 +301,7 @@ fn check(def: SourceDef) -> Result<Source, String> {
             unused("url", def.url.is_some())?;
             unused("installation", def.installation.is_some())?;
             unused("appstream", def.appstream.is_some())?;
+            unused("adjust", def.adjust.is_some())?;
             let patterns = |list: Option<Vec<String>>| {
                 list.unwrap_or_default()
                     .iter()
@@ -289,6 +326,40 @@ fn check(def: SourceDef) -> Result<Source, String> {
         colour: def.colour.unwrap_or(Colour([0x7F, 0xB8, 0xD9, 0xFF])),
         id: def.id,
         kind,
+    })
+}
+
+fn check_adjust(def: AdjustDef, here: &str) -> Result<Adjust, String> {
+    let here = format!("{here}: adjust \"{}\"", def.app);
+    if def.app.is_empty() {
+        return Err(format!("{here}: `app` is the application's id"));
+    }
+    for name in def.env.keys() {
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return Err(format!(
+                "{here}: \"{name}\" is not an environment variable's name"
+            ));
+        }
+    }
+    let file = match (def.file, def.contents) {
+        (None, None) => None,
+        (Some(path), Some(contents)) => {
+            // Under the application's own directory, and nowhere else.
+            if path.as_os_str().is_empty()
+                || !path.components().all(|c| matches!(c, Component::Normal(_)))
+            {
+                return Err(format!(
+                    "{here}: `file` is a path under the application's own directory"
+                ));
+            }
+            Some((path, contents))
+        }
+        _ => return Err(format!("{here}: `file` and `contents` go together")),
+    };
+    Ok(Adjust {
+        app: def.app,
+        env: def.env.into_iter().collect(),
+        file,
     })
 }
 
@@ -373,6 +444,17 @@ mod tests {
             panic!("Flathub first");
         };
         assert_eq!(flathub.installation, Installation::User);
+        // Zed is kept in its sandbox, with the account's own shell in its
+        // terminal: outside it, its editor finds no glibc to run on.
+        let zed = flathub
+            .adjust
+            .iter()
+            .find(|a| a.app == "dev.zed.Zed")
+            .expect("Zed is adjusted");
+        assert_eq!(zed.env, [("ZED_FLATPAK_NO_ESCAPE".into(), "1".into())]);
+        let (path, contents) = zed.file.as_ref().expect("Zed's settings");
+        assert_eq!(path, std::path::Path::new("config/zed/settings.json"));
+        assert!(contents.contains("\"host-spawn\""));
         let Kind::Apk(apk) = &config.sources[1].kind else {
             panic!("Alpine second");
         };
@@ -396,6 +478,23 @@ mod tests {
     fn a_setting_of_another_kind_is_an_error() {
         let text = "[[source]]\nid = \"a\"\nkind = \"apk\"\nremote = \"flathub\"\n";
         assert!(Config::parse(text).unwrap_err().contains("remote"));
+    }
+
+    #[test]
+    fn an_adjustment_stays_in_the_applications_own_directory() {
+        let source =
+            "[[source]]\nid = \"a\"\nkind = \"flatpak\"\n[[source.adjust]]\napp = \"x.y.Z\"\n";
+        let parse = |rest: &str| Config::parse(&format!("{source}{rest}"));
+        assert!(parse("env = { A_1 = \"b\" }\n").is_ok());
+        assert!(parse("file = \"config/a\"\ncontents = \"\"\n").is_ok());
+        for outside in ["../a", "/etc/a", "config/../../a", ""] {
+            let rest = format!("file = \"{outside}\"\ncontents = \"\"\n");
+            assert!(parse(&rest).unwrap_err().contains("own directory"));
+        }
+        assert!(parse("file = \"a\"\n").unwrap_err().contains("together"));
+        assert!(parse("env = { \"A=B\" = \"c\" }\n").is_err());
+        let apk = "[[source]]\nid = \"a\"\nkind = \"apk\"\n[[source.adjust]]\napp = \"x\"\n";
+        assert!(Config::parse(apk).unwrap_err().contains("adjust"));
     }
 
     #[test]
