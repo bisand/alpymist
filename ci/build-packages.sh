@@ -57,53 +57,29 @@ FETCHED=" squint validity-fprintd "
 # what cargo downloaded, and what it compiled of other people's crates.
 KEPT="${CARGO_KEPT:-}"
 export CARGO_HOME="${KEPT:-/tmp}/cargo"
-# Where the first-party packages build, one directory for all of them. Each
-# copies the workspace into a directory of its own and builds only its own
-# crates, with its own features, so what one package gets never depends on
-# another's; but a dependency built once with the same features is not built
-# again, and without this each package compiled every one from scratch. squint
-# builds as upstream wrote it, in its own tree.
-TARGET="${KEPT:-/tmp}/cargo-target"
-
-# The dev channel builds without link-time optimisation, and stable with it.
-# The release profile's full LTO has every program optimise all of its
-# dependencies again as it links, and with twenty programs that is most of the
-# build: twelve packages took 508 s with it and 233 s without, on the same
-# machine. What it buys is size — the programs are about two thirds bigger
-# without — which matters for what people install, not for what a commit is
-# tried with an hour later. So dev is not byte for byte what stable ships;
-# Release builds the full profile, and the image it boots in the smoke test is
-# made of those.
+# Where the first-party packages build: one directory for all of them, and
+# one copy of the workspace. Their programs are built a group at a time by
+# ci/build-programs.sh, which each package's build() calls: the first package
+# of a group builds every program in it, in one cargo run, and the others find
+# theirs there. It takes the one path and the one directory to be so: cargo
+# knows a crate of the workspace by its path, and a second copy would be other
+# crates to it, built again. squint and validity-fprintd build as upstream
+# wrote them, in their own trees.
 #
-# It has to be said in abuild's own configuration: abuild exports
-# CARGO_PROFILE_RELEASE_LTO, _CODEGEN_UNITS and _OPT_LEVEL from its
-# default.conf as it starts, over whatever the environment had, and reads the
-# user's file after that. QUICK names a user file of the dev channel's, which
-# is the ordinary one and then these two; it is given to the workspace's own
-# packages only, so squint and validity-fprintd, whose built packages are kept
-# and shared with stable, are built as stable builds them.
-QUICK=()
-quick_profile() {
-	[ "$CHANNEL" = dev ] || return 0
-	cat > ~/.abuild/dev.conf <<-'EOF'
-		. ~/.abuild/abuild.conf
-		export CARGO_PROFILE_RELEASE_LTO=off
-		export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
-	EOF
-	QUICK=(ABUILD_USERCONF="$HOME/.abuild/dev.conf")
-
-	# One copy of the workspace for all of dev's packages, where each used to
-	# make its own. Cargo knows a crate of the workspace by its path, so
-	# twenty copies were twenty different crates to it, and every package
-	# compiled the ones it shares with the others again: alpymist-ui a dozen
-	# times a build. From one path each is compiled once for each set of
-	# features, as the dependencies already were. Each package still asks
-	# cargo for its own crates and features only.
-	WORKSPACE=~/workspace
+# Both channels build the release profile as it is, full link-time
+# optimisation and all, so a dev package is the program the next release
+# ships. One cargo run for a group is what made that affordable: the links,
+# which are most of the time and use a core each, run side by side
+# (ADR 0006's addendum of 2026-10-04).
+TARGET="${KEPT:-/tmp}/cargo-target"
+WORKSPACE=~/workspace
+workspace() {
 	rm -rf "$WORKSPACE" && mkdir -p "$WORKSPACE"
-	tar -C /src -cf - --exclude=./target --exclude=./out --exclude=./.git \
-		--exclude=./cache . | tar -C "$WORKSPACE" -xf -
-	QUICK+=(ALPYMIST_WORKSPACE="$WORKSPACE")
+	# tar ends with 1 when a file changed as it was read, which a checkout
+	# mounted from a Mac says of the directory itself, and with 2 when it
+	# failed. Each APKBUILD's own copy has always let the first pass.
+	{ tar -C /src -cf - --exclude=./target --exclude=./out --exclude=./.git \
+		--exclude=./cache . || [ $? -eq 1 ]; } | tar -C "$WORKSPACE" -xf -
 }
 
 case "$CHANNEL" in
@@ -134,7 +110,6 @@ stamp() {
 if [ ! -e ~/.abuild/abuild.conf ]; then
 	abuild-keygen -a -i -n >/dev/null 2>&1
 fi
-quick_profile
 mkdir -p "$KEYS"
 cp ~/.abuild/*.rsa.pub "$KEYS"/
 
@@ -165,6 +140,7 @@ if [ -n "${PREBUILT:-}" ]; then
 	cp "$PREBUILT"/*.apk "$REPO"/
 	reindex
 else
+	workspace
 	for pkg in alpymist-keys alpymist alpymist-menu alpymist-about alpymist-wifi alpymist-auth alpymist-splash alpymist-install alpymist-lock alpymist-power alpymist-thunderbolt alpymist-settings alpymist-screensaver alpymist-saver-mountains alpymist-saver-starfield alpymist-store alpymist-greeter alpymist-fingerprint alpymist-ai-usage squint validity-fprintd alpymist-desktop; do
 		mkdir -p ~/ap/"$pkg"
 		cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
@@ -207,7 +183,8 @@ else
 		# run over them. abuild checks the sums itself while fetching, and stops
 		# if they disagree.
 		shared=()
-		[[ "$INDEPENDENT" == *" $pkg "* ]] || shared=(env CARGO_TARGET_DIR="$TARGET" "${QUICK[@]}")
+		[[ "$INDEPENDENT" == *" $pkg "* ]] \
+			|| shared=(env CARGO_TARGET_DIR="$TARGET" ALPYMIST_WORKSPACE="$WORKSPACE")
 		( cd ~/ap/"$pkg" \
 			&& { [[ "$FETCHED" == *" $pkg "* ]] || abuild checksum >/dev/null; } \
 			&& "${shared[@]}" abuild -r >/dev/null )

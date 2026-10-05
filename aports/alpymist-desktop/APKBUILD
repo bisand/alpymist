@@ -137,7 +137,9 @@ depends="
 # else still upgrades (tried with apk 3.0.8 against local repositories).
 provides="$pkgname-wayland=$pkgver-r$pkgrel $pkgname-full=$pkgver-r$pkgrel"
 replaces="$pkgname-wayland $pkgname-full"
-makedepends="cargo"
+# What every program of the desktop group links, not this one alone: the
+# first package of the group builds them all (ci/build-programs.sh).
+makedepends="cargo libxkbcommon-dev linux-pam-dev"
 subpackages="
 	alpymist-shell:_shell
 	alpymist-tools:_tools
@@ -151,8 +153,9 @@ source=""
 builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
 
 # Where cargo leaves what it builds. build-packages.sh points every package at
-# one directory, so a dependency compiled for one is not compiled again for the
-# next; each still builds only its own crates with their own features.
+# one directory, and ci/build-programs.sh builds a whole group of programs
+# into it at once, so the first package of a group builds them and the rest
+# find it done.
 _release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
 
 prepare() {
@@ -167,7 +170,7 @@ prepare() {
 }
 
 build() {
-	cargo build --release --locked -p alpymist-wallpaper
+	sh "$builddir"/ci/build-programs.sh desktop
 	# The wallpaper and the mark come from the same code: the furthest range in
 	# the wallpaper is the mark, weathered.
 	"$_release"/alpymist-wallpaper "$builddir"/alpymist.png 2560 1440

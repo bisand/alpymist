@@ -11,7 +11,9 @@ license="MIT OR Apache-2.0"
 # the store, which needs libxkbcommon and the menu's fonts. Everything it shows
 # is read from files any account can read: apk's database, the repositories
 # file, /etc/alpine-release, /proc and /sys. Copy details goes through wl-copy.
-makedepends="cargo libxkbcommon-dev"
+# What every program of the desktop group links, not this one alone: the
+# first package of the group builds them all (ci/build-programs.sh).
+makedepends="cargo libxkbcommon-dev linux-pam-dev"
 depends="font-fira-ttf font-nerd-fonts-symbols wl-clipboard"
 options="!check"  # the test suite runs in CI, not in the package build
 source=""
@@ -20,8 +22,9 @@ source=""
 builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
 
 # Where cargo leaves what it builds. build-packages.sh points every package at
-# one directory, so a dependency compiled for one is not compiled again for the
-# next; each still builds only its own crates with their own features.
+# one directory, and ci/build-programs.sh builds a whole group of programs
+# into it at once, so the first package of a group builds them and the rest
+# find it done.
 _release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
 
 prepare() {
@@ -37,7 +40,7 @@ prepare() {
 
 build() {
 	cd "$builddir"
-	cargo build --release --locked -p alpymist-about
+	sh "$builddir"/ci/build-programs.sh desktop
 }
 
 package() {

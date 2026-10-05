@@ -39,17 +39,21 @@ are pruned before the cache is saved, and are compiled every run anyway.
 run that builds it. To throw the kept crates away, bump `cargo-dev-v2` in
 `.github/workflows/packages.yml`.
 
-The first-party packages build one after another, each from its own copy of
-the workspace, but into one cargo target directory, so a dependency is
-compiled once for each set of features it is built with rather than once for
-each package. Each package still builds only its own crates, with
-`cargo build -p` and its own features. That is deliberate: a crate that only
-compiles with a feature some other crate turns on in the workspace build fails
-here, as Settings did when it used the screensaver's `paint` without `saver`.
-On the dev channel they all build from one copy of the workspace, not one
-each: cargo knows a workspace crate by its path, so from twenty copies every
-package compiled the crates it shares with the others again. What each
-package asks cargo for is unchanged, so the rule above holds there too.
+The first-party packages are packaged one after another, but their programs
+are built a group at a time: `ci/build-programs.sh` builds every program of a
+group in one cargo run, each package's `build()` calls it, and so the first
+package of a group builds them all and the rest find theirs built. All of it
+from one copy of the workspace and into one cargo target directory, since
+cargo knows a workspace crate by its path. One run is what lets the links,
+which are most of the time under the release profile's full LTO and take a
+core each, go side by side. There are two groups: `console`, the greeter, the
+installer and the splash, built without default features so nothing of the
+desktop's window backend is linked into them, and `desktop`, everything else.
+Within a group cargo gives a crate the features of every package there, not
+of one alone, so the package build no longer catches a crate that only
+compiles with a feature a neighbour turns on (ADR 0006, addendum of
+2026-10-04). A new program is added to its group in that script; a package
+whose program is not there fails at `package()`, with nothing to install.
 squint and validity-fprintd build in their own trees, as upstream wrote them.
 The ISO jobs build no packages at all: they index and sign the ones the
 package jobs made. What is left of an image's time is mostly squashing the
@@ -119,12 +123,10 @@ Dev packages are versioned `<pkgver>_git<UTC time of their last commit>`, which
 apk sorts after the pkgver and before the next one, so dev stays ahead of the
 release it follows and meets the next one when it arrives.
 
-Dev packages are also built without link-time optimisation, which stable's
-have (`QUICK` in `ci/build-packages.sh`). Full LTO was most of the build's
-time, and what it buys is size: dev's programs are about two thirds bigger.
-So a dev package is the same source as the release that follows it and not
-the same bytes. Release builds the full profile, and the image its smoke test
-boots is made of those packages.
+Dev packages are built exactly as stable's are, the release profile with its
+full link-time optimisation, so a dev package is the program the release that
+follows it ships. Dev differs only in keeping other people's compiled crates
+from one run to the next.
 
 ### Setting up the dev channel (once)
 

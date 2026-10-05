@@ -7,7 +7,9 @@ pkgdesc="Alpymist boot splash, drawn straight to DRM/KMS"
 url="https://github.com/bisand/alpymist"
 arch="all"
 license="MIT OR Apache-2.0"
-makedepends="cargo"
+# What every program of the desktop group links, not this one alone: the
+# first package of the group builds them all (ci/build-programs.sh).
+makedepends="cargo libxkbcommon-dev linux-pam-dev"
 # The font is a runtime suggestion: without it the splash falls back to
 # Denise's built-in bitmap and still reads correctly.
 depends="font-fira-ttf $pkgname-picture=$pkgver-r$pkgrel"
@@ -19,8 +21,9 @@ source="alpymist-splash.initd alpymist-splash-done.initd"
 builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
 
 # Where cargo leaves what it builds. build-packages.sh points every package at
-# one directory, so a dependency compiled for one is not compiled again for the
-# next; each still builds only its own crates with their own features.
+# one directory, and ci/build-programs.sh builds a whole group of programs
+# into it at once, so the first package of a group builds them and the rest
+# find it done.
 _release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
 
 # Alpymist's own picture: the boot menus, the splash, the login screen and the
@@ -44,14 +47,13 @@ build() {
 	cd "$builddir"
 	# No default features: the desktop window backend must not be linked into
 	# something that runs this early in boot.
-	cargo build --release --locked \
-		-p alpymist-splash --no-default-features --features drm
+	sh "$builddir"/ci/build-programs.sh console
 	# The boot menus' backgrounds: the picture with the badge on it, so the
 	# machine shows one picture from the bootloader to the password. Two sizes because syslinux draws at a fixed 640x480 VESA mode
 	# and GRUB stretches to the panel, and two formats because Alpine's
 	# grub-efi for arm64 ships no PNG decoder at all; see write_image in
 	# alpymist-wallpaper.
-	cargo build --release --locked -p alpymist-wallpaper
+	sh "$builddir"/ci/build-programs.sh desktop
 	"$_release"/alpymist-wallpaper --boot menu-640.png 640 480 "$_picture"
 	"$_release"/alpymist-wallpaper --boot menu-1280.jpg 1280 800 "$_picture"
 }

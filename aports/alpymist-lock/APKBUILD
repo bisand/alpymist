@@ -11,6 +11,8 @@ license="MIT OR Apache-2.0"
 # needs the same keymap library; the password goes through libpam, which is
 # what linux-pam-dev is for. Nothing is generated at build time: the PAM
 # bindings are alpymist-pam's, written out, so there is no clang here.
+# What every program of the desktop group links, not this one alone: the
+# first package of the group builds them all (ci/build-programs.sh).
 makedepends="cargo libxkbcommon-dev linux-pam-dev"
 # linux-pam is the stack /etc/pam.d/alpymist-lock includes, and pam_unix's
 # setuid unix_chkpwd is what lets this read a password as the account itself
@@ -26,8 +28,9 @@ source="alpymist-lock.pam"
 builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
 
 # Where cargo leaves what it builds. build-packages.sh points every package at
-# one directory, so a dependency compiled for one is not compiled again for the
-# next; each still builds only its own crates with their own features.
+# one directory, and ci/build-programs.sh builds a whole group of programs
+# into it at once, so the first package of a group builds them and the rest
+# find it done.
 _release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
 
 prepare() {
@@ -43,7 +46,7 @@ prepare() {
 
 build() {
 	cd "$builddir"
-	cargo build --release --locked -p alpymist-lock
+	sh "$builddir"/ci/build-programs.sh desktop
 }
 
 package() {

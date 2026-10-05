@@ -13,7 +13,9 @@ license="MIT OR Apache-2.0"
 # it the stale package stays installed for good. Keep it while such systems
 # may still be upgrading.
 provides="alpymistctl=$pkgver-r$pkgrel"
-makedepends="cargo"
+# What every program of the desktop group links, not this one alone: the
+# first package of the group builds them all (ci/build-programs.sh).
+makedepends="cargo libxkbcommon-dev linux-pam-dev"
 # libEGL is loaded at runtime, not linked, so it is deliberately not a depend:
 # alpymist must work on a system with no Mesa and simply report less.
 # alpymist-firmware, in the -openrc package, installs firmware that a driver
@@ -27,8 +29,9 @@ source="alpymist-firmware.initd"
 builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
 
 # Where cargo leaves what it builds. build-packages.sh points every package at
-# one directory, so a dependency compiled for one is not compiled again for the
-# next; each still builds only its own crates with their own features.
+# one directory, and ci/build-programs.sh builds a whole group of programs
+# into it at once, so the first package of a group builds them and the rest
+# find it done.
 _release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
 
 prepare() {
@@ -47,7 +50,7 @@ prepare() {
 
 build() {
 	cd "$builddir"
-	cargo build --release --locked -p alpymist
+	sh "$builddir"/ci/build-programs.sh desktop
 }
 
 package() {

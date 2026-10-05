@@ -61,9 +61,9 @@ jobs:
 
       # The dev channel keeps what cargo downloaded and compiled of other
       # people's crates from one run to the next: some 280 of them, the same
-      # every time, and most of what a dev build spent its minutes on. The
-      # workspace's own crates are compiled every run regardless, since each
-      # package builds from a fresh copy of the tree.
+      # every time. The workspace's own crates are compiled every run
+      # regardless, since each run builds from a fresh copy of the tree, and
+      # every program is linked every run.
       #
       # The key is everything a compiled dependency depends on: the compiler,
       # the lockfile and the builder. There are no restore-keys, on purpose: a

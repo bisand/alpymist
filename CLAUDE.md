@@ -103,6 +103,17 @@ list gives, and a package missing from that list is simply never built, with no
 error anywhere. Add it there, before anything that depends on it, and add it to
 whatever `depends` should pull it in.
 
+**A program is built with its group, not by its package.**
+`ci/build-programs.sh` builds every program in two cargo runs, `desktop` and
+`console`, and an APKBUILD's `build()` calls it and never `cargo build`
+itself: one run links the programs side by side, which is what lets both
+channels build with full LTO. A new program is a `-p` line in its group and,
+for `desktop`, the group's `makedepends` in its APKBUILD. The console group,
+built without default features, is the greeter, the installer and the splash:
+cargo shares features across a run, so a desktop program added there, or one
+of those three built beside the desktop's, links what it must not. See
+ADR 0006's addendum of 2026-10-04.
+
 **A screensaver is a package, not a branch in a match.** Adding one means a
 binary and a `/usr/share/alpymist/screensavers/<id>.toml` beside it declaring
 its settings — nothing in `alpymist-screensaver` or `alpymist-settings` names
