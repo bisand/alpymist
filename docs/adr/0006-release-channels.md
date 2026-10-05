@@ -132,7 +132,9 @@ screensaver crates with their popups compiled in, where alone they would not.
 The optimiser drops what a program does not call — twenty of the programs came
 out the same size to the byte, and none more than 4 kB bigger — but they are
 not the same bytes, and a crate that only compiles because a neighbour turns a
-feature on is no longer caught by the package build. The groups are by what
+feature on is no longer caught by the package build. CI catches it in its
+place: `ci/build-programs.sh alone` has cargo check each package by itself,
+with its own features, on every pull request. The groups are by what
 must not be shared: the programs that run with no desktop (the greeter, the
 installer, the splash) are built without default features and never beside
 the rest, so the window backend cannot reach them this way.

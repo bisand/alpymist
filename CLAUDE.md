@@ -24,6 +24,7 @@ cargo clippy --locked --no-default-features --features drm -p alpymist-greeter \
   -p alpymist-install -p alpymist-splash --all-targets -- -D warnings
 cargo run -q --locked -p xtask -- version # every pkgver must equal the workspace version
 cargo run -q --locked -p xtask -- deps    # every crate from crates.io, every third-party one on the list
+sh ci/build-programs.sh alone             # each package checked by itself, with its own features
 ```
 
 `--locked` everywhere, because the packages are built with it: a `Cargo.lock`

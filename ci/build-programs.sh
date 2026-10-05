@@ -19,36 +19,65 @@
 #
 # A package whose program is not named here has nothing to install and fails
 # at package(): add it to its group.
+#
+# `build-programs.sh alone` builds nothing: it has cargo check each package by
+# itself, with its own features and no neighbour's, which is what building
+# them a package at a time used to prove. A crate that only compiles with a
+# feature another package turns on passes a build of the group and fails
+# there. CI runs it.
 set -eu
+
+DESKTOP="
+	alpymist
+	alpymist-about
+	alpymist-ai-usage
+	alpymist-auth
+	alpymist-fingerprint
+	alpymist-lock
+	alpymist-menu
+	alpymist-power
+	alpymist-saver-mountains
+	alpymist-saver-starfield
+	alpymist-screensaver
+	alpymist-settings-app
+	alpymist-store
+	alpymist-thunderbolt
+	alpymist-wallpaper
+	alpymist-wifi
+"
+CONSOLE="
+	alpymist-greeter
+	alpymist-install
+	alpymist-splash
+"
+# How the console programs are built: without the desktop's window backend.
+BARE="--no-default-features --features drm"
+
+if [ "${1:-}" = alone ]; then
+	for p in $DESKTOP; do
+		echo "    $p, alone"
+		cargo check --locked -p "$p"
+	done
+	for p in $CONSOLE; do
+		echo "    $p, alone"
+		# shellcheck disable=SC2086 # two words, meant as two
+		cargo check --locked $BARE -p "$p"
+	done
+	exit 0
+fi
 
 case "${1:-}" in
 desktop)
-	set -- \
-		-p alpymist \
-		-p alpymist-about \
-		-p alpymist-ai-usage \
-		-p alpymist-auth \
-		-p alpymist-fingerprint \
-		-p alpymist-lock \
-		-p alpymist-menu \
-		-p alpymist-power \
-		-p alpymist-saver-mountains \
-		-p alpymist-saver-starfield \
-		-p alpymist-screensaver \
-		-p alpymist-settings-app \
-		-p alpymist-store \
-		-p alpymist-thunderbolt \
-		-p alpymist-wallpaper \
-		-p alpymist-wifi
+	set --
+	for p in $DESKTOP; do set -- "$@" -p "$p"; done
 	;;
 console)
-	set -- --no-default-features --features drm \
-		-p alpymist-greeter \
-		-p alpymist-install \
-		-p alpymist-splash
+	# shellcheck disable=SC2086 # two words, meant as two
+	set -- $BARE
+	for p in $CONSOLE; do set -- "$@" -p "$p"; done
 	;;
 *)
-	echo "usage: build-programs.sh desktop|console" >&2
+	echo "usage: build-programs.sh desktop|console|alone" >&2
 	exit 2
 	;;
 esac
