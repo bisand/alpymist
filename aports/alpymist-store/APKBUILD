@@ -15,7 +15,9 @@ license="MIT OR Apache-2.0"
 # names and nothing else. polkit asks an administrator's password for them in
 # alpymist-auth's dialog, and keeps the answer a few minutes except for
 # removals. logger is busybox's, for the helper's log.
-makedepends="cargo libxkbcommon-dev"
+# What every program of the desktop group links, not this one alone: the
+# first package of the group builds them all (ci/build-programs.sh).
+makedepends="cargo libxkbcommon-dev linux-pam-dev"
 depends="alpymist-auth flatpak font-fira-ttf font-nerd-fonts-symbols polkit"
 options="!check"  # the test suite runs in CI, not in the package build
 source=""
@@ -24,8 +26,9 @@ source=""
 builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
 
 # Where cargo leaves what it builds. build-packages.sh points every package at
-# one directory, so a dependency compiled for one is not compiled again for the
-# next; each still builds only its own crates with their own features.
+# one directory, and ci/build-programs.sh builds a whole group of programs
+# into it at once, so the first package of a group builds them and the rest
+# find it done.
 _release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
 
 prepare() {
@@ -41,7 +44,7 @@ prepare() {
 
 build() {
 	cd "$builddir"
-	cargo build --release --locked -p alpymist-store --bins
+	sh "$builddir"/ci/build-programs.sh desktop
 }
 
 package() {

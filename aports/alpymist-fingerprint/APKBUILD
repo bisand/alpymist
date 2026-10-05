@@ -16,7 +16,9 @@ license="MIT OR Apache-2.0"
 # entry is only there where it can do something (#58). fprintd-pam is
 # pam_fprintd alone, without fprintd: what Settings › System › Unlock with a
 # fingerprint turns on for the lock screen and polkit (ADR 0016).
-makedepends="cargo libxkbcommon-dev"
+# What every program of the desktop group links, not this one alone: the
+# first package of the group builds them all (ci/build-programs.sh).
+makedepends="cargo libxkbcommon-dev linux-pam-dev"
 depends="alpymist-auth font-fira-ttf font-nerd-fonts-symbols fprintd-pam polkit"
 options="!check"  # the test suite runs in CI, not in the package build
 source=""
@@ -25,8 +27,9 @@ source=""
 builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
 
 # Where cargo leaves what it builds. build-packages.sh points every package at
-# one directory, so a dependency compiled for one is not compiled again for the
-# next; each still builds only its own crates with their own features.
+# one directory, and ci/build-programs.sh builds a whole group of programs
+# into it at once, so the first package of a group builds them and the rest
+# find it done.
 _release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
 
 prepare() {
@@ -42,7 +45,7 @@ prepare() {
 
 build() {
 	cd "$builddir"
-	cargo build --release --locked -p alpymist-fingerprint
+	sh "$builddir"/ci/build-programs.sh desktop
 }
 
 package() {

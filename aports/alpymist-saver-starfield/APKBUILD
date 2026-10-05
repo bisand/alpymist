@@ -15,7 +15,9 @@ license="MIT OR Apache-2.0"
 # A wlr-layer-shell surface over wl_shm, drawn by Denise on the CPU like the
 # menu: no GPU stack, and libxkbcommon for the keymap that tells the shared
 # host a key was pressed.
-makedepends="cargo libxkbcommon-dev"
+# What every program of the desktop group links, not this one alone: the
+# first package of the group builds them all (ci/build-programs.sh).
+makedepends="cargo libxkbcommon-dev linux-pam-dev"
 # Nothing at run time. It is linked against the screensaver library rather than
 # calling out to it, and it can be run by hand with nothing else installed —
 # though on a desktop it is alpymist-screensaver that decides when.
@@ -26,8 +28,9 @@ source=""
 builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
 
 # Where cargo leaves what it builds. build-packages.sh points every package at
-# one directory, so a dependency compiled for one is not compiled again for the
-# next; each still builds only its own crates with their own features.
+# one directory, and ci/build-programs.sh builds a whole group of programs
+# into it at once, so the first package of a group builds them and the rest
+# find it done.
 _release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
 
 prepare() {
@@ -43,7 +46,7 @@ prepare() {
 
 build() {
 	cd "$builddir"
-	cargo build --release --locked -p alpymist-saver-starfield
+	sh "$builddir"/ci/build-programs.sh desktop
 }
 
 package() {

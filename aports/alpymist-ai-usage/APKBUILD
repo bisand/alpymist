@@ -21,7 +21,9 @@ license="MIT OR Apache-2.0"
 # jq is the status line's, claude-statusline.sh, which is bash too.
 # libxkbcommon is alpymist-widget's, which the bar's line comes from and the
 # popup will be drawn with.
-makedepends="cargo libxkbcommon-dev"
+# What every program of the desktop group links, not this one alone: the
+# first package of the group builds them all (ci/build-programs.sh).
+makedepends="cargo libxkbcommon-dev linux-pam-dev"
 depends="bash curl font-nerd-fonts-symbols jq libgcc libsecret libstdc++ ripgrep"
 options="!check"  # the test suite runs in CI, not in the package build
 source=""
@@ -30,8 +32,9 @@ source=""
 builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
 
 # Where cargo leaves what it builds. build-packages.sh points every package at
-# one directory, so a dependency compiled for one is not compiled again for the
-# next; each still builds only its own crates with their own features.
+# one directory, and ci/build-programs.sh builds a whole group of programs
+# into it at once, so the first package of a group builds them and the rest
+# find it done.
 _release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
 
 prepare() {
@@ -47,7 +50,7 @@ prepare() {
 
 build() {
 	cd "$builddir"
-	cargo build --release --locked -p alpymist-ai-usage
+	sh "$builddir"/ci/build-programs.sh desktop
 }
 
 package() {

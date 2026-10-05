@@ -13,7 +13,9 @@ license="MIT OR Apache-2.0"
 # `alpymist set` through alpymist-auth's password dialog and polkit. The menu
 # finds every setting through the fragment generated here from the registry,
 # so its entries are always the installed window's (ADR 0007).
-makedepends="cargo libxkbcommon-dev"
+# What every program of the desktop group links, not this one alone: the
+# first package of the group builds them all (ci/build-programs.sh).
+makedepends="cargo libxkbcommon-dev linux-pam-dev"
 depends="alpymist alpymist-auth font-fira-ttf font-nerd-fonts-symbols polkit wl-clipboard"
 options="!check"  # the test suite runs in CI, not in the package build
 source=""
@@ -22,8 +24,9 @@ source=""
 builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
 
 # Where cargo leaves what it builds. build-packages.sh points every package at
-# one directory, so a dependency compiled for one is not compiled again for the
-# next; each still builds only its own crates with their own features.
+# one directory, and ci/build-programs.sh builds a whole group of programs
+# into it at once, so the first package of a group builds them and the rest
+# find it done.
 _release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
 
 prepare() {
@@ -39,7 +42,7 @@ prepare() {
 
 build() {
 	cd "$builddir"
-	cargo build --release --locked -p alpymist-settings-app -p alpymist
+	sh "$builddir"/ci/build-programs.sh desktop
 	"$_release"/alpymist menu-fragment > settings.toml
 }
 

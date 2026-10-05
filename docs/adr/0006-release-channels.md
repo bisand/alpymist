@@ -96,3 +96,43 @@ and a fault that only full LTO brings out would first be seen in a Release
 build, not on dev. Release still builds the full profile, and its smoke test
 boots an image made of those packages, which is where such a fault would show
 before anything is published to stable.
+
+## Addendum — 2026-10-04: dev is built as stable is again, a group of programs at a time
+
+The addendum above traded what dev tests for time: its programs were not the
+ones the next release ships. The time was the links. Full LTO has each program
+optimise everything it links, on about one core, and the packages were built
+one after another, so nineteen cargo runs linked twenty-three programs one at
+a time on a runner with four cores.
+
+Now `ci/build-programs.sh` builds the programs in two cargo runs, and each
+package's `build()` calls it: the first package of a group builds every
+program in it, linking as many at once as there are cores, and the others find
+theirs built. Measured on one machine with four jobs, stable's profile
+throughout:
+
+| | time | the programs |
+| --- | --- | --- |
+| one package at a time, as it was | 635 s | 28.86 MB |
+| two runs, a group each | 296 s | 28.80 MB |
+| one at a time without LTO, as dev was | 246 s | 43.1 MB |
+
+Thin LTO was measured too and is not the answer: 459 s one at a time, and
+programs 24% bigger.
+
+So both channels build the release profile as it is, and the first addendum's
+decision is undone: a dev package is again the program the release ships, and
+a fault that only full LTO brings out is seen on dev first.
+
+What that gives up is what `ci/README.md` used to promise, that a package
+builds only its own crates with their own features. Cargo gives a crate the
+features of every package it is built beside, so within a group they are
+shared: `alpymist` and Settings link the Wi-Fi, power, AI usage and
+screensaver crates with their popups compiled in, where alone they would not.
+The optimiser drops what a program does not call — twenty of the programs came
+out the same size to the byte, and none more than 4 kB bigger — but they are
+not the same bytes, and a crate that only compiles because a neighbour turns a
+feature on is no longer caught by the package build. The groups are by what
+must not be shared: the programs that run with no desktop (the greeter, the
+installer, the splash) are built without default features and never beside
+the rest, so the window backend cannot reach them this way.
