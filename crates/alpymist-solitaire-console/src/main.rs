@@ -117,14 +117,16 @@ mod frame {
             }
         }
 
-        /// Paint what of the table looks different, and say how much that
-        /// was.
-        pub fn refresh(&mut self, game: &mut Play) -> Change {
+        /// Paint what of the table looks different. Returns the one
+        /// rectangle all of it is in, the whole table for all of it, and
+        /// `None` when nothing was.
+        pub fn refresh(&mut self, game: &mut Play) -> Option<Rect> {
             let (look, change) = game.since(self.look.as_ref());
-            let only = match change {
-                Change::Nothing => return change,
-                Change::Within(area) => Some(area),
-                Change::Everything => None,
+            let whole = Rect::from_size(self.size);
+            let parts = match change {
+                Change::Nothing => return None,
+                Change::Within(parts) => parts,
+                Change::Everything => Vec::new(),
             };
             if let Some(mut canvas) = Canvas::from_pixels(
                 &mut self.pixels,
@@ -132,10 +134,22 @@ mod frame {
                 self.size.width,
                 PixelFormat::Argb8888,
             ) {
-                game.paint_table_on(&mut canvas, only);
+                if parts.is_empty() {
+                    game.paint_table_on(&mut canvas, None);
+                }
+                // Each part by itself: two piles at either end of the table
+                // are two columns, not everything between them.
+                for part in &parts {
+                    game.paint_table_on(&mut canvas, Some(*part));
+                }
             }
             self.look = Some(look);
-            change
+            Some(
+                parts
+                    .into_iter()
+                    .reduce(|all, part| all.union(&part))
+                    .unwrap_or(whole),
+            )
         }
 
         /// Put the table's `area` on `canvas`, and the cards in the hand
@@ -165,6 +179,7 @@ mod frame {
 
     /// Print what a frame costs here: a table painted whole, and a card
     /// carried across it.
+    #[allow(clippy::too_many_lines)] // one measurement after another
     pub fn bench() {
         let size = Size::new(1920, 1080);
         let mut game = Play::new(
@@ -211,7 +226,7 @@ mod frame {
                     table.compose(&mut canvas, area, &mut game);
                 }
                 last = now;
-                assert_eq!(change, Change::Nothing, "a hand moving repainted the table");
+                assert!(change.is_none(), "a hand moving repainted the table");
                 started.elapsed().as_secs_f64() * 1000.0
             })
             .collect();
@@ -230,16 +245,37 @@ mod frame {
                 let started = Instant::now();
                 game.pointer(Some(spots[i % spots.len()]));
                 let change = table.refresh(&mut game);
-                if let (Change::Within(area), Some(mut canvas)) = (
+                if let (Some(area), Some(mut canvas)) = (
                     change,
                     Canvas::from_pixels(&mut screen, size, size.width, PixelFormat::Argb8888),
                 ) {
                     table.compose(&mut canvas, area, &mut game);
                 }
-                assert_ne!(
-                    change,
-                    Change::Everything,
+                assert!(
+                    change.is_none_or(|area| area.height < 200),
                     "a button lit repainted the table"
+                );
+                started.elapsed().as_secs_f64() * 1000.0
+            })
+            .collect();
+
+        // The stock turned, card after card: the stock and the waste.
+        game.pointer(None);
+        table.refresh(&mut game);
+        let turned: Vec<f64> = (0..20)
+            .map(|_| {
+                let started = Instant::now();
+                game.key(alpymist_solitaire::play::Key::Space);
+                let change = table.refresh(&mut game);
+                if let (Some(area), Some(mut canvas)) = (
+                    change,
+                    Canvas::from_pixels(&mut screen, size, size.width, PixelFormat::Argb8888),
+                ) {
+                    table.compose(&mut canvas, area, &mut game);
+                }
+                assert!(
+                    change.is_some_and(|area| area.height < 800),
+                    "turning the stock repainted the table"
                 );
                 started.elapsed().as_secs_f64() * 1000.0
             })
@@ -253,6 +289,10 @@ mod frame {
             median(carried)
         );
         println!("  a button lit, median            {:8.2} ms", median(lit));
+        println!(
+            "  the stock turned, median        {:8.2} ms",
+            median(turned)
+        );
     }
 
     #[cfg(test)]
@@ -376,7 +416,6 @@ mod screen {
     use super::frame::{Table, around};
     use super::keys;
     use alpymist_solitaire::kept::Kept;
-    use alpymist_solitaire::play::Change;
     use alpymist_solitaire::play::{self, Outcome, Play};
     use alpymist_ui::display::{self, Screen};
     use alpymist_ui::render::{new_cursor, paint_cursor};
@@ -512,7 +551,6 @@ mod screen {
         // what the bar said in it.
         let mut shown: [Option<Rect>; 2] = [None, None];
         let mut said = String::new();
-        let whole = Rect::from_size(size);
 
         loop {
             // A keyboard or a mouse that turns up a moment late is ordinary;
@@ -550,18 +588,14 @@ mod screen {
             if dirty {
                 // The table only when it looks different; otherwise just
                 // where the hand and the arrow were and are.
-                let change = table.refresh(&mut game);
+                let repainted = table.refresh(&mut game);
                 let now = [game.hand_bounds(), cursor.visible.then(|| cursor.bounds())];
                 // The clock's words, where they changed: a second passing
                 // is a strip of the bar, not a table.
                 let ticked = game.status().filter(|(words, _)| *words != said);
                 let moved = around([shown[0], shown[1], now[0], now[1]]);
                 let said_at = ticked.as_ref().map(|(_, at)| *at);
-                let area = match change {
-                    Change::Everything => Some(whole),
-                    Change::Within(part) => around([moved, said_at, Some(part), None]),
-                    Change::Nothing => around([moved, said_at, None, None]),
-                };
+                let area = around([moved, said_at, repainted, None]);
                 if let Some((words, _)) = ticked {
                     said = words;
                 }

@@ -133,40 +133,49 @@ pub fn decode(bytes: &[u8]) -> Option<Rgb> {
 }
 
 /// Area-average `src` to exactly `dw` by `dh`.
+///
+/// In 32 bits throughout: a card's picture is a hundred and thirty thousand
+/// pixels of at most 255 each, which a `u32` holds many times over, and on a
+/// 32-bit processor sums of 64 are what made a card turned up for the first
+/// time a pause.
 // Indices stay below the picture's pixel count, which fits in usize.
 #[must_use]
 #[allow(clippy::cast_possible_truncation)]
 pub fn scale(src: &Rgb, dw: u32, dh: u32) -> Face {
-    let (w, h) = (u64::from(src.width), u64::from(src.height));
+    let (w, h) = (src.width as usize, src.height as usize);
     let (width, height) = (dw.max(1), dh.max(1));
-    let (dw, dh) = (u64::from(width), u64::from(height));
-    let mut pixels = vec![0xFFFF_FFFFu32; (dw * dh) as usize];
-    if w == 0 || h == 0 || (src.pixels.len() as u64) < w * h {
+    let (dw, dh) = (width as usize, height as usize);
+    let mut pixels = vec![0xFFFF_FFFFu32; dw * dh];
+    // A picture too large to sum in 32 bits is not one of ours.
+    if w == 0 || h == 0 || src.pixels.len() < w * h || w * h > (u32::MAX / 255) as usize {
         return Face {
             pixels,
             width,
             height,
         };
     }
-    for dy in 0..dh {
-        // Source rows covered by this destination row, at least one.
+    // The source columns each destination column covers, at least one: the
+    // same for every row, so worked out once.
+    let columns: Vec<(usize, usize)> = (0..dw)
+        .map(|dx| {
+            let x0 = dx * w / dw;
+            (x0, ((dx + 1) * w).div_ceil(dw).max(x0 + 1).min(w))
+        })
+        .collect();
+    for (dy, row) in pixels.chunks_exact_mut(dw).enumerate() {
         let y0 = dy * h / dh;
         let y1 = ((dy + 1) * h).div_ceil(dh).max(y0 + 1).min(h);
-        for dx in 0..dw {
-            let x0 = dx * w / dw;
-            let x1 = ((dx + 1) * w).div_ceil(dw).max(x0 + 1).min(w);
-            let mut sum = [0u64; 3];
+        for (out, &(x0, x1)) in row.iter_mut().zip(&columns) {
+            let mut sum = [0u32; 3];
             for sy in y0..y1 {
-                let row = (sy * w) as usize;
-                for p in &src.pixels[row + x0 as usize..row + x1 as usize] {
-                    for (s, v) in sum.iter_mut().zip(p) {
-                        *s += u64::from(*v);
-                    }
+                for p in &src.pixels[sy * w + x0..sy * w + x1] {
+                    sum[0] += u32::from(p[0]);
+                    sum[1] += u32::from(p[1]);
+                    sum[2] += u32::from(p[2]);
                 }
             }
-            let n = ((y1 - y0) * (x1 - x0)).max(1);
-            let c = |i: usize| u32::try_from(sum[i] / n).unwrap_or(255).min(255);
-            pixels[(dy * dw + dx) as usize] = 0xFF00_0000 | (c(0) << 16) | (c(1) << 8) | c(2);
+            let n = ((y1 - y0) * (x1 - x0)).max(1) as u32;
+            *out = 0xFF00_0000 | ((sum[0] / n) << 16) | ((sum[1] / n) << 8) | (sum[2] / n);
         }
     }
     Face {

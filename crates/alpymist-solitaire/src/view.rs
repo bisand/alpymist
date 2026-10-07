@@ -239,6 +239,32 @@ impl Layout {
         Rect::new(x, y, self.card.0, self.card.1)
     }
 
+    /// Everything a pile can cover, with room for the ring the keyboard
+    /// draws round it: what has to be painted again when the pile changes.
+    /// One of the seven reaches to the foot of the window, however few cards
+    /// it has now, since it may have had more.
+    #[must_use]
+    pub fn reach(&self, place: Place) -> Rect {
+        let slot = self.slot(place);
+        let covered = match place {
+            Place::Stock | Place::Foundation(_) => slot,
+            // Three cards fanned.
+            Place::Waste => Rect::new(
+                slot.x,
+                slot.y,
+                slot.width + 2 * (self.card.0 * 22 / 100),
+                slot.height,
+            ),
+            Place::Tableau(_) => Rect::new(
+                slot.x,
+                slot.y,
+                slot.width,
+                (i32::try_from(self.size.height).unwrap_or(0) - slot.y).max(slot.height),
+            ),
+        };
+        covered.inflate(self.metrics.px(10))
+    }
+
     /// How far each face-down and each face-up card of `pile` shows above
     /// the next: less than usual when the pile would leave the window.
     #[must_use]
