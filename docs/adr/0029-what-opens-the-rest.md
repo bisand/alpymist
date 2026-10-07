@@ -148,6 +148,11 @@ the commands that made them. Faces drawn by code would have followed the
 theme and looked like nothing anyone has played with; faces made by an
 image model were tried and came out with the wrong pips and letters.
 
+**The backs are a picture made for it**: mountains in mist, from an image
+model run on a machine of our own, with the prompt and the seed beside the
+picture. It does not follow the theme; the back drawn in the theme's
+colour is kept for where the picture cannot be decoded.
+
 Tried: the rules by their tests, the table as pictures drawn offscreen, and
 the window opened on the development machine. Not tried by anyone but the
 person playing: how dragging feels.
