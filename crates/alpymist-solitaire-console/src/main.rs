@@ -78,6 +78,54 @@ fn run(turn: Option<usize>, nearly_out: bool) -> Result<(), String> {
     screen::run(turn, nearly_out)
 }
 
+/// A face to write with, on a system that is not Alpymist.
+mod face {
+    /// Where other systems keep a plain sans-serif: Debian and Raspberry Pi
+    /// OS first, then Alpine, Arch and Fedora. None of them is carried in
+    /// the program; where none is there, text is Denise's built-in bitmap.
+    const ELSEWHERE: [&str; 8] = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
+    ];
+
+    /// The face to use: `wanted` where it `exists`, else the first of the
+    /// others that does, else `wanted` all the same, to be reported missing.
+    pub fn choose(wanted: &str, exists: impl Fn(&str) -> bool) -> String {
+        if exists(wanted) {
+            return wanted.to_owned();
+        }
+        ELSEWHERE
+            .into_iter()
+            .find(|path| exists(path))
+            .unwrap_or(wanted)
+            .to_owned()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{ELSEWHERE, choose};
+
+        #[test]
+        fn the_theme_s_face_where_it_is_and_another_system_s_where_it_is_not() {
+            let ours = "/usr/share/fonts/fira/FiraSans-Regular.ttf";
+            assert_eq!(choose(ours, |_| true), ours);
+            assert_eq!(choose(ours, |p| p == ELSEWHERE[2]), ELSEWHERE[2]);
+            // The first that is there, in the order they are tried.
+            assert_eq!(
+                choose(ours, |p| p == ELSEWHERE[4] || p == ELSEWHERE[1]),
+                ELSEWHERE[1]
+            );
+            assert_eq!(choose(ours, |_| false), ours);
+        }
+    }
+}
+
 /// The keys a game takes, from the kernel's.
 #[cfg(feature = "drm")]
 mod keys {
@@ -238,8 +286,11 @@ mod screen {
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos());
         let seed = u64::try_from(now & u128::from(u64::MAX)).unwrap_or(0);
-        let mut game =
-            Play::new(alpymist_widget::appearance(), kept, dir, seed, nearly_out).with_quit();
+        let mut appearance = alpymist_widget::appearance();
+        appearance.font = super::face::choose(&appearance.font, |path| {
+            std::path::Path::new(path).is_file()
+        });
+        let mut game = Play::new(appearance, kept, dir, seed, nearly_out).with_quit();
         for p in game.font_problems() {
             eprintln!("font {p}");
         }
