@@ -36,7 +36,9 @@ Install › Alpine package adds.
 Pictures open in Ristretto, films and music in mpv, and archives in
 xarchiver, which also gives Thunar's menu "Extract here" and "Create
 archive". Ristretto opens PNG, JPEG, GIF, BMP, TIFF, SVG and WebP; a phone's
-HEIF and AVIF pictures need a viewer from the Store.
+HEIF and AVIF pictures need a viewer from the Store. It shows one picture
+and no strip of the folder's others, since nothing here makes thumbnails;
+the arrows in its toolbar still go to the next and the last.
 
 The right-hand column is a system with nothing added, and yours shows what
 you have installed. Where nothing installed opens a kind, the page says so; the Store has

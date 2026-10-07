@@ -89,6 +89,7 @@ depends="
 	alpymist-settings
 	alpymist-shell=$pkgver-r$pkgrel
 	alpymist-tools=$pkgver-r$pkgrel
+	alpymist-tui=$pkgver-r$pkgrel
 	alpymist-splash-openrc
 	alpymist-store
 	alpymist-thunderbolt
@@ -236,6 +237,10 @@ package() {
 	# Folders as a list; see the file.
 	install -Dm644 "$builddir"/desktop/thunar/thunar.xml \
 		"$pkgdir"/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/thunar.xml
+	# No strip of thumbnails nothing makes, and no message about it; see the
+	# file.
+	install -Dm644 "$builddir"/desktop/ristretto/ristretto.xml \
+		"$pkgdir"/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/ristretto.xml
 	# Who may mount a stick, and gvfs's root helper; see the file.
 	install -Dm644 "$builddir"/desktop/polkit/49-alpymist-files.rules \
 		"$pkgdir"/usr/share/polkit-1/rules.d/49-alpymist-files.rules
@@ -343,8 +348,8 @@ _tools() {
 # cliamp for music and the radio, btop for what the machine is doing, ncdu
 # for what fills the disk, tmux, and fastfetch to say what the machine is.
 # About 64 MiB, most of it lazygit and cliamp, each one Go binary. The
-# desktop does not depend on it, so `apk del alpymist-tui` takes them away
-# again: the installer adds it by name, as it does the tools. cliamp plays
+# desktop depends on it, as it does on the tools, so an upgrade brings them
+# to a system that was installed before they were. cliamp plays
 # through ALSA, which pipewire-alsa hands to PipeWire, and asks ffmpeg for
 # the radio stations that send AAC; mpv's libraries are most of ffmpeg
 # already. None of them is pinned but cliamp, which is our own aport of a

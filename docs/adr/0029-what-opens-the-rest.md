@@ -74,13 +74,20 @@ ADR 0028's reason for no thumbnails, and it stands: Ristretto, mpv and
 opening one no longer takes a trip to the Store.
 
 **A terminal's programs are a package of their own, `alpymist-tui`, which
-nothing depends on.** lazygit, cliamp, btop, ncdu, tmux and fastfetch, with
-`pipewire-alsa` and `ffmpeg` for cliamp: about 64 MiB. The installer adds
-it by name, as it does `alpymist-tools`, and the image names it so that it
-is there without a network. `apk del alpymist-tui` takes all of it away
-again, which a dependency of the desktop's would not allow. A system
-installed before this gets it with `apk add alpymist-tui`, and not by
-upgrading.
+the desktop depends on.** lazygit, cliamp, btop, ncdu, tmux and fastfetch,
+with `pipewire-alsa` and `ffmpeg` for cliamp: about 64 MiB. A dependency,
+as `alpymist-tools` is, so that an upgrade brings them to every system and
+the image carries them with the desktop. Leaving it for the installer to
+add by name was the other way, and would have let `apk del` take them away
+again; it would also have left every system there is without them until
+someone typed a command. They cannot be removed while the desktop is
+installed.
+
+**Ristretto shows no strip of thumbnails.** It asks tumbler for them, and
+ADR 0028 left tumbler out. `/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/ristretto.xml`
+turns the strip off, and the message about the missing thumbnailer that
+came with every picture opened. Both are defaults the account's own
+settings override.
 
 **cliamp is an aport of ours, pinned to a release.** `aports/cliamp` builds
 upstream's tarball, held to its SHA-512 as squint's is, with the Go that
@@ -90,8 +97,7 @@ lists and in `FETCHED`. Nothing of its source is changed.
 
 ## Consequences
 
-- 32 MiB more on every desktop at its next upgrade, and 64 on a new
-  install.
+- 96 MiB more on every desktop at its next upgrade.
 - A third aport of somebody else's program to move forward by hand, and
   this one's upstream releases often. A release is a `pkgver` and a
   `sha512sums`; nothing tells us there is one.
@@ -111,5 +117,6 @@ lists and in `FETCHED`. Nothing of its source is changed.
   packages, cliamp built by `abuild` from the aport in an Alpine 3.24
   container for aarch64, and a build of the same release run there as far
   as listing its commands and themes.
-  Not tried: sound out of cliamp, x86_64, the installer's new step, the
+  Ristretto opening a picture with the defaults in place, as one window
+  and no message. Not tried: sound out of cliamp, the aport on x86_64, the
   image, and `alpymist-tui` as a package, which only CI builds.
