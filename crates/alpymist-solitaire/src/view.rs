@@ -86,6 +86,9 @@ pub struct Scene {
     /// their pile: whoever paints them apart, with [`paint_hand_on`], so
     /// that a hand moving does not mean a table painted again.
     pub without_hand: bool,
+    /// Leave what the bar says of the game out too, for
+    /// [`paint_status_on`]: a clock that ticks is not a table that changed.
+    pub without_status: bool,
 }
 
 /// Something said over the table, to be answered before the game goes on:
@@ -563,6 +566,33 @@ pub fn paint_hand_on(
     hand(&mut pen, &mut brush, game, lifted);
 }
 
+/// Paint what the bar says of the game, and the bar behind it, onto
+/// `canvas`: over a table painted with [`Scene::without_status`]. Nothing
+/// where a panel is up, which dims the bar with the rest.
+pub fn paint_status_on(
+    canvas: &mut Canvas<'_>,
+    layout: &Layout,
+    appearance: &Appearance,
+    fonts: &mut Fonts,
+    game: &Game,
+    scene: &Scene,
+) {
+    let mut pen = Pen::new(canvas);
+    let ink = Ink::new(appearance);
+    let st = fonts.styles(&layout.metrics);
+    let said = status(game, scene.seconds);
+    let colour = if game.won() { ink.accent } else { ink.dim };
+    pen.fill_rect(layout.status, ink.card);
+    draw::right_label(
+        &mut pen,
+        &mut fonts.engine,
+        st.text,
+        layout.status,
+        &said,
+        colour,
+    );
+}
+
 /// Paint the table into `frame`.
 #[allow(clippy::too_many_arguments)] // what a table is painted from
 pub fn paint(
@@ -640,9 +670,11 @@ pub fn paint_on(
             );
         }
     }
-    let said = status(game, scene.seconds);
-    let colour = if game.won() { ink.accent } else { ink.dim };
-    draw::right_label(&mut pen, engine, st.text, layout.status, &said, colour);
+    if !scene.without_status {
+        let said = status(game, scene.seconds);
+        let colour = if game.won() { ink.accent } else { ink.dim };
+        draw::right_label(&mut pen, engine, st.text, layout.status, &said, colour);
+    }
 
     let mut brush = Brush {
         layout,
