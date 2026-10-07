@@ -16,6 +16,7 @@ practice.
 | Network services | None listening. The SSH server is not installed until turned on. |
 | Bluetooth | Off |
 | Thunderbolt and USB4 devices | Asked about before they are let in |
+| USB sticks, cards and other drives | Opened when you open them in Files, never when plugged in |
 | Clipboard history | Off |
 | A fingerprint, at the lock screen, at administrator prompts and at login | Off, each |
 | Secrets | In a keyring encrypted with your login password |
@@ -102,6 +103,20 @@ shut may not have the dock's keyboard at the login screen: open the lid.
 alpymist-thunderbolt list          # the devices, and what each is allowed
 alpymist-thunderbolt forget UUID
 ```
+
+## Sticks, cards and other drives
+
+A drive you plug in appears in the file manager's sidebar and is opened when
+you click it there; nothing is mounted when it is plugged in, at the login
+screen or while the screen is locked. Opening and ejecting one asks for no
+password from someone sitting at the machine. An encrypted drive asks for
+its own passphrase.
+
+The machine's own disks are another matter: mounting one that is not
+already, formatting and partitioning ask for an administrator's password.
+
+Folders show no thumbnails, which is deliberate: making them would mean
+reading every picture and document in a folder you had only opened.
 
 ## What programs may do to the desktop
 

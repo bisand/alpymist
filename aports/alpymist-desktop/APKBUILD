@@ -62,6 +62,11 @@ license="MIT OR Apache-2.0"
 # hyprland-security.conf lets in (ADR 0015). alpymist-thunderbolt asks before a
 # Thunderbolt or USB4 dock is let in. Hyprland's own wallpaper and idle daemons
 # are not packaged for Alpine 3.24; swaybg and swayidle work under it.
+# Thunar is the file manager, with gvfs for its trash and its list of drives
+# and udisks2 to mount them: a stick is mounted when it is opened, never when
+# it is plugged in, so thunar-volman is left out, and so is tumbler, whose
+# thumbnails would have a parser read every picture, film and document in a
+# folder that is only looked at (ADR 0028).
 depends="
 	adwaita-icon-theme
 	alpymist
@@ -101,6 +106,7 @@ depends="
 	greetd
 	grim
 	gsettings-desktop-schemas
+	gvfs
 	hyprland
 	hyprland-plugins-hyprexpo
 	impala
@@ -121,6 +127,8 @@ depends="
 	slurp
 	squint
 	swaybg
+	thunar
+	udisks2
 	waybar
 	wireplumber
 	wl-clipboard
@@ -214,6 +222,12 @@ package() {
 		"$pkgdir"/etc/xdg/gtk-3.0/settings.ini
 	install -Dm644 "$builddir"/desktop/theme/gtk-4.0-settings.ini \
 		"$pkgdir"/etc/xdg/gtk-4.0/settings.ini
+	# Folders as a list; see the file.
+	install -Dm644 "$builddir"/desktop/thunar/thunar.xml \
+		"$pkgdir"/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/thunar.xml
+	# Who may mount a stick, and gvfs's root helper; see the file.
+	install -Dm644 "$builddir"/desktop/polkit/49-alpymist-files.rules \
+		"$pkgdir"/usr/share/polkit-1/rules.d/49-alpymist-files.rules
 	install -Dm644 "$builddir"/desktop/librewolf/alpymist.js \
 		"$pkgdir"/usr/lib/librewolf/defaults/pref/alpymist.js
 	install -Dm644 "$builddir"/desktop/xdg-desktop-portal/portals.conf \
