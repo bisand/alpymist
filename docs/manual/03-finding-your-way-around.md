@@ -84,6 +84,5 @@ something when clicked. [The top bar](06-the-top-bar.md) goes through them.
 |---|---|
 | <kbd>Super</kbd>+<kbd>L</kbd> | Locks the screen. |
 | <kbd>Super</kbd>+<kbd>Esc</kbd> | Opens the System menu: lock, suspend, log out, restart, shut down. |
-| <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> | Logs out at once, without asking. |
 
 The power icon at the right end of the bar opens the same System menu.
