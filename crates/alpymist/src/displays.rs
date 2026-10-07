@@ -62,7 +62,8 @@ pub enum Action {
         n: u32,
     },
     /// Show every workspace of the screen with the focus, to pick one from
-    /// (Super+Tab); again, and the overview goes.
+    /// (Super+Tab). Again while it is open, Hyprland's own goes and
+    /// Alpymist's moves on to the next workspace.
     Overview,
     /// Follow screens as they come and go. `alpymist watchdog` does this,
     /// among its watches.
