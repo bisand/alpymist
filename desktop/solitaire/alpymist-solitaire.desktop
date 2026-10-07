@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Solitaire
+GenericName=Klondike
+Comment=The card game, with the mouse or the keyboard
+Exec=alpymist-solitaire
+Icon=applications-games
+Terminal=false
+Categories=Game;CardGame;
+Keywords=cards;patience;klondike;game;
+StartupWMClass=alpymist-solitaire
