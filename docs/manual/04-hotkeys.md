@@ -17,7 +17,7 @@ file.
 | <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd> | The menu, opened at Apps |
 | <kbd>Super</kbd>+<kbd>Esc</kbd> | The menu, opened at System |
 | <kbd>Super</kbd>+<kbd>Return</kbd> or <kbd>Super</kbd>+<kbd>Q</kbd> | A terminal |
-| <kbd>Super</kbd>+<kbd>B</kbd> | The web browser |
+| <kbd>Super</kbd>+<kbd>B</kbd> or <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>Return</kbd> | The web browser |
 | <kbd>Super</kbd>+<kbd>E</kbd> | The file manager |
 | <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> | The text editor |
 
