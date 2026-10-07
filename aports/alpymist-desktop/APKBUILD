@@ -241,6 +241,13 @@ package() {
 	# file.
 	install -Dm644 "$builddir"/desktop/ristretto/ristretto.xml \
 		"$pkgdir"/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/ristretto.xml
+	# impala and bluetuith among the menu's applications, under their own
+	# names; neither brings a desktop entry. See _tui for the rest.
+	local entry
+	for entry in impala bluetuith; do
+		install -Dm644 "$builddir"/desktop/tui/alpymist-$entry.desktop \
+			"$pkgdir"/usr/share/applications/alpymist-$entry.desktop
+	done
 	# Who may mount a stick, and gvfs's root helper; see the file.
 	install -Dm644 "$builddir"/desktop/polkit/49-alpymist-files.rules \
 		"$pkgdir"/usr/share/polkit-1/rules.d/49-alpymist-files.rules

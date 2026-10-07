@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=bluetuith
+GenericName=Bluetooth in a terminal
+Comment=Pair, connect and send files to Bluetooth devices
+Exec=bluetuith
+Icon=utilities-terminal
+Terminal=true
+Categories=Network;ConsoleOnly;
+Keywords=bluetooth;pair;headphones;bluez;devices;
