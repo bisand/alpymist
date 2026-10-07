@@ -6,7 +6,7 @@
 //! answer what is under the pointer and where a card let go of belongs.
 
 use crate::cards::Card;
-use crate::faces::{ASPECT, Faces};
+use crate::faces::{ASPECT, BACKS, Faces};
 use crate::game::{Game, PILES, Pile, Place};
 use alpymist_widget::Appearance;
 use alpymist_widget::draw::{self, Fonts, Ink, Metrics};
@@ -24,6 +24,8 @@ pub enum Button {
     Undo,
     /// Turn one card from the stock, or three: deals again.
     Turn,
+    /// The next picture for the cards' backs.
+    Back,
 }
 
 /// What is under a point.
@@ -69,6 +71,8 @@ pub struct Scene {
     pub focus: Option<Place>,
     /// The cards the keyboard has picked up, which stay where they lie.
     pub chosen: Option<(Place, usize)>,
+    /// Which of the backs the cards wear.
+    pub back: usize,
 }
 
 /// Where everything is, in physical pixels.
@@ -81,7 +85,7 @@ pub struct Layout {
     /// The bar of buttons along the top.
     pub bar: Rect,
     /// The buttons on it.
-    pub buttons: [(Button, Rect); 3],
+    pub buttons: [(Button, Rect); 4],
     /// Where the bar says how the game stands.
     pub status: Rect,
     /// A card's width and height.
@@ -127,6 +131,7 @@ impl Layout {
             (Button::New, place(u * 7)),
             (Button::Undo, place(u * 5)),
             (Button::Turn, place(u * 8)),
+            (Button::Back, place(u * 10)),
         ];
         let status = Rect::new(x + u / 2, by, (w - x - u * 3 / 2).max(0), button_h);
 
@@ -320,14 +325,18 @@ pub fn status(game: &Game) -> String {
     }
 }
 
-/// What a button says.
+/// What a button says, in a game whose cards wear the `back`th back.
 #[must_use]
-pub fn label(button: Button, game: &Game) -> &'static str {
+pub fn label(button: Button, game: &Game, back: usize) -> String {
     match button {
-        Button::New => "New game",
-        Button::Undo => "Undo",
-        Button::Turn if game.turn() == 3 => "Turn three",
-        Button::Turn => "Turn one",
+        Button::New => "New game".into(),
+        Button::Undo => "Undo".into(),
+        Button::Turn if game.turn() == 3 => "Turn three".into(),
+        Button::Turn => "Turn one".into(),
+        Button::Back => format!(
+            "Back: {}",
+            BACKS.get(back).map_or("plain", |(name, _)| name)
+        ),
     }
 }
 
@@ -340,6 +349,7 @@ const SHADOW: Color = Color::rgba(0, 0, 0, 0x50);
 
 struct Brush<'a> {
     layout: &'a Layout,
+    which: usize,
     faces: &'a mut Faces,
     back: Color,
     line: i32,
@@ -375,7 +385,7 @@ impl Brush<'_> {
             u32::try_from(inner.width).unwrap_or(1),
             u32::try_from(inner.height).unwrap_or(1),
         );
-        let drawn = self.faces.back(w, h).is_some_and(|back| {
+        let drawn = self.faces.back(self.which, w, h).is_some_and(|back| {
             PixelView::new(&back.pixels, Size::new(back.width, back.height), back.width)
                 .is_some_and(|view| {
                     pen.blit_rounded(&view, inner, inner, radius / 2);
@@ -419,7 +429,7 @@ pub fn paint(
                 engine,
                 st.text,
                 rect,
-                label(button, game),
+                &label(button, game, scene.back),
                 (None, ink.dim),
                 Some((m.px(1), ink.border)),
             );
@@ -429,7 +439,7 @@ pub fn paint(
                 engine,
                 st.text,
                 rect,
-                label(button, game),
+                &label(button, game, scene.back),
                 hovered,
                 m,
                 &ink,
@@ -442,6 +452,7 @@ pub fn paint(
 
     let mut brush = Brush {
         layout,
+        which: scene.back,
         faces,
         back: draw::mix(appearance.accent, appearance.background, 45),
         line: m.px(1),

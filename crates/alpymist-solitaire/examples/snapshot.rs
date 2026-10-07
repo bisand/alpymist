@@ -107,6 +107,30 @@ fn main() {
         ("midway", &midway, Scene::default()),
         ("held", &midway, held),
         ("keys", &midway, keys),
+        (
+            "back-3",
+            &dealt,
+            Scene {
+                back: 2,
+                ..Scene::default()
+            },
+        ),
+        (
+            "back-7",
+            &dealt,
+            Scene {
+                back: 6,
+                ..Scene::default()
+            },
+        ),
+        (
+            "back-9",
+            &dealt,
+            Scene {
+                back: 8,
+                ..Scene::default()
+            },
+        ),
     ] {
         let mut pixels = vec![0u32; (w * h) as usize];
         let mut frame = Frame::new(

@@ -148,10 +148,15 @@ the commands that made them. Faces drawn by code would have followed the
 theme and looked like nothing anyone has played with; faces made by an
 image model were tried and came out with the wrong pips and letters.
 
-**The backs are a picture made for it**: mountains in mist, from an image
-model run on a machine of our own, with the prompt and the seed beside the
-picture. It does not follow the theme; the back drawn in the theme's
-colour is kept for where the picture cannot be decoded.
+**The backs are pictures made for it, twelve to choose from**: mountains
+in mist, the classic red and blue, an aurora, a wave, a neon grid, and two
+in the manner of the home computers of the 1980s among them. All from an
+image model run on a machine of our own, with the prompt and the seed of
+each beside the pictures, 660 KiB together. <kbd>B</kbd> or the bar's last
+button goes to the next and <kbd>Shift</kbd>+<kbd>B</kbd> to the one
+before, and the choice is kept as a name in
+`~/.local/state/alpymist/solitaire-back`. None follows the theme; the back
+drawn in the theme's colour is kept for where a picture cannot be decoded.
 
 Tried: the rules by their tests, the table as pictures drawn offscreen, and
 the window opened on the development machine. Not tried by anyone but the

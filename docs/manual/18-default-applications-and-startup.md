@@ -47,7 +47,10 @@ the arrows move between the piles, <kbd>Enter</kbd> picks cards up and puts
 them down, <kbd>Up</kbd> and <kbd>Down</kbd> on a pile picked up from take
 more cards or fewer, <kbd>Space</kbd> turns the stock, <kbd>H</kbd> sends a
 card home, <kbd>U</kbd> takes a move back and <kbd>N</kbd> deals again. The
-bar's last button chooses between turning one card and three.
+bar chooses between turning one card and three, and <kbd>B</kbd> or its
+last button changes the picture on the cards' backs: twelve of them, from
+mountains in mist to the home computers of the 1980s, and the one chosen is
+kept.
 
 The right-hand column is a system with nothing added, and yours shows what
 you have installed. Where nothing installed opens a kind, the page says so; the Store has
