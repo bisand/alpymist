@@ -15,6 +15,7 @@ members = [
     "crates/alpymist-install",
     "crates/alpymist-lock",
     "crates/alpymist-menu",
+    "crates/alpymist-overview",
     "crates/alpymist-pam",
     "crates/alpymist-power",
     "crates/alpymist-saver-mountains",

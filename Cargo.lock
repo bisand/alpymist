@@ -218,6 +218,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpymist-overview"
+version = "0.3.8"
+dependencies = [
+ "alpymist-displays",
+ "alpymist-widget",
+ "denise",
+ "denise-render",
+ "denise-text",
+ "png",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "alpymist-pam"
 version = "0.3.8"
 

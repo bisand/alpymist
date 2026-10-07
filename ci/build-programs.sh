@@ -35,6 +35,7 @@ DESKTOP="
 	alpymist-fingerprint
 	alpymist-lock
 	alpymist-menu
+	alpymist-overview
 	alpymist-power
 	alpymist-saver-mountains
 	alpymist-saver-starfield

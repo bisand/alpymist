@@ -287,10 +287,6 @@ pub const OVERVIEW: &str = "ALPYMIST_OVERVIEW";
 /// draws: only on `x86_64`, where Hyprland's hooks are written (0.54).
 const HOOKS: bool = cfg!(target_arch = "x86_64");
 
-/// What Super+Tab says where there are no hooks.
-const NO_HOOKS: &str =
-    "Hyprland's overview is a plugin that works only on Intel and AMD processors";
-
 /// Whether hyprexpo can load in a session started now. Hyprland finds the
 /// function a plugin hooks by running `nm` over itself, so without binutils
 /// there is no overview on any machine.
@@ -304,30 +300,45 @@ fn loads(hooks: bool, path: Option<&std::ffi::OsStr>) -> bool {
 }
 
 /// Super+Tab: every workspace of the screen with the focus, side by side on
-/// it, to pick one from; again, and it goes. hyprexpo draws it, and is told
+/// it, to pick one from; again, and it goes.
+///
+/// Where hyprexpo is loaded it draws it, the windows themselves, and is told
 /// first which workspace its grid starts at: the screen's own first, since
-/// it knows nothing of each screen having its own.
+/// it knows nothing of each screen having its own. Everywhere else — a
+/// processor Hyprland cannot hook a function on, a session that began
+/// before the plugin could load — `alpymist-overview` draws it, each window
+/// an outline.
 ///
 /// # Errors
-/// Hyprland could not be asked, or has no overview: this machine cannot
-/// have one, or the session began before the package that brought it was
-/// installed.
+/// Hyprland could not be asked, or neither could show it.
 pub fn overview() -> Result<(), String> {
-    if !HOOKS {
-        return Err(NO_HOOKS.into());
+    if HOOKS && by_plugin()? {
+        return Ok(());
     }
+    let status = std::process::Command::new(OURS)
+        .stdin(std::process::Stdio::null())
+        .status()
+        .map_err(|e| format!("{OURS}: {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("{OURS} could not show it"))
+    }
+}
+
+/// The overview of our own, which needs no plugin.
+const OURS: &str = "alpymist-overview";
+
+/// Have hyprexpo show the overview, or take it away. Whether it did: not,
+/// where it is not loaded.
+fn by_plugin() -> Result<bool, String> {
     let monitors = screen::parse(&hypr::request("j/monitors all")?)?;
     let layouts = Layouts::load(&layout::path());
     let first = focused_id(1, &monitors, &layouts);
     hypr::request(&format!(
         "keyword plugin:hyprexpo:workspace_method first {first}"
     ))?;
-    let answer = hypr::request("dispatch hyprexpo:expo toggle")?;
-    if answer == b"ok" {
-        Ok(())
-    } else {
-        Err("the overview starts with the desktop: log out and in again".into())
-    }
+    Ok(hypr::request("dispatch hyprexpo:expo toggle")? == b"ok")
 }
 
 /// What of `layout` the screens did not take, as Hyprland has them now: a
