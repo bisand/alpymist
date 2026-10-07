@@ -321,6 +321,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpymist-solitaire"
+version = "0.4.0"
+dependencies = [
+ "alpymist-widget",
+ "denise",
+ "denise-render",
+ "denise-text",
+ "png",
+]
+
+[[package]]
 name = "alpymist-splash"
 version = "0.4.0"
 dependencies = [

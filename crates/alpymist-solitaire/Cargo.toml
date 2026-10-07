@@ -1,0 +1,24 @@
+[package]
+name = "alpymist-solitaire"
+description = "Alpymist's Solitaire: Klondike in a window, drawn with Denise in the theme's colours."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "alpymist-solitaire"
+path = "src/main.rs"
+
+[dependencies]
+# The window, the fonts and the menu's appearance.
+alpymist-widget = { workspace = true }
+denise = { workspace = true }
+denise-render = { workspace = true }
+denise-text = { workspace = true }
+# The cards' faces are PNGs in the program: cards/README.md.
+png = { workspace = true }
+
+[lints]
+workspace = true
