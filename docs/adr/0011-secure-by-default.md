@@ -151,10 +151,11 @@ path, should it come.
 have been asked, and once it has been, Hyprland keeps the unanswered
 permission by the address of the program's connection, and does not drop it
 when the program goes. The next program given that address is `grim` again,
-as likely as not, and waits for an answer that was never its question: after
-the first such question on the development machine, three screenshots in
-eight hung until ended by hand, where forty in a row had been taken before
-it. That lasts until the next login. It is a desktop that stays up with a
+as likely as not, and waits for an answer that was never its question. On
+the development machine, in a session where the question had been asked,
+eight screenshots in twenty of a still screen hung until ended, and nineteen
+in forty taken across changes of workspace; before the first question forty
+in a row had gone through. That lasts until the next login. It is a desktop that stays up with a
 screenshot that sometimes does nothing, in place of a desktop that ends;
 answering yes for the script would mend the screenshot and give the same
 address's next owner the screen, whatever the rules say of it, and is not
@@ -163,9 +164,10 @@ permission with its program.
 
 Seen on the development machine: the backtrace with the debugger, from
 `CScreenshareFrame::render` through `clientPermissionMode` to the null in
-`askForPermission`; and with the script installed, a change of workspace
-and a screenshot twenty-five times over with Hyprland still running, the
-question in the session's log as one about an "Unknown application", and a
-terminal stopped for twenty-five seconds, asked about as not responding,
-with Hyprland still running. Read in the source and not seen: that the last
+`askForPermission`; and with the script installed, twenty changes of
+workspace there and back with a screenshot after each, and twenty
+screenshots of a still screen, with Hyprland still running, the question in
+the session's log as one about an "Unknown application"; and a terminal
+stopped for twenty-five seconds, asked about as not responding, with
+Hyprland still running. Read in the source and not seen: that the last
 of those ends Hyprland without the script, and the safe mode's dialog.
