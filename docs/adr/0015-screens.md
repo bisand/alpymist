@@ -220,6 +220,42 @@ Hyprland reads permissions once, when it starts. A session that began
 before the upgrade does not load the plugin, and says nothing; the key does
 nothing until the next login.
 
+## Addendum — 2026-10-07: the overview needs `nm`, and an x86_64 processor
+
+The overview was tried on a machine that builds Alpymist, which has
+binutils, and on no other. On the aarch64 development machine, the first
+login after the upgrade that brought the plugin had two red lines across
+the desktop: hyprexpo could not load, "no fns for hook renderWorkspace".
+
+Two things are behind that, both read from Hyprland 0.54.3's source:
+
+- Hyprland finds the function a plugin wants to hook by running `nm -D`
+  over its own binary. `nm` is binutils', which neither Hyprland's package
+  nor the plugin's depends on, and the desktop did not either. Without it
+  no function is found, on any processor. `alpymist-desktop` now depends on
+  `binutils`, 14 MiB.
+- Hooking a function is written for x86_64 and returns at once on anything
+  else. On aarch64 hyprexpo cannot load whatever is installed.
+
+So the plugin is loaded only where it can load. `alpymist session` sets
+`ALPYMIST_OVERVIEW` for Hyprland on x86_64 when `nm` is there, and
+`hyprland-security.conf` loads hyprexpo inside `# hyprlang if
+ALPYMIST_OVERVIEW`. Elsewhere nothing is loaded and nothing is said at
+login; Super+Tab says, in a notification, that the overview is not for
+this processor. The rule that allows the one plugin's file is as it was.
+
+What this leaves: no overview on aarch64, and binutils installed there for
+nothing, since the desktop's package is the same for every processor. An
+overview that works everywhere is one drawn by a program of ours and not
+by a plugin, which would also take the plugin back out of the compositor;
+that is not decided here.
+
+Tried on the aarch64 machine: Hyprland reads the new file with the variable
+and without, and an `if` on a variable of the environment skips what is
+under it. Not tried: a login with the new packages on either processor, and
+x86_64 without binutils, where the first cause is read from the source and
+not seen.
+
 ## Addendum — 2026-10-02: the watch moves to the watchdog
 
 `alpymist displays watch` was started by the packaged Hyprland configuration

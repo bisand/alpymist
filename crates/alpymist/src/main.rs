@@ -460,6 +460,10 @@ fn session(
         }
     };
     vars.extend(secrets::environment(socket.as_deref()));
+    // hyprland-security.conf loads the overview's plugin only under this.
+    if alpymist_displays::overview_loads() {
+        vars.push((alpymist_displays::OVERVIEW.to_owned(), "1".to_owned()));
+    }
     if !vars.is_empty() {
         // What D-Bus starts for the desktop, the portals among them, has
         // the environment D-Bus started with, from before this login's

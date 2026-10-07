@@ -56,6 +56,10 @@ the same way, unless it already uses <kbd>Super</kbd>+<kbd>Tab</kbd>. The
 overview is loaded when the desktop starts, so the first time after the
 upgrade that brought it, log out and in.
 
+The overview is a plugin of Hyprland's that works only on Intel and AMD
+processors. On an ARM machine, a virtual one on a Mac among them,
+<kbd>Super</kbd>+<kbd>Tab</kbd> says so and does nothing else.
+
 When a screen goes away its workspaces move to the screens that are left, and
 when it comes back they go home.
 

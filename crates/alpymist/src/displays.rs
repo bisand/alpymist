@@ -80,7 +80,10 @@ pub fn run(action: &Action) -> Result<(), Box<dyn std::error::Error>> {
         Action::Watch => Ok(watch::run()?),
         Action::Workspace { n } => Ok(alpymist_displays::switch(*n, false)?),
         Action::Move { n } => Ok(alpymist_displays::switch(*n, true)?),
-        Action::Overview => Ok(alpymist_displays::overview()?),
+        Action::Overview => Ok(alpymist_displays::overview().inspect_err(|e| {
+            // Super+Tab has no terminal to complain in.
+            crate::keys::say("No overview", e);
+        })?),
         Action::Apply => {
             let plan = alpymist_displays::apply()?;
             if plan.new {
