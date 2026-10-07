@@ -1,7 +1,7 @@
 //! The cards' faces: pictures in the program, scaled to the size drawn at.
 //!
 //! Fifty-two PNGs of 300 by 436 are carried in the binary, 750 KiB of it,
-//! and one more for the backs.
+//! and twelve more to choose the backs from.
 //! Denise scales pictures to the nearest pixel, which is wrong for a picture
 //! shrunk to a third, so each face is resampled by area to exactly the size
 //! of a card in this window, the first time it is shown, and kept until the
@@ -25,11 +25,24 @@ pub struct Face {
 pub struct Faces {
     size: (u32, u32),
     scaled: Vec<Option<Face>>,
-    back: Option<Face>,
+    back: Option<(usize, Face)>,
 }
 
-/// The picture on the back of every card.
-const BACK: &[u8] = include_bytes!("../cards/back.png");
+/// The backs there are to choose from: what each is called, and its picture.
+pub const BACKS: [(&str, &[u8]); 12] = [
+    ("Mist", include_bytes!("../cards/back-01.png")),
+    ("Night", include_bytes!("../cards/back-02.png")),
+    ("Crimson", include_bytes!("../cards/back-03.png")),
+    ("Navy", include_bytes!("../cards/back-04.png")),
+    ("Aurora", include_bytes!("../cards/back-05.png")),
+    ("Sunset", include_bytes!("../cards/back-06.png")),
+    ("Deco", include_bytes!("../cards/back-07.png")),
+    ("Wave", include_bytes!("../cards/back-08.png")),
+    ("Neon", include_bytes!("../cards/back-09.png")),
+    ("Garden", include_bytes!("../cards/back-10.png")),
+    ("8-bit", include_bytes!("../cards/back-11.png")),
+    ("16-bit", include_bytes!("../cards/back-12.png")),
+];
 
 macro_rules! pictures {
     ($($name:literal),* $(,)?) => {
@@ -62,16 +75,17 @@ impl Faces {
         slot.as_ref()
     }
 
-    /// The picture on the cards' backs, `width` by `height` pixels.
-    pub fn back(&mut self, width: u32, height: u32) -> Option<&Face> {
-        if self
+    /// The `which`th of [`BACKS`], `width` by `height` pixels.
+    pub fn back(&mut self, which: usize, width: u32, height: u32) -> Option<&Face> {
+        let kept = self
             .back
             .as_ref()
-            .is_none_or(|b| (b.width, b.height) != (width, height))
-        {
-            self.back = decode(BACK).map(|p| scale(&p, width, height));
+            .is_some_and(|(i, b)| (*i, b.width, b.height) == (which, width, height));
+        if !kept {
+            let (_, bytes) = BACKS.get(which)?;
+            self.back = decode(bytes).map(|p| (which, scale(&p, width, height)));
         }
-        self.back.as_ref()
+        self.back.as_ref().map(|(_, face)| face)
     }
 }
 
@@ -178,10 +192,16 @@ mod tests {
             );
         }
         assert_eq!(ASPECT, (300, 436));
-        let back = decode(super::BACK).expect("the back does not decode");
-        assert_eq!((back.width, back.height), (300, 436));
         let mut faces = Faces::default();
-        assert_eq!(faces.back(27, 40).map(|b| b.pixels.len()), Some(27 * 40));
+        for (which, (name, bytes)) in super::BACKS.iter().enumerate() {
+            let back = decode(bytes).unwrap_or_else(|| panic!("the back {name} does not decode"));
+            assert_eq!((back.width, back.height), (300, 436), "{name}");
+            assert_eq!(
+                faces.back(which, 27, 40).map(|b| b.pixels.len()),
+                Some(27 * 40)
+            );
+        }
+        assert!(faces.back(super::BACKS.len(), 27, 40).is_none());
     }
 
     /// A red card's corner is red and a black one's is not: the pictures are

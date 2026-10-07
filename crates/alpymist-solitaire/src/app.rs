@@ -2,7 +2,7 @@
 //! keyboard, and a card's flight home.
 
 use alpymist_solitaire::cards::Rng;
-use alpymist_solitaire::faces::Faces;
+use alpymist_solitaire::faces::{BACKS, Faces};
 use alpymist_solitaire::game::{Game, PILES, Place};
 use alpymist_solitaire::view::{self, Button, Hit, Layout, Lifted, Scene};
 use alpymist_widget::draw::Fonts;
@@ -11,6 +11,7 @@ use alpymist_widget::window::{self, App, Cursor, Key, Mods};
 use alpymist_widget::{Appearance, Outcome};
 use denise::Frame;
 use denise::geom::{Point, Size};
+use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// The app id.
@@ -49,6 +50,38 @@ struct Solitaire {
     pressed: Option<(Hit, Instant)>,
     focus: Option<Place>,
     chosen: Option<(Place, usize)>,
+    /// Which back the cards wear.
+    back: usize,
+}
+
+/// Where the back last chosen is kept, for the next game: a name on a line
+/// in the account's state directory.
+fn remembered() -> Option<PathBuf> {
+    let state = std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| Some(PathBuf::from(std::env::var_os("HOME")?).join(".local/state")))?;
+    Some(state.join("alpymist/solitaire-back"))
+}
+
+/// The back last chosen, or the first.
+fn recall() -> usize {
+    remembered()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|name| BACKS.iter().position(|(n, _)| *n == name.trim()))
+        .unwrap_or(0)
+}
+
+/// Keep `back` for the next game. A choice that cannot be kept is still
+/// worn until the window closes.
+fn keep(back: usize) {
+    let (Some(path), Some((name, _))) = (remembered(), BACKS.get(back)) else {
+        return;
+    };
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).ok();
+    }
+    std::fs::write(path, format!("{name}\n")).ok();
 }
 
 /// Open the window and play until it closes.
@@ -77,6 +110,7 @@ pub fn run(turn: usize) -> Result<(), String> {
         pressed: None,
         focus: None,
         chosen: None,
+        back: recall(),
     };
     let options = window::Options {
         app_id: NAME.into(),
@@ -132,8 +166,15 @@ impl Solitaire {
             Button::New => self.deal_again(self.game.turn()),
             Button::Undo => return self.undo(),
             Button::Turn => self.deal_again(if self.game.turn() == 3 { 1 } else { 3 }),
+            Button::Back => self.wear(1),
         }
         Outcome::Redraw
+    }
+
+    /// Wear the back `by` after this one, round and round.
+    fn wear(&mut self, by: usize) {
+        self.back = (self.back + by) % BACKS.len();
+        keep(self.back);
     }
 
     /// Send the top card of `from` to its foundation, flying.
@@ -198,6 +239,7 @@ impl Solitaire {
             hover,
             focus: self.focus,
             chosen: self.chosen,
+            back: self.back,
         }
     }
 
@@ -329,7 +371,13 @@ impl App for Solitaire {
     }
 
     fn text(&mut self, ch: char) -> Outcome {
+        // B for the next back, Shift+B for the one before.
+        if ch == 'B' {
+            self.wear(BACKS.len() - 1);
+            return Outcome::Redraw;
+        }
         match ch.to_ascii_lowercase() {
+            'b' => self.button(Button::Back),
             'n' => self.button(Button::New),
             'u' => self.undo(),
             // Home: the card under the keyboard, to its foundation.

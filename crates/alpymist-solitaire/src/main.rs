@@ -21,7 +21,8 @@ Deals a game of Klondike in a window.
 Drag cards with the mouse, or double-click one to send it home. With the
 keyboard: the arrows move between piles, Enter picks up and puts down,
 Up and Down on a pile picked up take more or fewer cards, Space turns the
-stock, U takes a move back, N deals again, Ctrl+Q closes.";
+stock, U takes a move back, N deals again, B and Shift+B change the
+picture on the cards' backs, Ctrl+Q closes.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
