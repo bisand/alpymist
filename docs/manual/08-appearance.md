@@ -14,9 +14,15 @@ size and the wallpaper.
 The style is light text on dark, or dark on light. The accent is the colour
 of focus, selection and the main button. Together they reach the menu, the
 popups, Settings and Alpymist's other windows, the top bar, the terminal,
-window borders, notifications, and GTK applications. The bar, open terminals,
-notifications and GTK applications change at once; Alpymist's own windows
-that are already open keep what they had.
+window borders, notifications, and GTK applications, the file manager and
+its folders among them. The bar, open terminals, notifications, and GTK
+applications' style and icons change at once; Alpymist's own windows that
+are already open keep what they had, and so do the colours of the file
+manager and other GTK 3 windows until they are opened again.
+
+The file manager's colours are `~/.config/gtk-3.0/gtk.css`, written from the
+theme. A stylesheet of your own there is left as it is, and the theme then
+does not reach those windows.
 
 ## Text size
 

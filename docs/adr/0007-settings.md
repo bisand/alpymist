@@ -283,3 +283,45 @@ browser` or `alpymist open terminal`. The file is kept as it was beside it as
 `hyprland.conf.bak-defaults`, Hyprland is reloaded so the key follows at
 once, and a note says so. A line of the account's own is left alone, and
 nothing happens on an upgrade.
+
+## Addendum, 2026-10-07 — GTK 3's colours and a file manager's icons follow the theme
+
+The theme reached GTK as a preference for dark or light and nothing more.
+Adwaita is a grey and a blue of its own, and Thunar in it, the file manager
+since [ADR 0028](0028-a-file-manager.md), looked like a window from another
+system whatever accent was chosen.
+
+Two more files are now written from the account's theme, at every login and
+when the theme changes, by the code that writes the bar's colours:
+
+- `~/.config/gtk-3.0/gtk.css`, a stylesheet GTK 3 reads after its theme: the
+  page, the lines, the text and the accent, on what GTK 3 programs here are
+  made of. It is a generated file like the others: one edited by hand, or an
+  account's own from before, is left as it is and said to have been. It is
+  Adwaita underneath, so what the stylesheet does not name still looks like
+  something.
+- `~/.local/share/icons/Alpymist`, an icon theme of some forty drawings: a
+  folder, the folders a home starts with, and what stands in a file
+  manager's sidebar, each in the accent. It inherits Adwaita for everything
+  else. The directory is Alpymist's, and its files are written over.
+
+The package's GTK defaults name that icon theme. Where it has not been
+written, for root or for an account that has never logged in, GTK falls back
+to Adwaita: seen on the development machine with a name that does not
+exist.
+
+Thunar's own defaults in `/etc/xdg` gain two: the path as a row of folders
+to click, and the menu bar as one button, since no window of Alpymist's has
+a bar of menus. Both are Thunar's settings and an account's own win.
+
+What this does not do. GTK 4 is not styled: its programs here are
+libadwaita's, which take the scheme and the accent from `gsettings` and
+their look from libadwaita, and a stylesheet like this one laid over them
+was not tried; the volume control, which is GTK 4 without libadwaita, stays
+Adwaita's grey. A GTK 3 program open when the theme changes keeps its
+colours until it is started again, though its icons follow. And every
+program that draws with GTK 3 gets the stylesheet, not only Thunar: only
+Thunar was looked at.
+
+Seen on the development machine (aarch64): Thunar with the files as
+generated, in the default theme, in another accent and in the light scheme.
