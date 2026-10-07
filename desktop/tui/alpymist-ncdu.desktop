@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=ncdu
+GenericName=Disk usage
+Comment=What fills your home directory, largest first
+Exec=ncdu
+Icon=utilities-terminal
+Terminal=true
+Categories=System;Filesystem;ConsoleOnly;
+Keywords=disk;space;size;full;usage;storage;

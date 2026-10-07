@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=tmux
+GenericName=Terminals that stay
+Comment=Several terminals in one window, which go on when it closes
+Exec=tmux new-session -A -s main
+Icon=utilities-terminal
+Terminal=true
+Categories=System;ConsoleOnly;
+Keywords=terminal;multiplexer;session;split;panes;

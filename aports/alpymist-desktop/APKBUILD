@@ -367,6 +367,15 @@ _tui() {
 		tmux
 		"
 	mkdir -p "$subpkgdir"
+	# The menu lists what has a desktop entry. btop and cliamp bring their
+	# own; these three have none, in Alpine or upstream. Named as ours, so
+	# that one of Alpine's arriving later is a second line in the menu and
+	# not two packages owning a file.
+	local entry
+	for entry in lazygit ncdu tmux; do
+		install -Dm644 "$builddir"/desktop/tui/alpymist-$entry.desktop \
+			"$subpkgdir"/usr/share/applications/alpymist-$entry.desktop
+	done
 }
 
 # The photographs: the default wallpaper is one of them, and the rest
