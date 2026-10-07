@@ -129,6 +129,17 @@ pub struct Play {
     deals: u32,
 }
 
+/// How much of a table has to be painted again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Change {
+    /// None of it.
+    Nothing,
+    /// What is inside this: a button lit or unlit, a clock under a panel.
+    Within(denise::geom::Rect),
+    /// All of it.
+    Everything,
+}
+
 /// How a table looks, the place of the hand apart: two of these alike mean
 /// the table need not be painted again, only the hand over it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -562,6 +573,7 @@ impl Play {
             answer,
             without_hand: false,
             without_status: false,
+            only: None,
         }
     }
 
@@ -827,10 +839,84 @@ impl Play {
         }
     }
 
+    /// How the table looks now, and how much of it differs from how it
+    /// `was`. A button lit under the pointer is a button's worth, not a
+    /// table's: on a small machine that is the difference between a pointer
+    /// that glides over the bar and one that stops at every button.
+    #[must_use]
+    pub fn since(&self, was: Option<&Look>) -> (Look, Change) {
+        let now = self.look();
+        let Some(was) = was else {
+            return (now, Change::Everything);
+        };
+        if *was == now {
+            return (now, Change::Nothing);
+        }
+        let plain = |look: &Look| {
+            let mut look = look.clone();
+            look.scene.hover = None;
+            look.scene.answer = None;
+            look.scene.seconds = None;
+            look
+        };
+        if plain(was) != plain(&now) {
+            // A panel whose words changed, initials being typed into it, is
+            // a panel's worth where nothing else differs.
+            let bare = |look: &Look| {
+                let mut look = plain(look);
+                look.panel = None;
+                look
+            };
+            if let (Some(before), Some(after)) = (&was.panel, &now.panel)
+                && bare(was) == bare(&now)
+            {
+                let area = self
+                    .layout
+                    .panel(before)
+                    .frame
+                    .union(&self.layout.panel(after).frame);
+                return (now, Change::Within(area.inflate(4)));
+            }
+            return (now, Change::Everything);
+        }
+        let button = |hover: Option<Button>| {
+            self.layout
+                .buttons
+                .iter()
+                .find(|(b, _)| Some(*b) == hover)
+                .map(|(_, rect)| *rect)
+        };
+        let answers = now.panel.as_ref().map(|panel| self.layout.panel(panel));
+        let answer = |index: Option<usize>| {
+            answers
+                .as_ref()
+                .zip(index)
+                .and_then(|(at, i)| at.buttons.get(i).copied())
+        };
+        let mut parts: Vec<denise::geom::Rect> = Vec::new();
+        if was.scene.hover != now.scene.hover {
+            parts.extend(button(was.scene.hover));
+            parts.extend(button(now.scene.hover));
+        }
+        if was.scene.answer != now.scene.answer {
+            parts.extend(answer(was.scene.answer));
+            parts.extend(answer(now.scene.answer));
+        }
+        if was.scene.seconds != now.scene.seconds {
+            parts.push(self.layout.status);
+        }
+        let change = parts
+            .into_iter()
+            .reduce(|all, part| all.union(&part))
+            .map_or(Change::Nothing, |r| Change::Within(r.inflate(2)));
+        (now, change)
+    }
+
     /// Paint the table without the cards in the hand, onto a canvas kept
-    /// from one frame to the next.
-    pub fn paint_table_on(&mut self, canvas: &mut Canvas<'_>) {
+    /// from one frame to the next: all of it, or `only` what is inside.
+    pub fn paint_table_on(&mut self, canvas: &mut Canvas<'_>, only: Option<denise::geom::Rect>) {
         let mut scene = self.scene();
+        scene.only = only;
         scene.without_hand = true;
         scene.without_status = self.over.is_none();
         let panel = self.panel();
@@ -1032,6 +1118,19 @@ mod tests {
 
     fn play(kept: Kept, dir: Option<PathBuf>, nearly_out: bool) -> Play {
         Play::new(Appearance::default(), kept, dir, 42, nearly_out)
+    }
+
+    /// A game that has just run out and is asking whose record it is.
+    fn play_out() -> Play {
+        let mut play = play(Kept::default(), None, true);
+        for _ in 0..300 {
+            play.tick();
+            if play.game().won() && play.said().is_some() {
+                return play;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("the game did not run out");
     }
 
     fn centre(r: Rect) -> Point {
@@ -1280,6 +1379,41 @@ mod tests {
         // Let go over nothing: the table is as it was dealt.
         play.release(Point::new(600, 500));
         assert_eq!(play.look(), dealt);
+        // A button lit under the pointer is that button's worth of change.
+        let before = play.look();
+        let (_, new) = play.layout().buttons[0];
+        let (_, undo) = play.layout().buttons[1];
+        play.pointer(Some(Point::new(new.x + 5, new.y + 5)));
+        let (lit, change) = play.since(Some(&before));
+        let super::Change::Within(area) = change else {
+            panic!("lighting a button changed {change:?}");
+        };
+        assert!(area.contains(Point::new(new.x + 5, new.y + 5)));
+        assert!(area.width < new.width + 10 && area.height < new.height + 10);
+        // From one button to the next: both, and nothing of the cards.
+        play.pointer(Some(Point::new(undo.x + 5, undo.y + 5)));
+        let (_, change) = play.since(Some(&lit));
+        let super::Change::Within(area) = change else {
+            panic!("moving to the next button changed {change:?}");
+        };
+        assert!(area.x <= new.x && area.right() >= undo.right());
+        assert!(area.bottom() < play.layout().top);
+        assert_eq!(play.since(None).1, super::Change::Everything);
+        play.pointer(Some(Point::new(600, 500)));
+        assert_eq!(play.since(Some(&before)).1, super::Change::Nothing);
+
+        // Initials typed into a panel are the panel's worth.
+        let mut won = play_out();
+        let asked = won.look();
+        won.text('a');
+        let (_, change) = won.since(Some(&asked));
+        let super::Change::Within(area) = change else {
+            panic!("a letter typed changed {change:?}");
+        };
+        let frame = won.layout().panel(&won.said().unwrap()).frame;
+        assert!(area.x <= frame.x && area.right() >= frame.right());
+        assert!(area.width < frame.width + 20);
+
         // The clock ticking is not another table either: the bar's words
         // are painted apart.
         play.press(Point::new(card.x + 10, card.y + 10));

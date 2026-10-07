@@ -89,6 +89,9 @@ pub struct Scene {
     /// Leave what the bar says of the game out too, for
     /// [`paint_status_on`]: a clock that ticks is not a table that changed.
     pub without_status: bool,
+    /// Paint only inside this: for a table kept from one frame to the next,
+    /// of which a button lit under the pointer changes a corner.
+    pub only: Option<Rect>,
 }
 
 /// Something said over the table, to be answered before the game goes on:
@@ -635,12 +638,21 @@ pub fn paint_on(
     scene: &Scene,
     panel: Option<&Panel>,
 ) {
-    let mut pen = Pen::new(canvas);
+    let mut everywhere = Pen::new(canvas);
+    let mut pen = everywhere.with_clip(scene.only.unwrap_or(Rect::from_size(layout.size)));
     let m = &layout.metrics;
     let ink = Ink::new(appearance);
     let st = fonts.styles(m);
     let engine = &mut fonts.engine;
-    pen.clear(ink.background);
+    match scene.only {
+        // Over what was there before: black first, so that a background
+        // with any transparency in it comes out as a clearing leaves it.
+        Some(area) => {
+            pen.fill_rect(area, Color::rgb(0, 0, 0));
+            pen.fill_rect(area, ink.background);
+        }
+        None => pen.clear(ink.background),
+    }
 
     // The bar.
     pen.fill_rect(layout.bar, ink.card);
