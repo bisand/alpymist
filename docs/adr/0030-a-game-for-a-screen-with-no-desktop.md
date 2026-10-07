@@ -1,6 +1,6 @@
 # ADR 0030 — A game for a screen with no desktop, and for systems that are not ours
 
-**Status:** proposed · **Date:** 2026-10-07
+**Status:** accepted · **Date:** 2026-10-07
 
 ## Context
 
