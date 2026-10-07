@@ -27,7 +27,7 @@ Deals a game of Klondike on this screen, with no desktop.
 Without either it turns as many as the last game did.
 
 Run it from a text console, as root or as an account in the video and
-input groups. The bar's Quit, Esc, Q or Ctrl+C leaves, asking first if a
+input groups. The bar's Quit, Ctrl+Q or Ctrl+C leaves, asking first if a
 game is under way. Everything else is as in the window:
 drag the cards or double-click one home; the arrows and Enter; Space turns
 the stock, U takes a move back, N deals again, B changes the cards' backs,
@@ -99,7 +99,7 @@ mod keys {
             KeyCode::Z if ctrl => Key::Undo,
             KeyCode::N if ctrl => Key::New,
             // Ctrl+C as well: what a hand tries first at a console.
-            KeyCode::Q | KeyCode::W | KeyCode::C if ctrl => Key::Quit,
+            KeyCode::Q | KeyCode::C if ctrl => Key::Quit,
             _ => return None,
         })
     }
@@ -339,9 +339,6 @@ mod screen {
         #[test]
         fn every_way_out_is_a_way_out() {
             let ways = [
-                InputEvent::Text { ch: 'q' },
-                InputEvent::Text { ch: 'Q' },
-                key(KeyCode::Escape, Modifiers::NONE),
                 key(KeyCode::Q, Modifiers::CTRL),
                 key(KeyCode::C, Modifiers::CTRL),
             ];
@@ -353,10 +350,20 @@ mod screen {
                     "{way:?}"
                 );
             }
-            // The key that types a q is not itself one; its text is.
-            let mut cursor = new_cursor();
-            let plain = key(KeyCode::Q, Modifiers::NONE);
-            assert_eq!(hand(&plain, &mut game(), &mut cursor), Outcome::Unchanged);
+            // Escape and a letter by itself are the game's, not ways out.
+            for not in [
+                key(KeyCode::Escape, Modifiers::NONE),
+                key(KeyCode::Q, Modifiers::NONE),
+                key(KeyCode::W, Modifiers::CTRL),
+                InputEvent::Text { ch: 'q' },
+            ] {
+                let mut cursor = new_cursor();
+                assert_ne!(
+                    hand(&not, &mut game(), &mut cursor),
+                    Outcome::Close,
+                    "{not:?}"
+                );
+            }
         }
 
         #[test]
