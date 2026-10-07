@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=lazygit
+GenericName=Git in a terminal
+Comment=Stage, commit, branch and push in a git repository
+Exec=lazygit
+Icon=utilities-terminal
+Terminal=true
+Categories=Development;RevisionControl;ConsoleOnly;
+Keywords=git;repository;commit;branch;version control;

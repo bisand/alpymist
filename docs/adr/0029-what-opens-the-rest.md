@@ -83,6 +83,11 @@ again; it would also have left every system there is without them until
 someone typed a command. They cannot be removed while the desktop is
 installed.
 
+**They are in the menu.** btop and cliamp bring desktop entries;
+`alpymist-tui` ships one each for lazygit, ncdu and tmux, which have none,
+under names of our own. fastfetch prints and ends, and a terminal opened
+for it would close before it was read.
+
 **Ristretto shows no strip of thumbnails.** It asks tumbler for them, and
 ADR 0028 left tumbler out. `/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/ristretto.xml`
 turns the strip off, and the message about the missing thumbnailer that
