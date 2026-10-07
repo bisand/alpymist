@@ -104,3 +104,68 @@ so it asks the pool and answers nobody. What it does reveal is that the
 machine asks pool.ntp.org the time, which every phone and laptop does too. A
 right clock is itself a security property: certificates, signatures and
 expiring tokens are all judged against it.
+
+## Addendum — 2026-10-07: Hyprland's questions go to a program that answers none
+
+A screenshot ended the desktop, now and then, on the development machine
+and on the Asus, and nobody knew why: Hyprland's crash reports hold no
+backtrace on musl. A debugger attached to it on 2026-10-07 gave one. It is
+not the screenshot. `CDynamicPermissionManager::askForPermission` makes a
+dialog, sets a field on it, and only then looks whether it was made; with no
+`hyprland-dialog` on the path it was not, and Hyprland 0.54.3 ends there.
+Hyprland's `main` branch read the same that day.
+
+`hyprland-dialog` is part of hyprland-guiutils, which Alpine does not
+package. `hyprland-security.conf` was written knowing that, with a rule for
+every program so that nothing would need asking. But the rules go by a
+program's path, looked up from its process, and a program that has ended has
+none: `grim`, finished while the screen was still being redrawn after a
+change of workspace, is asked about as a program unknown. Switching
+workspace and taking a screenshot at once ended the desktop one time in
+two.
+
+The same dialog is made, and used unlooked at, in two more places: when a
+window stops responding, and in the Hyprland that `start-hyprland` starts
+after a crash, to say that it is in safe mode. The second is why one crash
+became two and a login screen saying the desktop stopped as it started.
+
+**Decision.** The desktop ships `/usr/bin/hyprland-dialog`: a shell script
+that writes what was asked to the session's log and chooses no button. With
+it on the path the dialog is made and nothing is dereferenced that is not
+there. Choosing nothing leaves a permission pending for as long as the
+program that wanted it lives, which is a refusal; ends no program for being
+slow; and leaves the recovery with the configuration it has.
+
+That is safe by §1, and safer than what Hyprland means to do without a
+dialog, which is to stop enforcing: "cannot ask! Disabling permission
+control" is what its source says of that case. Nothing is allowed here that
+a rule did not allow.
+
+What it gives up: nobody is ever asked. A program that hangs is not offered
+to be ended, and a program no rule covers is refused without a word. A
+dialog of our own that does ask, drawn as `alpymist-auth` draws its, would
+take this script's place; so would Alpine's hyprland-guiutils, at the same
+path, should it come.
+
+**What it does not mend.** The question about a screenshot should never
+have been asked, and once it has been, Hyprland keeps the unanswered
+permission by the address of the program's connection, and does not drop it
+when the program goes. The next program given that address is `grim` again,
+as likely as not, and waits for an answer that was never its question: after
+the first such question on the development machine, three screenshots in
+eight hung until ended by hand, where forty in a row had been taken before
+it. That lasts until the next login. It is a desktop that stays up with a
+screenshot that sometimes does nothing, in place of a desktop that ends;
+answering yes for the script would mend the screenshot and give the same
+address's next owner the screen, whatever the rules say of it, and is not
+done. The mending is in Hyprland: look before using the dialog, and drop a
+permission with its program.
+
+Seen on the development machine: the backtrace with the debugger, from
+`CScreenshareFrame::render` through `clientPermissionMode` to the null in
+`askForPermission`; and with the script installed, a change of workspace
+and a screenshot twenty-five times over with Hyprland still running, the
+question in the session's log as one about an "Unknown application", and a
+terminal stopped for twenty-five seconds, asked about as not responding,
+with Hyprland still running. Read in the source and not seen: that the last
+of those ends Hyprland without the script, and the safe mode's dialog.

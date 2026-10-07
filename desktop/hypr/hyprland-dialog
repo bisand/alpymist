@@ -1,0 +1,24 @@
+#!/bin/sh
+# Alpymist: what Hyprland runs to ask a question, answering none of them.
+#
+# Hyprland asks through a program called hyprland-dialog, from
+# hyprland-guiutils, which Alpine does not package. Without one on the path
+# Hyprland 0.54 does not go without asking: it uses the dialog it failed to
+# make, and ends, and the desktop with it. Three questions do that:
+#
+#   - whether a program may do something no permission rule covers. The rules
+#     in hyprland-security.conf cover every program by its path, but a program
+#     that has already ended has no path to look up, and a screenshot taken
+#     while the screen is being redrawn is finished by then;
+#   - whether to end a program that has stopped responding;
+#   - what to do after a crash, in the Hyprland started to recover from it,
+#     which is why one crash became two and a login screen.
+#
+# This is on the path, so the dialog is made; and it chooses no button, so
+# nothing is allowed that a rule did not allow, no program is ended for being
+# slow, and the recovery goes on with what it has. What was asked goes to the
+# session's log.
+#
+#   hyprland-dialog --title TITLE --text TEXT --buttons "ONE;TWO"
+echo "hyprland-dialog: asked and not answered: $*" >&2
+exit 0
