@@ -85,7 +85,8 @@ installed.
 
 **They are in the menu.** btop and cliamp bring desktop entries;
 `alpymist-tui` ships one each for lazygit, ncdu and tmux, which have none,
-under names of our own. fastfetch prints and ends, and a terminal opened
+under names of our own, and the desktop one each for impala and bluetuith,
+which it already brought. fastfetch prints and ends, and a terminal opened
 for it would close before it was read.
 
 **Ristretto shows no strip of thumbnails.** It asks tumbler for them, and

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=impala
+GenericName=Wi-Fi in a terminal
+Comment=Join, forget and watch wireless networks through iwd
+Exec=impala
+Icon=utilities-terminal
+Terminal=true
+Categories=Network;ConsoleOnly;
+Keywords=wifi;wi-fi;wireless;wlan;iwd;network;
