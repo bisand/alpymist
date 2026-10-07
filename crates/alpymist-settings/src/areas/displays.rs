@@ -68,6 +68,13 @@ const KEPT_MOVE: &str = ".bak-move";
 
 /// The last of the Super+number lines, which the overview's key goes after.
 const MOVE_NINE: &str = "bind = SUPER SHIFT, 9, exec, alpymist displays move 9";
+/// The same line as every account started with, before the numbers went
+/// through `alpymist displays`: an account that never changed a Displays
+/// setting still has it.
+const OLD_MOVE_NINE: &str = "bind = SUPER SHIFT, 9, movetoworkspace, 9";
+/// Where `hyprland.conf` is kept as it was before a login gave it the
+/// overview's key; and, by being there, what says it was given once.
+const KEPT_OVERVIEW: &str = ".bak-overview";
 /// Super+Tab: its chord, and its line.
 const OVERVIEW_KEY: (&str, &str) = (
     "SUPER|TAB",
@@ -241,11 +248,14 @@ fn with_screen_keys(conf: &str) -> Option<String> {
 }
 
 /// `hyprland.conf` with Super+Tab showing the overview, after the Super+number
-/// lines; `None` when the last of those is not as shipped, or Super+Tab is
-/// already bound, by the account or by having been given it before.
+/// lines; `None` when the last of those is not as shipped, now or at first,
+/// or Super+Tab is already bound, by the account or by having been given it
+/// before.
 fn with_overview_key(conf: &str) -> Option<String> {
     let lines: Vec<&str> = conf.lines().collect();
-    let at = lines.iter().position(|l| l.trim() == MOVE_NINE)?;
+    let at = lines
+        .iter()
+        .position(|l| l.trim() == MOVE_NINE || l.trim() == OLD_MOVE_NINE)?;
     if lines
         .iter()
         .filter_map(|l| chord(l))
@@ -263,10 +273,19 @@ fn with_overview_key(conf: &str) -> Option<String> {
     Some(out)
 }
 
-/// Have Super+Shift and an arrow move the window that way, where the
-/// account's `hyprland.conf` still takes it only to another screen, as
-/// Alpymist first wrote, and tell a running Hyprland. Each of the four is put
-/// right by itself; one written any other way is somebody's choice.
+/// What a login, and an upgrade for each account, puts right in the
+/// account's `hyprland.conf`, and tells a running Hyprland.
+///
+/// Super+Shift and an arrow move the window that way, where the file still
+/// takes it only to another screen, as Alpymist first wrote: each of the
+/// four is put right by itself, and one written any other way is somebody's
+/// choice.
+///
+/// And Super+Tab shows the overview, where the file binds that key to
+/// nothing: once. An account made before the key had it only after a
+/// Displays setting was changed, and most never change one. The file as it
+/// was is kept beside it, and that copy being there is what says the key was
+/// given: an account that then takes the line out is not given it again.
 ///
 /// # Errors
 /// The file could not be written.
@@ -275,12 +294,29 @@ pub fn prepare_session(env: &Env) -> Result<(), String> {
     let Ok(text) = std::fs::read_to_string(&path) else {
         return Ok(());
     };
-    let Some(right) = with_moves(&text) else {
+    let keep = |to: &std::path::Path| {
+        std::fs::write(to, &text).map_err(|e| format!("{}: {e}", to.display()))
+    };
+    let mut new = None;
+    if let Some(right) = with_moves(&text) {
+        keep(&crate::generated::beside(&path, KEPT_MOVE))?;
+        new = Some(right);
+    }
+    let given = {
+        let mut name = path.as_os_str().to_owned();
+        name.push(KEPT_OVERVIEW);
+        std::path::PathBuf::from(name)
+    };
+    if !given.exists()
+        && let Some(keyed) = with_overview_key(new.as_deref().unwrap_or(&text))
+    {
+        keep(&given)?;
+        new = Some(keyed);
+    }
+    let Some(new) = new else {
         return Ok(());
     };
-    let kept = crate::generated::beside(&path, KEPT_MOVE);
-    std::fs::write(&kept, &text).map_err(|e| format!("{}: {e}", kept.display()))?;
-    crate::generated::replace(&path, &right)?;
+    crate::generated::replace(&path, &new)?;
     // As for the lock's key: at an upgrade nothing says which Hyprland is the
     // account's, and before a login there is none to tell.
     let _ = env.run(&["hyprctl", "-i", "0", "reload"]);
@@ -427,8 +463,60 @@ mod tests {
         // Super+Tab the account's own: nothing is touched.
         let own = format!("{MOVE_NINE}\nbind = SUPER, TAB, cyclenext\n");
         assert_eq!(with_overview_key(&own), None);
-        // Its Super+number lines still Hyprland's, or changed by hand.
+        // Its Super+number lines as every account first had them: after those.
+        let first = format!(
+            "{}\nbindm = SUPER, mouse:272, movewindow\n",
+            super::OLD_MOVE_NINE
+        );
+        assert_eq!(
+            with_overview_key(&first).unwrap(),
+            format!(
+                "{}\n{}\nbindm = SUPER, mouse:272, movewindow\n",
+                super::OLD_MOVE_NINE,
+                OVERVIEW_KEY.1
+            )
+        );
+        // Changed by hand: there is nowhere to put it.
         assert_eq!(with_overview_key("bind = SUPER, Q, killactive\n"), None);
+    }
+
+    #[test]
+    fn a_login_gives_an_older_account_the_overview_key_and_only_once() {
+        static RAN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+        let dir =
+            std::env::temp_dir().join(format!("alpymist-displays-tab-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        let env = Env::test(&dir, false, &RAN);
+        let path = env.account(HYPRLAND);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let conf = format!("{}\nbind = SUPER, W, killactive\n", super::OLD_MOVE_NINE);
+        std::fs::write(&path, &conf).unwrap();
+        prepare_session(&env).unwrap();
+        let keyed = format!(
+            "{}\n{}\nbind = SUPER, W, killactive\n",
+            super::OLD_MOVE_NINE,
+            OVERVIEW_KEY.1
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), keyed);
+        let kept = format!("{}.bak-overview", path.display());
+        assert_eq!(std::fs::read_to_string(&kept).unwrap(), conf);
+        // Again changes nothing and tells Hyprland nothing more.
+        prepare_session(&env).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), keyed);
+        assert_eq!(*RAN.lock().unwrap(), ["hyprctl -i 0 reload"]);
+        // Taken out by the account: it stays out.
+        std::fs::write(&path, &conf).unwrap();
+        prepare_session(&env).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), conf);
+        // Its own Super+Tab, on an account never given the key: left alone,
+        // and nothing kept.
+        std::fs::remove_file(&kept).unwrap();
+        let own = format!("{}\nbind = SUPER, Tab, cyclenext\n", super::OLD_MOVE_NINE);
+        std::fs::write(&path, &own).unwrap();
+        prepare_session(&env).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), own);
+        assert!(!std::path::Path::new(&kept).exists());
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

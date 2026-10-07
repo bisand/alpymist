@@ -52,7 +52,9 @@ between it and the edge. Every account has these from the package.
 pointer is on, on that screen; move the pointer to another screen and press it
 again for that one's. Click a workspace to go to it, or press
 <kbd>Super</kbd> and its number. An account made before the key is given it
-the same way, unless it already uses <kbd>Super</kbd>+<kbd>Tab</kbd>. The
+at its next login, or at the upgrade, unless it already uses
+<kbd>Super</kbd>+<kbd>Tab</kbd>; `hyprland.conf` as it was is kept beside it
+as `hyprland.conf.bak-overview`, and a line taken out again stays out. The
 overview is loaded when the desktop starts, so the first time after the
 upgrade that brought it, log out and in.
 

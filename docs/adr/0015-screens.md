@@ -277,6 +277,19 @@ which a person has to press and see; a login with the new packages on
 either processor; and x86_64 without binutils, where the first cause is
 read from the source and not seen.
 
+## Addendum — 2026-10-07: every older account is given Super+Tab, once
+
+The key was given to an account made before it only when a Displays setting
+was changed, and an account that never changed one never had it: the
+development machine's did not, and the overview there could not be reached.
+`alpymist session prepare`, which runs at every login and for each account
+at the desktop's upgrade, now adds the line where the file binds Super+Tab
+to nothing and still has the last Super+number line as shipped, in either of
+the two forms that line has had. It does so once: the file as it was is
+kept as `hyprland.conf.bak-overview`, and while that copy is there the line
+is not added again, so an account that takes it out keeps it out. A file
+whose Super+number lines are somebody's own is left alone, as before.
+
 ## Addendum — 2026-10-02: the watch moves to the watchdog
 
 `alpymist displays watch` was started by the packaged Hyprland configuration
