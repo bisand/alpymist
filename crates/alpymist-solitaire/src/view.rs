@@ -29,6 +29,8 @@ pub enum Button {
     Back,
     /// The best games.
     Best,
+    /// Leave: only where nothing else closes the game.
+    Quit,
 }
 
 /// What is under a point.
@@ -119,7 +121,7 @@ pub struct Layout {
     /// The bar of buttons along the top.
     pub bar: Rect,
     /// The buttons on it.
-    pub buttons: [(Button, Rect); 5],
+    pub buttons: Vec<(Button, Rect)>,
     /// Where the bar says how the game stands.
     pub status: Rect,
     /// A card's width and height.
@@ -161,7 +163,7 @@ impl Layout {
             x += width + u / 2;
             r
         };
-        let buttons = [
+        let buttons = vec![
             (Button::New, place(u * 7)),
             (Button::Undo, place(u * 5)),
             (Button::Turn, place(u * 8)),
@@ -195,6 +197,20 @@ impl Layout {
             up: (card_h * 20 / 100).max(4),
             radius: (card_w * 5 / 100).max(2),
         }
+    }
+
+    /// The same, with a button to leave by at the end of the bar: for a
+    /// screen with no window to close.
+    #[must_use]
+    pub fn with_quit(mut self) -> Self {
+        let u = self.metrics.unit;
+        let width = u * 5;
+        let right = i32::try_from(self.size.width).unwrap_or(0) - u;
+        let y = self.buttons.first().map_or(u / 2, |(_, r)| r.y);
+        let quit = Rect::new(right - width, y, width, u * 2);
+        self.status.width = (quit.x - u - self.status.x).max(0);
+        self.buttons.push((Button::Quit, quit));
+        self
     }
 
     fn column(&self, index: usize) -> i32 {
@@ -421,6 +437,7 @@ pub fn label(button: Button, game: &Game, back: usize) -> String {
         Button::Turn if game.turn() == 3 => "Turn three".into(),
         Button::Turn => "Turn one".into(),
         Button::Best => "Best".into(),
+        Button::Quit => "Quit".into(),
         Button::Back => format!(
             "Back: {}",
             BACKS.get(back).map_or("plain", |(name, _)| name)
@@ -538,7 +555,7 @@ pub fn paint_on(
 
     // The bar.
     pen.fill_rect(layout.bar, ink.card);
-    for (button, rect) in layout.buttons {
+    for &(button, rect) in &layout.buttons {
         let hovered = scene.hover == Some(button);
         let dead = button == Button::Undo && (!game.can_undo() || game.won());
         if dead {
@@ -770,7 +787,7 @@ mod tests {
     fn what_is_painted_is_what_is_hit() {
         let l = layout(1200, 800);
         let mut game = Game::new(4, 3);
-        for (button, rect) in l.buttons {
+        for &(button, rect) in &l.buttons {
             assert_eq!(l.hit(&game, centre(rect)), Some(Hit::Button(button)));
         }
         assert_eq!(l.buttons[0].0, Button::New);
@@ -798,6 +815,20 @@ mod tests {
             l.hit(&game, centre(l.pile_card(&game, 6, 6))),
             Some(Hit::Pile { pile: 6, count: 1 })
         );
+    }
+
+    #[test]
+    fn a_screen_with_no_window_gets_a_button_to_leave_by() {
+        let plain = layout(1100, 760);
+        assert!(plain.buttons.iter().all(|(b, _)| *b != Button::Quit));
+        let l = layout(1100, 760).with_quit();
+        let game = Game::new(1, 1);
+        let (_, quit) = l.buttons.last().copied().unwrap();
+        assert_eq!(l.hit(&game, centre(quit)), Some(Hit::Button(Button::Quit)));
+        assert!(quit.right() <= 1100);
+        // What the bar says stops short of it.
+        assert!(l.status.right() < quit.x);
+        assert!(l.status.x > l.buttons[4].1.right());
     }
 
     #[test]

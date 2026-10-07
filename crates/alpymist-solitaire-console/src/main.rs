@@ -27,7 +27,8 @@ Deals a game of Klondike on this screen, with no desktop.
 Without either it turns as many as the last game did.
 
 Run it from a text console, as root or as an account in the video and
-input groups. Q or Ctrl+Q leaves. Everything else is as in the window:
+input groups. The bar's Quit, Esc, Q or Ctrl+C leaves, asking first if a
+game is under way. Everything else is as in the window:
 drag the cards or double-click one home; the arrows and Enter; Space turns
 the stock, U takes a move back, N deals again, B changes the cards' backs,
 S shows the best games.";
@@ -97,7 +98,8 @@ mod keys {
             KeyCode::Backspace => Key::Backspace,
             KeyCode::Z if ctrl => Key::Undo,
             KeyCode::N if ctrl => Key::New,
-            KeyCode::Q | KeyCode::W if ctrl => Key::Quit,
+            // Ctrl+C as well: what a hand tries first at a console.
+            KeyCode::Q | KeyCode::W | KeyCode::C if ctrl => Key::Quit,
             _ => return None,
         })
     }
@@ -114,6 +116,8 @@ mod keys {
             assert_eq!(key(KeyCode::NumpadEnter, Modifiers::NONE), Some(Key::Enter));
             assert_eq!(key(KeyCode::Z, Modifiers::CTRL), Some(Key::Undo));
             assert_eq!(key(KeyCode::Q, Modifiers::CTRL), Some(Key::Quit));
+            assert_eq!(key(KeyCode::C, Modifiers::CTRL), Some(Key::Quit));
+            assert_eq!(key(KeyCode::C, Modifiers::NONE), None);
             // A letter alone is text, which comes by itself.
             assert_eq!(key(KeyCode::Q, Modifiers::NONE), None);
             assert_eq!(key(KeyCode::Z, Modifiers::NONE), None);
@@ -200,8 +204,6 @@ mod screen {
                 modifiers,
                 ..
             } => keys::key(code, modifiers).map_or(Outcome::Unchanged, |key| game.key(key)),
-            // Q leaves, where nothing is being asked that a Q answers.
-            InputEvent::Text { ch: 'q' | 'Q' } if game.said().is_none() => Outcome::Close,
             InputEvent::Text { ch } => game.text(ch),
             _ => Outcome::Unchanged,
         }
@@ -236,7 +238,8 @@ mod screen {
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos());
         let seed = u64::try_from(now & u128::from(u64::MAX)).unwrap_or(0);
-        let mut game = Play::new(alpymist_widget::appearance(), kept, dir, seed, nearly_out);
+        let mut game =
+            Play::new(alpymist_widget::appearance(), kept, dir, seed, nearly_out).with_quit();
         for p in game.font_problems() {
             eprintln!("font {p}");
         }
@@ -298,6 +301,82 @@ mod screen {
             if stop.load(Ordering::Relaxed) {
                 return Ok(());
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::hand;
+        use alpymist_solitaire::kept::Kept;
+        use alpymist_solitaire::play::{Outcome, Play};
+        use alpymist_ui::render::new_cursor;
+        use denise::InputEvent;
+        use denise::geom::Point;
+        use denise::input::{ElementState, KeyCode, Modifiers, PointerButton};
+
+        fn game() -> Play {
+            Play::new(
+                alpymist_widget::Appearance::default(),
+                Kept::default(),
+                None,
+                7,
+                false,
+            )
+            .with_quit()
+        }
+
+        fn key(code: KeyCode, modifiers: Modifiers) -> InputEvent {
+            InputEvent::Key {
+                code,
+                state: ElementState::Down,
+                repeat: false,
+                modifiers,
+            }
+        }
+
+        /// What the kernel sends for each way out ends the game: the reason
+        /// this test is here is a console nobody could leave.
+        #[test]
+        fn every_way_out_is_a_way_out() {
+            let ways = [
+                InputEvent::Text { ch: 'q' },
+                InputEvent::Text { ch: 'Q' },
+                key(KeyCode::Escape, Modifiers::NONE),
+                key(KeyCode::Q, Modifiers::CTRL),
+                key(KeyCode::C, Modifiers::CTRL),
+            ];
+            for way in ways {
+                let mut cursor = new_cursor();
+                assert_eq!(
+                    hand(&way, &mut game(), &mut cursor),
+                    Outcome::Close,
+                    "{way:?}"
+                );
+            }
+            // The key that types a q is not itself one; its text is.
+            let mut cursor = new_cursor();
+            let plain = key(KeyCode::Q, Modifiers::NONE);
+            assert_eq!(hand(&plain, &mut game(), &mut cursor), Outcome::Unchanged);
+        }
+
+        #[test]
+        fn the_mouse_shows_an_arrow_and_presses_the_quit_button() {
+            let mut game = game();
+            let mut cursor = new_cursor();
+            assert!(!cursor.visible, "no arrow where there is no mouse");
+            let (_, quit) = game.layout().buttons.last().copied().unwrap();
+            let at = Point::new(quit.x + quit.width / 2, quit.y + quit.height / 2);
+            let moved = InputEvent::PointerMoved { position: at };
+            assert_eq!(hand(&moved, &mut game, &mut cursor), Outcome::Redraw);
+            assert!(cursor.visible);
+            assert_eq!(cursor.position, at);
+            let press = InputEvent::PointerButton {
+                button: PointerButton::Left,
+                state: ElementState::Down,
+                position: at,
+                modifiers: Modifiers::NONE,
+            };
+            assert_eq!(hand(&press, &mut game, &mut cursor), Outcome::Close);
         }
     }
 }
