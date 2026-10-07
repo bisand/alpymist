@@ -25,7 +25,9 @@ a keyboard's Files key, and it is among the menu's applications. An account
 older than the file manager has neither that key nor the editor's until its
 `hyprland.conf` is given the lines
 `bind = SUPER, E, exec, alpymist open files` and
-`bind = SUPER SHIFT, R, exec, alpymist open editor`.
+`bind = SUPER SHIFT, E, exec, alpymist open editor`, the second in place of
+`bind = SUPER SHIFT, E, exit`, which logged out at once and is no longer
+shipped: logging out is in the menu's System page.
 
 Thunar shows folders as a list; Edit › Preferences in it changes that.
 Windows shares and phones need `gvfs-smb` and `gvfs-mtp`, which the menu's
@@ -43,7 +45,7 @@ alpymist set default.terminal foot
 
 <kbd>Super</kbd>+<kbd>B</kbd> and <kbd>Super</kbd>+<kbd>Return</kbd> follow
 the browser and the terminal chosen here, as <kbd>Super</kbd>+<kbd>E</kbd>
-and <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> do the file manager and
+and <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> do the file manager and
 the text editor.
 
 ### alpymist open

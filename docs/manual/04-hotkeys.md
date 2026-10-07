@@ -19,7 +19,7 @@ file.
 | <kbd>Super</kbd>+<kbd>Return</kbd> or <kbd>Super</kbd>+<kbd>Q</kbd> | A terminal |
 | <kbd>Super</kbd>+<kbd>B</kbd> | The web browser |
 | <kbd>Super</kbd>+<kbd>E</kbd> | The file manager |
-| <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> | The text editor |
+| <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> | The text editor |
 
 The terminal and the browser are the ones chosen in Settings › Default
 applications.
@@ -65,7 +65,6 @@ See [Clipboard and screenshots](15-clipboard-and-screenshots.md).
 | Key | Does |
 |---|---|
 | <kbd>Super</kbd>+<kbd>L</kbd> | Lock the screen |
-| <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> | Log out, without asking |
 | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Delete</kbd> | Ask whether the password prompt on screen is really Alpymist's |
 | The power button | What Settings › Power says: the System menu by default |
 | The sleep key | Lock and suspend |
