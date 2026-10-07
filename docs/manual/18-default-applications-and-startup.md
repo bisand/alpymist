@@ -22,10 +22,14 @@ Each list offers the installed applications that can open that kind.
 
 The file manager is Thunar: <kbd>Super</kbd>+<kbd>E</kbd> opens it, as does
 a keyboard's Files key, and it is among the menu's applications. An account
-older than the file manager has no such key until its `hyprland.conf` is
-given the line `bind = SUPER, E, exec, alpymist open files`. It shows folders as a
-list; Edit › Preferences in it changes that. Windows shares and phones need `gvfs-smb` and `gvfs-mtp`,
-which the menu's Install › Alpine package adds.
+older than the file manager has neither that key nor the editor's until its
+`hyprland.conf` is given the lines
+`bind = SUPER, E, exec, alpymist open files` and
+`bind = SUPER SHIFT, R, exec, alpymist open editor`.
+
+Thunar shows folders as a list; Edit › Preferences in it changes that.
+Windows shares and phones need `gvfs-smb` and `gvfs-mtp`, which the menu's
+Install › Alpine package adds.
 
 The right-hand column is a system with nothing added, and yours shows what
 you have installed. Where nothing installed opens a kind, the page says so; the Store has
@@ -38,7 +42,9 @@ alpymist set default.terminal foot
 ```
 
 <kbd>Super</kbd>+<kbd>B</kbd> and <kbd>Super</kbd>+<kbd>Return</kbd> follow
-the browser and the terminal chosen here.
+the browser and the terminal chosen here, as <kbd>Super</kbd>+<kbd>E</kbd>
+and <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> do the file manager and
+the text editor.
 
 ### alpymist open
 
