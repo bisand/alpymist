@@ -6,7 +6,13 @@
 # gtk-theme stays at its default, Adwaita: GTK 3 has no theme called
 # Adwaita-dark, falls back to light Adwaita, and ignores the dark preference
 # in settings.ini when it does. Dark GTK 3 comes from that preference.
+#
+# icon-theme is Alpymist's folders and places, which `alpymist session`
+# writes into each account's ~/.local/share/icons from its theme, in its
+# accent. It inherits Adwaita, and where it is not there, a program run as
+# root or an account that has never logged in, GTK shows Adwaita.
 [org.gnome.desktop.interface]
 color-scheme='prefer-dark'
+icon-theme='Alpymist'
 cursor-theme='Breeze_Light'
 cursor-size=24

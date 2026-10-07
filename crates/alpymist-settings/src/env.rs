@@ -16,6 +16,8 @@ pub struct Env {
     pub root: PathBuf,
     /// The account's configuration directory: `~/.config`.
     pub config: PathBuf,
+    /// The account's data directory: `~/.local/share`.
+    pub data: PathBuf,
     /// Whether this process is root.
     pub is_root: bool,
     /// Whether a Hyprland session can be spoken to.
@@ -35,10 +37,16 @@ impl Env {
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
             .unwrap_or_else(|| PathBuf::from("/nonexistent/.config"));
+        let data = std::env::var_os("XDG_DATA_HOME")
+            .filter(|d| !d.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
+            .unwrap_or_else(|| PathBuf::from("/nonexistent/.local/share"));
         let uid = uid();
         Self {
             root: PathBuf::from("/"),
             config,
+            data,
             is_root: uid == 0,
             hyprland: std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE")
                 .is_some_and(|s| !s.is_empty()),
@@ -55,6 +63,7 @@ impl Env {
         Self {
             root: dir.join("root"),
             config: dir.join("config"),
+            data: dir.join("data"),
             is_root,
             hyprland: true,
             user: Some("someone".into()),
@@ -77,6 +86,12 @@ impl Env {
     #[must_use]
     pub fn account(&self, relative: &str) -> PathBuf {
         self.config.join(relative)
+    }
+
+    /// A path under the account's data: `icons/Alpymist`.
+    #[must_use]
+    pub fn data(&self, relative: &str) -> PathBuf {
+        self.data.join(relative)
     }
 
     /// Run a program.

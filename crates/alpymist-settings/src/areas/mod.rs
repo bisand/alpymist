@@ -7,6 +7,8 @@ pub mod clipboard;
 pub mod datetime;
 pub mod default_apps;
 pub mod displays;
+pub mod gtk;
+pub mod icons;
 pub mod input;
 pub mod keyboard;
 pub mod language;

@@ -10,6 +10,10 @@
 //!   includes: both palettes, and which one foot starts in;
 //! - `~/.config/gtk-3.0/settings.ini` and `gtk-4.0`'s, GTK's dark preference,
 //!   unless the account already has its own;
+//! - `~/.config/gtk-3.0/gtk.css`, GTK 3 in the theme's colours, unless the
+//!   account already has its own (see [`super::gtk`]);
+//! - `~/.local/share/icons/Alpymist`, the folders and places a file manager
+//!   shows, in the accent (see [`super::icons`]);
 //! - Hyprland's border colours, in the `settings.conf` the input settings
 //!   write;
 //! - mako's colours, in the configuration Settings › Notifications writes
@@ -176,7 +180,35 @@ pub fn write(env: &Env, theme: &ThemeFile) -> Vec<String> {
         // An account's own settings.ini is its own: a note, not a failure.
         put(file, "#", gtk(theme));
     }
+    // As is its own stylesheet.
+    put(super::gtk::CSS, "/*", super::gtk::css(theme));
+    if let Err(e) = icons(env, theme) {
+        left.push(e);
+    }
     left
+}
+
+/// Write the icon theme, each file only where it is not already as it
+/// should be, and the index last and anew when anything changed: GTK looks
+/// again at a theme whose directory has.
+fn icons(env: &Env, theme: &ThemeFile) -> Result<(), String> {
+    let directory = env.data(super::icons::DIRECTORY);
+    let mut files = super::icons::files(theme);
+    let index = files.remove(0);
+    let mut changed = false;
+    for (path, text) in &files {
+        let path = directory.join(path);
+        if std::fs::read_to_string(&path).is_ok_and(|now| now == *text) {
+            continue;
+        }
+        generated::replace(&path, text)?;
+        changed = true;
+    }
+    let path = directory.join(&index.0);
+    if changed || !path.exists() {
+        generated::replace(&path, &index.1)?;
+    }
+    Ok(())
 }
 
 /// Give the account's own files the lines that make them follow the theme,
@@ -492,5 +524,61 @@ mod tests {
             drop_borders("general {\n    col.active_border = rgb(ff0000)\n}\n"),
             None
         );
+    }
+
+    #[test]
+    fn gtk_and_the_icons_are_written_from_the_theme_and_an_own_stylesheet_kept() {
+        static RAN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+        let dir = std::env::temp_dir().join(format!("alpymist-themed-gtk-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        let env = Env::test(&dir, false, &RAN);
+        let mut theme = ThemeFile::default();
+        assert!(super::write(&env, &theme).is_empty());
+        let css = env.account(crate::areas::gtk::CSS);
+        let first = std::fs::read_to_string(&css).unwrap();
+        let accent = alpymist_theme::hex(theme.palette().accent);
+        assert!(first.contains(&format!("alpymist_accent #{accent};")));
+        let icons = env.data(crate::areas::icons::DIRECTORY);
+        let folder = icons.join("scalable/places/folder.svg");
+        assert!(std::fs::read_to_string(&folder).unwrap().contains(&accent));
+        assert!(icons.join("index.theme").exists());
+
+        // Another accent: both follow it.
+        theme.accent = alpymist_theme::Accent::Moss;
+        assert!(super::write(&env, &theme).is_empty());
+        let moss = alpymist_theme::hex(theme.palette().accent);
+        assert_ne!(moss, accent);
+        assert!(std::fs::read_to_string(&css).unwrap().contains(&moss));
+        assert!(std::fs::read_to_string(&folder).unwrap().contains(&moss));
+        assert!(!std::fs::read_to_string(&folder).unwrap().contains(&accent));
+
+        // A stylesheet of the account's own is left, and said to have been;
+        // the icons, which are nobody's but ours, still follow.
+        std::fs::write(&css, "window { background: red; }\n").unwrap();
+        theme.accent = alpymist_theme::Accent::Rose;
+        let left = super::write(&env, &theme);
+        assert_eq!(left.len(), 1, "{left:?}");
+        assert!(left[0].contains("gtk.css"));
+        assert_eq!(
+            std::fs::read_to_string(&css).unwrap(),
+            "window { background: red; }\n"
+        );
+        let rose = alpymist_theme::hex(theme.palette().accent);
+        assert!(std::fs::read_to_string(&folder).unwrap().contains(&rose));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn the_package_names_the_icon_theme_that_is_written() {
+        let named = format!("'{}'", crate::areas::icons::THEME);
+        let schema = include_str!("../../../../desktop/theme/90_alpymist.gschema.override");
+        assert!(schema.contains(&format!("icon-theme={named}")), "{schema}");
+        for ini in [
+            include_str!("../../../../desktop/theme/gtk-3.0-settings.ini"),
+            include_str!("../../../../desktop/theme/gtk-4.0-settings.ini"),
+        ] {
+            let line = format!("gtk-icon-theme-name={}", crate::areas::icons::THEME);
+            assert!(ini.lines().any(|l| l == line), "{ini}");
+        }
     }
 }

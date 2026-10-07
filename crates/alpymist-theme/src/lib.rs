@@ -20,7 +20,7 @@
 
 #![forbid(unsafe_code)]
 
-use denise::Color;
+pub use denise::Color;
 use denise::theme::{ColorScheme, Role, Theme};
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Write as _};
@@ -232,6 +232,17 @@ pub struct Palette {
     pub error: Color,
     /// What is off or out of reach.
     pub muted: Color,
+}
+
+/// `a` moved towards `b` by `percent`: a surface a little off the page, an
+/// accent a little into it.
+#[must_use]
+pub fn mix(a: Color, b: Color, percent: u16) -> Color {
+    let p = percent.min(100);
+    let m = |x: u8, y: u8| {
+        u8::try_from((u16::from(x) * (100 - p) + u16::from(y) * p) / 100).unwrap_or(u8::MAX)
+    };
+    Color::rgb(m(a.r, b.r), m(a.g, b.g), m(a.b, b.b))
 }
 
 /// A colour as CSS and most configuration files write it, without the `#`:
