@@ -567,7 +567,7 @@ pub fn open(category_id: &str, args: &[String]) -> Result<Vec<Vec<String>>, Stri
         .map(desktop_entry::unescape)
         .unwrap_or_default();
     let runs = desktop_entry::exec_with(&exec, args);
-    if app.entry.yes("Terminal") {
+    if app.entry.wants_terminal() {
         let prefix = defaults::terminal_prefix(&places);
         return Ok(runs
             .into_iter()

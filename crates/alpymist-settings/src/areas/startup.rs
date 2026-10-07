@@ -88,7 +88,7 @@ impl Program {
     #[must_use]
     pub fn argv(&self) -> Option<Vec<String>> {
         let argv = self.entry.argv()?;
-        if self.entry.yes("Terminal") {
+        if self.entry.wants_terminal() {
             return Some(alpymist_core::defaults::terminal_argv(
                 &alpymist_core::defaults::Places::current(),
                 &argv,
