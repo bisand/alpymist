@@ -18,6 +18,7 @@ file.
 | <kbd>Super</kbd>+<kbd>Esc</kbd> | The menu, opened at System |
 | <kbd>Super</kbd>+<kbd>Return</kbd> or <kbd>Super</kbd>+<kbd>Q</kbd> | A terminal |
 | <kbd>Super</kbd>+<kbd>B</kbd> | The web browser |
+| <kbd>Super</kbd>+<kbd>E</kbd> | The file manager |
 
 The terminal and the browser are the ones chosen in Settings › Default
 applications.
@@ -126,7 +127,7 @@ bind = SUPER, F12, exec, alpymist key volume-up
 Open `~/.config/hypr/hyprland.conf` and edit the `bind =` line, or add one:
 
 ```
-bind = SUPER, E, exec, alpymist open files
+bind = SUPER, N, exec, alpymist open editor
 ```
 
 Hyprland reads the file again as soon as it is saved. A line of your own

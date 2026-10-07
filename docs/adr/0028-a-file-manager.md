@@ -40,7 +40,9 @@ list of drives needs gvfs and udisks2 whichever it is.
 `gvfs`, for the trash and the list of drives, and `udisks2`, which mounts
 them: 29 MiB and 46 packages together. `/etc/xdg/mimeapps.list` says Thunar
 opens folders, so that is what Automatic comes to, and another can be chosen
-in Settings as for any kind.
+in Settings as for any kind. <kbd>Super</kbd>+<kbd>E</kbd> runs
+`alpymist open files` in a new account's `hyprland.conf`; an account that
+exists keeps the file it has.
 
 **Folders open as a list.** `/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/thunar.xml`
 sets Thunar's `default-view`. It is a default, which Thunar's own
