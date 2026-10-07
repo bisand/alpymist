@@ -41,6 +41,7 @@ DESKTOP="
 	alpymist-saver-starfield
 	alpymist-screensaver
 	alpymist-settings-app
+	alpymist-solitaire
 	alpymist-store
 	alpymist-thunderbolt
 	alpymist-wallpaper

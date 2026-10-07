@@ -88,6 +88,7 @@ depends="
 	alpymist-screensaver
 	alpymist-settings
 	alpymist-shell=$pkgver-r$pkgrel
+	alpymist-solitaire
 	alpymist-tools=$pkgver-r$pkgrel
 	alpymist-tui=$pkgver-r$pkgrel
 	alpymist-splash-openrc

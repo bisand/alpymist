@@ -126,3 +126,28 @@ lists and in `FETCHED`. Nothing of its source is changed.
   Ristretto opening a picture with the defaults in place, as one window
   and no message. Not tried: sound out of cliamp, the aport on x86_64, the
   image, and `alpymist-tui` as a package, which only CI builds.
+
+## Addendum, 2026-10-07 — a card game, and it is ours
+
+A desktop had no game at all. Alpine's with a window, `aisleriot`, is
+67 MiB in five packages, 51 of them Guile, which nothing else here uses;
+`tty-solitaire` is 65 KiB and a terminal's. Neither takes the theme.
+
+**`alpymist-solitaire` is Klondike in a window of our own, and the desktop
+depends on it.** A crate like the overview's: the rules with no pixels and
+tests of their own, a view that lays the table out for any window, and the
+program that joins them to one. Under 2 MiB, no dependency the workspace
+did not have, and the table, the backs of the cards and the buttons in the
+theme's colours.
+
+**The faces are pictures, and somebody else's.** Byron Knoll's Vector
+Playing Cards, which he released into the public domain, drawn once to
+fifty-two PNGs of 300 by 436 and carried in the program, 750 KiB.
+`crates/alpymist-solitaire/cards/README.md` says where they are from and
+the commands that made them. Faces drawn by code would have followed the
+theme and looked like nothing anyone has played with; faces made by an
+image model were tried and came out with the wrong pips and letters.
+
+Tried: the rules by their tests, the table as pictures drawn offscreen, and
+the window opened on the development machine. Not tried by anyone but the
+person playing: how dragging feels.

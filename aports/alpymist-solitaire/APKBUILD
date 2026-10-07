@@ -1,0 +1,54 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+pkgname=alpymist-solitaire
+pkgver=0.4.0
+pkgrel=0
+pkgdesc="Alpymist's Solitaire: Klondike in a window, in the theme's colours"
+url="https://github.com/bisand/alpymist"
+arch="all"
+license="MIT OR Apache-2.0"
+# The one game a desktop comes with (ADR 0029's addendum). A window over
+# wl_shm, drawn by Denise on the CPU like the menu, which needs libxkbcommon
+# and the menu's font. The cards' faces are pictures inside the program,
+# Byron Knoll's and in the public domain: crates/alpymist-solitaire/cards.
+# What every program of the desktop group links, not this one alone: the
+# first package of the group builds them all (ci/build-programs.sh).
+makedepends="cargo libxkbcommon-dev linux-pam-dev"
+depends="font-fira-ttf font-nerd-fonts-symbols"
+options="!check"  # the test suite runs in CI, not in the package build
+source=""
+# The workspace: a copy of this package's own, or the one copy a dev build
+# makes for all of them (ALPYMIST_WORKSPACE, from ci/build-packages.sh).
+builddir="${ALPYMIST_WORKSPACE:-$srcdir}"
+
+# Where cargo leaves what it builds. build-packages.sh points every package at
+# one directory, and ci/build-programs.sh builds a whole group of programs
+# into it at once, so the first package of a group builds them and the rest
+# find it done.
+_release="${CARGO_TARGET_DIR:-$srcdir/target}"/release
+
+prepare() {
+	# Already there, once for every package of this build.
+	[ -z "${ALPYMIST_WORKSPACE:-}" ] || return 0
+	# Same as alpymist: the workspace is bind-mounted at /src.
+	tar -C /src -cf - \
+		--exclude=./target \
+		--exclude=./out \
+		--exclude=./.git \
+		. | tar -C "$builddir" -xf -
+}
+
+build() {
+	cd "$builddir"
+	sh "$builddir"/ci/build-programs.sh desktop
+}
+
+package() {
+	install -Dm755 "$_release"/alpymist-solitaire \
+		"$pkgdir"/usr/bin/alpymist-solitaire
+	install -Dm644 "$builddir"/desktop/solitaire/alpymist-solitaire.desktop \
+		"$pkgdir"/usr/share/applications/alpymist-solitaire.desktop
+}
+
+# Filled in by `abuild checksum` at build time; see alpymist-install.
+sha512sums=""

@@ -40,6 +40,15 @@ HEIF and AVIF pictures need a viewer from the Store. It shows one picture
 and no strip of the folder's others, since nothing here makes thumbnails;
 the arrows in its toolbar still go to the next and the last.
 
+There is one game, Solitaire, among the menu's applications: Klondike, in
+the colours of Settings › Appearance. Drag the cards, or double-click one to
+send it to its foundation; click the stock to turn it. With the keyboard,
+the arrows move between the piles, <kbd>Enter</kbd> picks cards up and puts
+them down, <kbd>Up</kbd> and <kbd>Down</kbd> on a pile picked up from take
+more cards or fewer, <kbd>Space</kbd> turns the stock, <kbd>H</kbd> sends a
+card home, <kbd>U</kbd> takes a move back and <kbd>N</kbd> deals again. The
+bar's last button chooses between turning one card and three.
+
 The right-hand column is a system with nothing added, and yours shows what
 you have installed. Where nothing installed opens a kind, the page says so; the Store has
 applications that do, and once one is installed it appears in the list.
