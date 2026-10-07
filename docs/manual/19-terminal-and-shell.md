@@ -66,8 +66,10 @@ There are also a few programs that fill a terminal's window:
 They come with the desktop, as the package `alpymist-tui`. All but
 fastfetch are among the menu's applications too, each opening in a terminal
 of its own: ncdu there starts in your home directory, and tmux comes back to
-the session it left. Its `cliamp upgrade` is not how it is updated here: it comes with the
-system's updates, like everything else.
+the session it left.
+
+cliamp's own `cliamp upgrade` is not how it is updated here: it comes with
+the system's updates, like everything else.
 
 ## Editors
 
