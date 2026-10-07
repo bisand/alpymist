@@ -84,6 +84,8 @@ enum Over {
     Ask(usize),
     /// The best games.
     Best,
+    /// Whether to leave a game under way.
+    Leave,
     /// Whose record a game just won is.
     Record {
         seconds: u32,
@@ -119,6 +121,9 @@ pub struct Play {
     over: Option<Over>,
     /// Where what is kept is written, when there is somewhere.
     dir: Option<PathBuf>,
+    /// Whether the game has to offer its own way out: a button, Escape and
+    /// Q, on a screen with no window to close.
+    quit: bool,
 }
 
 /// The account's state directory for Alpymist's programs.
@@ -239,7 +244,17 @@ impl Play {
             shown: None,
             over: None,
             dir,
+            quit: false,
         }
+    }
+
+    /// The same game, offering its own way out: a Quit button on the bar,
+    /// and Escape and Q, for a screen with no window to close.
+    #[must_use]
+    pub fn with_quit(mut self) -> Self {
+        self.quit = true;
+        self.layout = self.layout.with_quit();
+        self
     }
 
     /// Fonts that could not be loaded, for whoever keeps a log.
@@ -305,6 +320,16 @@ impl Play {
         }
     }
 
+    /// Leave, asking first if there is a game under way to lose.
+    fn leave(&mut self) -> Outcome {
+        if self.game.moves() > 0 && !self.game.won() {
+            self.over = Some(Over::Leave);
+            Outcome::Redraw
+        } else {
+            Outcome::Close
+        }
+    }
+
     fn undo(&mut self) -> Outcome {
         // A game that is out is over: its time is taken.
         if self.game.won() {
@@ -326,6 +351,7 @@ impl Play {
             Button::Turn => self.ask_new(if self.game.turn() == 3 { 1 } else { 3 }),
             Button::Back => self.wear(1),
             Button::Best => self.over = Some(Over::Best),
+            Button::Quit => return self.leave(),
         }
         Outcome::Redraw
     }
@@ -383,6 +409,11 @@ impl Play {
                 lines: vec![("This game will be lost.".into(), String::new())],
                 buttons: vec!["New game".into(), "Keep playing".into()],
             },
+            Over::Leave => Panel {
+                title: "Leave the game?".into(),
+                lines: vec![("This game will be lost.".into(), String::new())],
+                buttons: vec!["Quit".into(), "Keep playing".into()],
+            },
             Over::Best => {
                 let mut lines = Vec::new();
                 table(1, &mut lines);
@@ -423,6 +454,7 @@ impl Play {
     fn answer(&mut self, button: usize) -> Outcome {
         match self.over.take() {
             Some(Over::Ask(turn)) if button == 0 => self.deal_again(turn),
+            Some(Over::Leave) if button == 0 => return Outcome::Close,
             Some(Over::Record {
                 seconds,
                 moves,
@@ -629,7 +661,10 @@ impl Play {
             Key::Escape if self.chosen.take().is_some() => Outcome::Redraw,
             Key::Backspace | Key::Undo => self.undo(),
             Key::New => self.button(Button::New),
-            Key::Quit => Outcome::Close,
+            Key::Quit => self.leave(),
+            // With nothing picked up to put back, and no window to close,
+            // Escape is the way out.
+            Key::Escape if self.quit => self.leave(),
             Key::Escape => Outcome::Unchanged,
         }
     }
@@ -643,7 +678,7 @@ impl Play {
                 }
                 Outcome::Unchanged
             }
-            Some(Over::Ask(_)) => match ch.to_ascii_lowercase() {
+            Some(Over::Ask(_) | Over::Leave) => match ch.to_ascii_lowercase() {
                 'y' => self.answer(0),
                 'n' => self.answer(1),
                 _ => Outcome::Unchanged,
@@ -659,6 +694,7 @@ impl Play {
             return Outcome::Redraw;
         }
         match ch.to_ascii_lowercase() {
+            'q' if self.quit => self.leave(),
             'b' => self.button(Button::Back),
             'n' => self.button(Button::New),
             's' => self.button(Button::Best),
@@ -716,7 +752,12 @@ impl Play {
 impl Play {
     /// Lay the table out for a screen or window of `size` at a scale.
     pub fn resize(&mut self, size: Size, scale: u32) {
-        self.layout = Layout::new(&self.appearance, size, scale);
+        let layout = Layout::new(&self.appearance, size, scale);
+        self.layout = if self.quit {
+            layout.with_quit()
+        } else {
+            layout
+        };
     }
 
     /// Paint the game into `frame`.
@@ -938,6 +979,57 @@ mod tests {
         assert!(play.said().is_none());
         assert_eq!(play.game().moves(), 0);
         assert_ne!(*play.game().tableau(), under_way);
+    }
+
+    #[test]
+    fn where_there_is_no_window_to_close_the_game_offers_its_own_way_out() {
+        // In a window, Escape and Q are not ways out, and there is no button.
+        let mut windowed = play(Kept::default(), None, false);
+        assert_eq!(windowed.key(Key::Escape), Outcome::Unchanged);
+        assert_eq!(windowed.text('q'), Outcome::Unchanged);
+        assert!(
+            windowed
+                .layout()
+                .buttons
+                .iter()
+                .all(|(b, _)| *b != Button::Quit)
+        );
+        assert_eq!(windowed.key(Key::Quit), Outcome::Close);
+
+        // Without one: each of them leaves a game nothing was done in.
+        for way in 0..4 {
+            let mut bare = play(Kept::default(), None, false).with_quit();
+            bare.resize(denise::geom::Size::new(1280, 800), 1);
+            let outcome = match way {
+                0 => bare.key(Key::Escape),
+                1 => bare.text('q'),
+                2 => bare.key(Key::Quit),
+                _ => bare.press(button(&bare, Button::Quit)),
+            };
+            assert_eq!(outcome, Outcome::Close, "way {way}");
+        }
+
+        // With a game under way it asks, and Escape there keeps playing.
+        let mut bare = play(Kept::default(), None, false).with_quit();
+        bare.key(Key::Space);
+        assert_eq!(bare.text('Q'), Outcome::Redraw);
+        assert_eq!(bare.said().unwrap().title, "Leave the game?");
+        assert_eq!(bare.key(Key::Escape), Outcome::Redraw);
+        assert!(bare.said().is_none());
+        assert_eq!(bare.game().moves(), 1);
+        // Escape first puts back what the keyboard picked up.
+        bare.key(Key::Down);
+        bare.key(Key::Enter);
+        assert_eq!(bare.key(Key::Escape), Outcome::Redraw);
+        assert!(bare.said().is_none(), "that Escape was for the cards");
+        // And then asks; Enter, Y or the button leaves.
+        bare.key(Key::Escape);
+        assert_eq!(bare.key(Key::Enter), Outcome::Close);
+        bare.press(button(&bare, Button::Quit));
+        assert_eq!(bare.text('y'), Outcome::Close);
+        bare.key(Key::Quit);
+        let at = bare.layout().panel(&bare.said().unwrap());
+        assert_eq!(bare.press(centre(at.buttons[0])), Outcome::Close);
     }
 
     #[test]
