@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Alpymist: Ristretto without its strip of thumbnails, and without the
+  message that says there is nothing to make them. tumbler, which makes
+  them, is not installed, and why is ADR 0028: it would read every picture
+  in a folder that one picture was opened from. Defaults, which View ›
+  Thumbnail Bar and the account's own settings override.
+-->
+<channel name="ristretto" version="1.0">
+  <property name="window" type="empty">
+    <property name="thumbnails" type="empty">
+      <property name="show" type="bool" value="false"/>
+    </property>
+  </property>
+  <property name="errors" type="empty">
+    <property name="missing-thumbnailer" type="bool" value="false"/>
+  </property>
+</channel>

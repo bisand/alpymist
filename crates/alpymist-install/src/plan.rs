@@ -191,9 +191,6 @@ pub const DESKTOP: &str = "alpymist-desktop";
 /// git, ssh, nano and the rest of the first ten minutes: the desktop depends
 /// on it, and it is installed on its own too, for a system without one.
 pub const TOOLS: &str = "alpymist-tools";
-/// lazygit, cliamp and the rest of a terminal's programs: nothing depends on
-/// it, so that `apk del` can take it away again.
-pub const TUI: &str = "alpymist-tui";
 /// What `/etc/conf.d/greetd` says: the configuration that starts Hyprland,
 /// and that greetd waits for seatd, through which the desktop opens the
 /// screen and keyboard. The login screen needs no seat, so without the wait
@@ -604,24 +601,6 @@ pub fn build(a: &Answers) -> Result<Plan, PlanError> {
                 "/etc/apk/repositories",
                 "--no-progress",
                 TOOLS,
-            ],
-        )
-        .may_fail(),
-    );
-    // Nothing depends on these, which is what lets them be removed, so
-    // nothing else brings them.
-    steps.push(
-        Step::new(
-            "Installing the terminal's programs",
-            &[
-                "apk",
-                "add",
-                "--root",
-                ROOT,
-                "--repositories-file",
-                "/etc/apk/repositories",
-                "--no-progress",
-                TUI,
             ],
         )
         .may_fail(),
@@ -1080,7 +1059,6 @@ mod tests {
                     || title.starts_with("Showing the splash at boot")
                     || *title == "Installing the desktop"
                     || *title == "Installing the tools"
-                    || *title == "Installing the terminal's programs"
                     || *title == "Installing the fingerprint reader's driver"
                     || title.ends_with("graphics for a virtual machine")
                     || *title == "Choosing the desktop session",
@@ -1287,9 +1265,6 @@ mod tests {
         let tools = step(&plan, "Installing the tools");
         assert!(tools.argv.contains(&super::TOOLS.to_string()));
         assert!(tools.may_fail, "a system is bootable without git");
-        let tui = step(&plan, "Installing the terminal's programs");
-        assert!(tui.argv.contains(&super::TUI.to_string()));
-        assert!(tui.may_fail, "a system is bootable without a music player");
         assert!(
             desktop
                 .argv
@@ -1330,15 +1305,6 @@ mod tests {
         assert!(
             apkbuild.contains(&format!("\t{}:_tools\n", super::TOOLS)),
             "the desktop's aport makes the tools subpackage the installer adds"
-        );
-        assert!(
-            apkbuild.contains(&format!("\t{}:_tui\n", super::TUI)),
-            "the desktop's aport makes the terminal subpackage the installer adds"
-        );
-        let image = include_str!("../../../profiles/mkimg.alpymist.sh");
-        assert!(
-            image.contains(&format!("apks=\"$apks {}\"\n", super::TUI)),
-            "nothing depends on the terminal's programs, so the image must name them"
         );
         let cfgfile = super::GREETD_SERVICE
             .lines()

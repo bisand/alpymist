@@ -98,9 +98,6 @@ profile_alpymist() {
 	apks="$apks linux-firmware-ath9k_htc linux-firmware-ath10k linux-firmware-i915"
 	# The desktop, so the installer can put it on a machine with no network.
 	apks="$apks alpymist-desktop"
-	# The terminal's programs, which the desktop does not depend on and the
-	# installer adds by name (ADR 0029).
-	apks="$apks alpymist-tui"
 	# The fingerprint driver and window, which the installer adds where it
 	# finds a reader validity-fprintd drives (alpymist-install's fingerprint).
 	apks="$apks validity-fprintd validity-fprintd-openrc alpymist-fingerprint"
