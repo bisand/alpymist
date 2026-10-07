@@ -71,6 +71,7 @@ license="MIT OR Apache-2.0"
 # thumbnails would have a parser read every picture, film and document in a
 # folder that is only looked at (ADR 0028).
 depends="
+	7zip
 	adwaita-icon-theme
 	alpymist
 	alpymist-about
@@ -119,6 +120,7 @@ depends="
 	librewolf
 	mako
 	mesa-dri-gallium
+	mpv
 	musl-locales
 	pam-rundir
 	pavucontrol
@@ -127,16 +129,19 @@ depends="
 	pipewire-spa-bluez
 	playerctl
 	polkit
+	ristretto
 	seatd
 	shadow
 	slurp
 	squint
 	swaybg
 	thunar
+	thunar-archive-plugin
 	udisks2
 	waybar
 	wireplumber
 	wl-clipboard
+	xarchiver
 	xdg-desktop-portal
 	xdg-desktop-portal-gtk
 	xdg-desktop-portal-wlr
@@ -156,6 +161,7 @@ makedepends="cargo libxkbcommon-dev linux-pam-dev"
 subpackages="
 	alpymist-shell:_shell
 	alpymist-tools:_tools
+	alpymist-tui:_tui
 	alpymist-wallpapers:_wallpapers
 	"
 options="!check"  # the test suite runs in CI, not in the package build
@@ -329,6 +335,31 @@ _tools() {
 		rsync-doc
 		unzip
 		unzip-doc
+		"
+	mkdir -p "$subpkgdir"
+}
+
+# A terminal's programs, for whoever lives in one: lazygit for a repository,
+# cliamp for music and the radio, btop for what the machine is doing, ncdu
+# for what fills the disk, tmux, and fastfetch to say what the machine is.
+# About 64 MiB, most of it lazygit and cliamp, each one Go binary. The
+# desktop does not depend on it, so `apk del alpymist-tui` takes them away
+# again: the installer adds it by name, as it does the tools. cliamp plays
+# through ALSA, which pipewire-alsa hands to PipeWire, and asks ffmpeg for
+# the radio stations that send AAC; mpv's libraries are most of ffmpeg
+# already. None of them is pinned but cliamp, which is our own aport of a
+# release Alpine does not package (ADR 0029).
+_tui() {
+	pkgdesc="Alpymist terminal programs: lazygit, cliamp, btop, ncdu, tmux and fastfetch"
+	depends="
+		btop
+		cliamp
+		fastfetch
+		ffmpeg
+		lazygit
+		ncdu
+		pipewire-alsa
+		tmux
 		"
 	mkdir -p "$subpkgdir"
 }

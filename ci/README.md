@@ -24,7 +24,7 @@ Five workflows:
   that has not concluded, and a job cannot wait for its own run.
 - **Site** (`.github/workflows/site.yml`): alpymist.org.
 
-squint and validity-fprintd are built from pinned upstream releases. Each is
+squint, validity-fprintd and cliamp are built from pinned upstream releases. Each is
 kept in the Actions cache under a key of its aport and the builder, and built
 again only when one of those changes, or at least once a month so it follows
 Alpine's libraries.
@@ -55,7 +55,7 @@ compiles with a feature a neighbour turns on; CI does, with
 `ci/build-programs.sh alone`, which checks each package by itself (ADR 0006,
 addendum of 2026-10-04). A new program is added to its group in that script; a package
 whose program is not there fails at `package()`, with nothing to install.
-squint and validity-fprintd build in their own trees, as upstream wrote them.
+squint, validity-fprintd and cliamp build in their own trees, as upstream wrote them.
 The ISO jobs build no packages at all: they index and sign the ones the
 package jobs made. What is left of an image's time is mostly squashing the
 kernel's firmware.
@@ -234,10 +234,10 @@ cargo xtask version 0.0.5                 # write it everywhere, pkgrel back to 
 cargo update --workspace                  # and into Cargo.lock
 ```
 
-squint, validity-fprintd and `alpymist-keys` keep versions of their own: they
-are built from pinned upstream releases and from a key file, not from this
-workspace. Moving to a new squint or validity-fprintd is its `pkgver` and
-`sha512sums` in its `APKBUILD`.
+squint, validity-fprintd, cliamp and `alpymist-keys` keep versions of their
+own: they are built from pinned upstream releases and from a key file, not
+from this workspace. Moving to a new squint, validity-fprintd or cliamp is
+its `pkgver` and `sha512sums` in its `APKBUILD`.
 
 ### Cutting a release
 

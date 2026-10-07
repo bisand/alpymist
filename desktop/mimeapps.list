@@ -9,6 +9,41 @@ x-scheme-handler/http=librewolf.desktop
 x-scheme-handler/https=librewolf.desktop
 # Thunar opens folders.
 inode/directory=thunar.desktop
+# Ristretto opens pictures.
+image/png=org.xfce.ristretto.desktop
+image/jpeg=org.xfce.ristretto.desktop
+image/gif=org.xfce.ristretto.desktop
+image/webp=org.xfce.ristretto.desktop
+image/svg+xml=org.xfce.ristretto.desktop
+image/bmp=org.xfce.ristretto.desktop
+image/tiff=org.xfce.ristretto.desktop
+# mpv plays films and music.
+video/mp4=mpv.desktop
+video/x-matroska=mpv.desktop
+video/webm=mpv.desktop
+video/quicktime=mpv.desktop
+video/x-msvideo=mpv.desktop
+video/mpeg=mpv.desktop
+video/ogg=mpv.desktop
+audio/mpeg=mpv.desktop
+audio/flac=mpv.desktop
+audio/ogg=mpv.desktop
+audio/x-vorbis+ogg=mpv.desktop
+audio/opus=mpv.desktop
+audio/wav=mpv.desktop
+audio/x-wav=mpv.desktop
+audio/mp4=mpv.desktop
+audio/aac=mpv.desktop
+# xarchiver opens archives.
+application/zip=xarchiver.desktop
+application/x-tar=xarchiver.desktop
+application/gzip=xarchiver.desktop
+application/x-compressed-tar=xarchiver.desktop
+application/x-xz-compressed-tar=xarchiver.desktop
+application/x-7z-compressed=xarchiver.desktop
+application/x-bzip2=xarchiver.desktop
+application/vnd.rar=xarchiver.desktop
+application/zstd=xarchiver.desktop
 # squint opens text.
 text/plain=squint.desktop
 text/x-log=squint.desktop

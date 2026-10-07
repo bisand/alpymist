@@ -19,8 +19,8 @@ use std::path::{Path, PathBuf};
 /// upstream commit or from a key file, not from this workspace. Every other
 /// directory in `aports/` carries the workspace version, so a new aport is
 /// covered the day it is added — and `ci/build-packages.sh` leaves exactly
-/// these two unstamped.
-const INDEPENDENT: [&str; 3] = ["alpymist-keys", "squint", "validity-fprintd"];
+/// these unstamped.
+const INDEPENDENT: [&str; 4] = ["alpymist-keys", "cliamp", "squint", "validity-fprintd"];
 
 /// Set every version to `set`, or, without one, check that they already agree.
 ///

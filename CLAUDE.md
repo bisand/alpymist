@@ -93,7 +93,7 @@ already there, does the job; raising `LOCKED` wants a reason too. See
 
 **Two lists of independent packages must agree.** `INDEPENDENT` in
 `ci/build-packages.sh` and `INDEPENDENT` in `xtask/src/version.rs` both hold
-`squint`, `validity-fprintd` and `alpymist-keys`. They are not built from this workspace, so
+`squint`, `validity-fprintd`, `cliamp` and `alpymist-keys`. They are not built from this workspace, so
 neither the dev stamp nor the build number touches them. Adding a package like
 that means editing both.
 
@@ -201,7 +201,7 @@ would install it on every machine at the next upgrade, and installing
 every system trust that repository's CI. See
 [ADR 0018](docs/adr/0018-guest-graphics.md).
 
-**squint's and validity-fprintd's `sha512sums` are real pins.** They are the
+**squint's, validity-fprintd's and cliamp's `sha512sums` are real pins.** They are the
 aports fetched from upstream, named in `FETCHED` in `ci/build-packages.sh`,
 which deliberately does *not* run `abuild checksum` over them — that
 subcommand deletes the block and regenerates it from whatever was downloaded,
