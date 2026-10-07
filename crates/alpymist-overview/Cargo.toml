@@ -1,0 +1,29 @@
+[package]
+name = "alpymist-overview"
+description = "Alpymist's overview: the nine workspaces of a screen side by side, each window an outline with its name, to pick one from."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "alpymist-overview"
+path = "src/main.rs"
+
+[dependencies]
+# Which workspaces are the focused screen's, and Hyprland's socket.
+alpymist-displays = { workspace = true }
+# The surface over the screen, the fonts and the menu's appearance.
+alpymist-widget = { workspace = true }
+denise = { workspace = true }
+denise-render = { workspace = true }
+denise-text = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+png = { workspace = true }
+
+[lints]
+workspace = true

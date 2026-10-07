@@ -56,9 +56,13 @@ the same way, unless it already uses <kbd>Super</kbd>+<kbd>Tab</kbd>. The
 overview is loaded when the desktop starts, so the first time after the
 upgrade that brought it, log out and in.
 
-The overview is a plugin of Hyprland's that works only on Intel and AMD
-processors. On an ARM machine, a virtual one on a Mac among them,
-<kbd>Super</kbd>+<kbd>Tab</kbd> says so and does nothing else.
+On Intel and AMD processors the overview is Hyprland's own, which shows the
+windows themselves. Everywhere else, an ARM machine or a virtual one on a
+Mac among them, it is Alpymist's: each window is an outline with its
+program's name, where it is on the screen. There
+<kbd>Tab</kbd>, <kbd>Shift</kbd>+<kbd>Tab</kbd> and the arrows move between
+the workspaces, <kbd>Enter</kbd> goes to the one marked, <kbd>1</kbd> to
+<kbd>9</kbd> go straight to one, and <kbd>Esc</kbd> closes it.
 
 When a screen goes away its workspaces move to the screens that are left, and
 when it comes back they go home.

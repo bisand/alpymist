@@ -61,7 +61,8 @@ license="MIT OR Apache-2.0"
 # opens, Alpine's build of Hyprland's own plugin and the one plugin
 # hyprland-security.conf lets in (ADR 0015); binutils is for its `nm`, which
 # Hyprland runs over itself to find the function a plugin hooks, and which
-# nothing else here would bring. alpymist-thunderbolt asks before a
+# nothing else here would bring. alpymist-overview is what the key shows
+# where that plugin cannot load. alpymist-thunderbolt asks before a
 # Thunderbolt or USB4 dock is let in. Hyprland's own wallpaper and idle daemons
 # are not packaged for Alpine 3.24; swaybg and swayidle work under it.
 # Thunar is the file manager, with gvfs for its trash and its list of drives
@@ -79,6 +80,7 @@ depends="
 	alpymist-keys
 	alpymist-lock
 	alpymist-menu
+	alpymist-overview
 	alpymist-power
 	alpymist-saver-mountains
 	alpymist-saver-starfield

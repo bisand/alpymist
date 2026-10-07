@@ -244,17 +244,36 @@ ALPYMIST_OVERVIEW`. Elsewhere nothing is loaded and nothing is said at
 login; Super+Tab says, in a notification, that the overview is not for
 this processor. The rule that allows the one plugin's file is as it was.
 
-What this leaves: no overview on aarch64, and binutils installed there for
-nothing, since the desktop's package is the same for every processor. An
-overview that works everywhere is one drawn by a program of ours and not
-by a plugin, which would also take the plugin back out of the compositor;
-that is not decided here.
+What this leaves: binutils installed on aarch64 for nothing, since the
+desktop's package is the same for every processor.
+
+**An overview of our own where the plugin cannot load.** `alpymist-overview`
+is a program, not a plugin: a layer surface over the screen with the focus,
+drawn by Denise as the menu is. It shows that screen's nine workspaces three
+by three, each the screen made small, and each window an outline where it
+is on the screen with its program's name and title. It takes no picture of
+a window: places and names are what `hyprctl clients` tells any program of
+the account, so it needs no permission and nothing from the compositor that
+depends on the processor. Tab, Shift+Tab and the arrows move a mark between
+the workspaces, Enter or a click goes to one, 1 to 9 go straight there, Esc
+or a click beside them closes it, and so does running it again.
+
+`alpymist displays overview` asks hyprexpo first, on x86_64, and starts
+`alpymist-overview` wherever hyprexpo did not answer: aarch64, and an
+x86_64 session without the plugin. hyprexpo stays where it works because it
+shows the windows themselves, which this does not yet. Doing that takes
+Hyprland's protocol for a window's picture in `alpymist-wayland` and the
+screen-copy permission; with it, the plugin could come back out of the
+compositor everywhere. Not decided here.
 
 Tried on the aarch64 machine: Hyprland reads the new file with the variable
 and without, and an `if` on a variable of the environment skips what is
-under it. Not tried: a login with the new packages on either processor, and
-x86_64 without binutils, where the first cause is read from the source and
-not seen.
+under it; `alpymist-overview`, built for it by hand, opens over the screen
+from `alpymist displays overview`, uses no processor while it waits, and
+closes when run again. Not tried: its keys and its looks on a real screen,
+which a person has to press and see; a login with the new packages on
+either processor; and x86_64 without binutils, where the first cause is
+read from the source and not seen.
 
 ## Addendum — 2026-10-02: the watch moves to the watchdog
 
