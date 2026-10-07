@@ -13,11 +13,11 @@ Each list offers the installed applications that can open that kind.
 | File manager | Folders | Thunar |
 | Text editor | Text files, configuration and code | squint |
 | Terminal | Commands, and programs that run in one | foot |
-| Images | Pictures and photos | Nothing installed |
+| Images | Pictures and photos | Ristretto |
 | PDF | PDF documents | Not chosen; LibreWolf can open them |
-| Video | Films and clips | Nothing installed |
-| Music | Songs and sound files | Nothing installed |
-| Archives | Zip files, tarballs | Nothing installed |
+| Video | Films and clips | mpv |
+| Music | Songs and sound files | mpv |
+| Archives | Zip files, tarballs | xarchiver |
 | Calendar | Calendar files and subscriptions | Nothing installed |
 
 The file manager is Thunar: <kbd>Super</kbd>+<kbd>E</kbd> opens it, as does
@@ -32,6 +32,11 @@ shipped: logging out is in the menu's System page.
 Thunar shows folders as a list; Edit › Preferences in it changes that.
 Windows shares and phones need `gvfs-smb` and `gvfs-mtp`, which the menu's
 Install › Alpine package adds.
+
+Pictures open in Ristretto, films and music in mpv, and archives in
+xarchiver, which also gives Thunar's menu "Extract here" and "Create
+archive". Ristretto opens PNG, JPEG, GIF, BMP, TIFF, SVG and WebP; a phone's
+HEIF and AVIF pictures need a viewer from the Store.
 
 The right-hand column is a system with nothing added, and yours shows what
 you have installed. Where nothing installed opens a kind, the page says so; the Store has

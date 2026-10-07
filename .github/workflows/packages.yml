@@ -44,7 +44,7 @@ jobs:
       - name: Build the builder container
         run: docker build -t alpymist-builder builder
 
-      # squint and validity-fprintd are built from pinned upstream releases.
+      # squint, validity-fprintd and cliamp are built from pinned upstream releases.
       # build-packages.sh keeps them here, under a key of their aports and the
       # builder, and builds one again only when that changes. The month is in the cache's name so it is
       # rebuilt at least that often against Alpine's libraries as they are
@@ -56,7 +56,7 @@ jobs:
       - uses: actions/cache@v5
         with:
           path: cache
-          key: packages-v2-${{ matrix.arch }}-${{ steps.month.outputs.month }}-${{ hashFiles('aports/squint/**', 'aports/validity-fprintd/**', 'builder/**') }}
+          key: packages-v2-${{ matrix.arch }}-${{ steps.month.outputs.month }}-${{ hashFiles('aports/squint/**', 'aports/validity-fprintd/**', 'aports/cliamp/**', 'builder/**') }}
           restore-keys: packages-v2-${{ matrix.arch }}-${{ steps.month.outputs.month }}-
 
       # The dev channel keeps what cargo downloaded and compiled of other

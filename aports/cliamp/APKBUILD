@@ -1,0 +1,53 @@
+# Contributor: André Biseth <andre@biseth.net>
+# Maintainer: André Biseth <andre@biseth.net>
+#
+# cliamp, a music player for a terminal with a radio in it, which Alpine
+# does not package: pinned to a release of
+#   https://github.com/bjarneo/cliamp
+# See ADR 0029.
+pkgname=cliamp
+# cliamp's own version, from the release this is built from. It keeps its
+# numbering here (ADR 0008): nothing in this workspace decides it, so neither
+# the release version nor the build number is stamped onto it. Moving to a new
+# cliamp is this line and its sha512 below.
+pkgver=2.3.0
+pkgrel=0
+pkgdesc="Terminal music player in Winamp's manner, with internet radio"
+url="https://github.com/bjarneo/cliamp"
+arch="aarch64 x86_64"
+license="MIT"
+# Its sound goes out through ALSA, and it links the decoders and does not
+# carry them.
+makedepends="go alsa-lib-dev flac-dev libogg-dev libvorbis-dev mpg123-dev"
+# !check: the test suite runs in cliamp's own CI
+# net: go fetches the modules, each held to the release's go.sum
+options="!check net"
+source="$url/archive/v$pkgver/$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+
+# The Go that Alpine packages or none: without this a go.mod asking for a
+# newer one has go download a toolchain of its own and build with that.
+export GOTOOLCHAIN=local
+export GOFLAGS="$GOFLAGS -modcacherw -trimpath"
+export GOCACHE="${GOCACHE:-$srcdir/go-cache}"
+export GOMODCACHE="${GOMODCACHE:-$srcdir/go-mod}"
+
+build() {
+	go build -ldflags "-s -w -X main.version=v$pkgver" -o cliamp .
+}
+
+package() {
+	install -Dm755 cliamp "$pkgdir"/usr/bin/cliamp
+	install -Dm644 cliamp.desktop \
+		"$pkgdir"/usr/share/applications/cliamp.desktop
+	install -Dm644 Cliamp.svg \
+		"$pkgdir"/usr/share/icons/hicolor/scalable/apps/cliamp.svg
+	install -Dm644 LICENSE -t "$pkgdir"/usr/share/licenses/$pkgname/
+}
+
+# The pin. build-packages.sh leaves this alone rather than running
+# `abuild checksum` over it, so a tarball that is not the one this was
+# written against fails the build.
+sha512sums="
+73c12664fc221a9fe22bc4a631f1ff826fb5d516810e1777b08afbd75809eff73d71874227a443a5c3bc5a41cce9db26737c4e4941ae9bab97c308cc4bfeec55  cliamp-2.3.0.tar.gz
+"

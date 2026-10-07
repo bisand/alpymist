@@ -52,6 +52,23 @@ and updated as packages; oh-my-zsh's own updater is turned off.
 
 `man git` works: the manuals of these tools are installed with them.
 
+A new installation also has a few programs that fill a terminal's window:
+
+| For | Program |
+|---|---|
+| A git repository | `lazygit` |
+| Music and internet radio | `cliamp`; <kbd>R</kbd> lists the stations |
+| What the machine is doing | `btop` |
+| What fills the disk | `ncdu` |
+| Several terminals in one, that outlive it | `tmux` |
+| What the machine is | `fastfetch` |
+
+They are one package, `alpymist-tui`, which nothing else needs:
+`doas apk del alpymist-tui` removes them, and `doas apk add alpymist-tui`
+brings them to a system installed before they were. cliamp is in the menu
+too. Its `cliamp upgrade` is not how it is updated here: it comes with the
+system's updates, like everything else.
+
 ## Editors
 
 `squint` is the desktop's text editor: it is what the menu's Config entries

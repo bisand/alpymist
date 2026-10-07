@@ -22,8 +22,8 @@
 #                  below 0.0.5, so dev stays ahead of the release it follows
 #                  and meets the next one when it arrives (ADR 0006). Needs the
 #                  git history at /src.
-#   PACKAGE_CACHE  a directory kept between builds. squint and
-#                  validity-fprintd are built from pinned upstream releases, so
+#   PACKAGE_CACHE  a directory kept between builds. squint,
+#                  validity-fprintd and cliamp are built from pinned upstream releases, so
 #                  what they build to depends only on their aports and the
 #                  builder: they are kept there and not built again until one of
 #                  those changes.
@@ -43,15 +43,15 @@ ARCH="$(apk --print-arch)"
 REPO=~/packages/ap/"$ARCH"
 KEYS=~/packages/keys
 CACHE="${PACKAGE_CACHE:-}"
-CACHED=" squint validity-fprintd "
+CACHED=" squint validity-fprintd cliamp "
 CHANNEL="${CHANNEL:-stable}"
 BUILD="${BUILD:-}"
 # Built from a pinned upstream release or a key file, not from this workspace:
 # versioned by hand, on every channel, and given neither the dev stamp nor the
 # build number. xtask's version command holds the same list.
-INDEPENDENT=" squint validity-fprintd alpymist-keys "
+INDEPENDENT=" squint validity-fprintd cliamp alpymist-keys "
 # Fetched from upstream, their committed sha512sums the pin.
-FETCHED=" squint validity-fprintd "
+FETCHED=" squint validity-fprintd cliamp "
 
 # Kept from one dev run to the next, when the workflow gives it somewhere:
 # what cargo downloaded, and what it compiled of other people's crates.
@@ -141,7 +141,7 @@ if [ -n "${PREBUILT:-}" ]; then
 	reindex
 else
 	workspace
-	for pkg in alpymist-keys alpymist alpymist-menu alpymist-overview alpymist-about alpymist-wifi alpymist-auth alpymist-splash alpymist-install alpymist-lock alpymist-power alpymist-thunderbolt alpymist-settings alpymist-screensaver alpymist-saver-mountains alpymist-saver-starfield alpymist-store alpymist-greeter alpymist-fingerprint alpymist-ai-usage squint validity-fprintd alpymist-desktop; do
+	for pkg in alpymist-keys alpymist alpymist-menu alpymist-overview alpymist-about alpymist-wifi alpymist-auth alpymist-splash alpymist-install alpymist-lock alpymist-power alpymist-thunderbolt alpymist-settings alpymist-screensaver alpymist-saver-mountains alpymist-saver-starfield alpymist-store alpymist-greeter alpymist-fingerprint alpymist-ai-usage squint validity-fprintd cliamp alpymist-desktop; do
 		mkdir -p ~/ap/"$pkg"
 		cp -r /src/aports/"$pkg"/. ~/ap/"$pkg"/
 		if [[ "$INDEPENDENT" != *" $pkg "* ]]; then
@@ -177,7 +177,7 @@ else
 		echo "    $pkg"
 		# Our own packages build from the workspace copied in above, so their
 		# checksums describe files that were just written and are computed here
-		# rather than committed. squint and validity-fprintd are fetched from
+		# rather than committed. squint, validity-fprintd and cliamp are fetched from
 		# upstream, and their committed sha512s are the pins: `abuild checksum`
 		# would delete that block and write whatever was downloaded, so it is not
 		# run over them. abuild checks the sums itself while fetching, and stops
