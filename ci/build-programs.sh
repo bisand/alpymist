@@ -50,6 +50,7 @@ DESKTOP="
 CONSOLE="
 	alpymist-greeter
 	alpymist-install
+	alpymist-solitaire-console
 	alpymist-splash
 "
 # How the console programs are built: without the desktop's window backend.

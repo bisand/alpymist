@@ -21,7 +21,8 @@ cargo test --locked --workspace --features alpymist-ui/render
 # What the installer, splash and greeter ship as. Linux only: the DRM
 # backend does not build on macOS.
 cargo clippy --locked --no-default-features --features drm -p alpymist-greeter \
-  -p alpymist-install -p alpymist-splash --all-targets -- -D warnings
+  -p alpymist-install -p alpymist-solitaire-console -p alpymist-splash \
+  --all-targets -- -D warnings
 cargo run -q --locked -p xtask -- version # every pkgver must equal the workspace version
 cargo run -q --locked -p xtask -- deps    # every crate from crates.io, every third-party one on the list
 sh ci/build-programs.sh alone             # each package checked by itself, with its own features
@@ -110,7 +111,8 @@ whatever `depends` should pull it in.
 itself: one run links the programs side by side, which is what lets both
 channels build with full LTO. A new program is a `-p` line in its group and,
 for `desktop`, the group's `makedepends` in its APKBUILD. The console group,
-built without default features, is the greeter, the installer and the splash:
+built without default features, is the greeter, the installer, the splash and
+Solitaire's console program:
 cargo shares features across a run, so a desktop program added there, or one
 of those three built beside the desktop's, links what it must not. See
 ADR 0006's addendum of 2026-10-04.

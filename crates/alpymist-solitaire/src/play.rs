@@ -15,6 +15,7 @@ use alpymist_widget::Appearance;
 use alpymist_widget::draw::Fonts;
 use denise::Frame;
 use denise::geom::{Point, Size};
+use denise_render::Canvas;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -725,6 +726,23 @@ impl Play {
         self.shown = scene.seconds;
         view::paint(
             frame,
+            &self.layout,
+            &self.appearance,
+            &mut self.fonts,
+            &mut self.faces,
+            &self.game,
+            &scene,
+            panel.as_ref(),
+        );
+    }
+
+    /// Paint the game onto a canvas somebody else made: a screen's own.
+    pub fn paint_on(&mut self, canvas: &mut Canvas<'_>) {
+        let scene = self.scene();
+        let panel = self.panel();
+        self.shown = scene.seconds;
+        view::paint_on(
+            canvas,
             &self.layout,
             &self.appearance,
             &mut self.fonts,

@@ -332,6 +332,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpymist-solitaire-console"
+version = "0.5.0"
+dependencies = [
+ "alpymist-solitaire",
+ "alpymist-ui",
+ "alpymist-widget",
+ "denise",
+ "denise-drm",
+ "denise-evdev",
+ "denise-render",
+ "denise-ui",
+ "signal-hook",
+]
+
+[[package]]
 name = "alpymist-splash"
 version = "0.5.0"
 dependencies = [

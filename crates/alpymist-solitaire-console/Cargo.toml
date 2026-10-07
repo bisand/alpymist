@@ -1,0 +1,36 @@
+[package]
+name = "alpymist-solitaire-console"
+description = "Alpymist's Solitaire on a screen with no desktop: straight to the display through DRM, with the mouse and the keyboard read from the kernel."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "alpymist-solitaire-console"
+path = "src/main.rs"
+
+[dependencies]
+# The game, without the desktop's window.
+alpymist-solitaire = { path = "../alpymist-solitaire", default-features = false }
+# The screen, as the login screen opens it, and the pointer it draws.
+alpymist-ui = { workspace = true, features = ["render"] }
+# The menu's appearance, where there is one, and without its Wayland host.
+alpymist-widget = { path = "../alpymist-widget", default-features = false }
+denise = { workspace = true }
+denise-render = { workspace = true }
+denise-ui = { workspace = true }
+denise-drm = { workspace = true, optional = true }
+denise-evdev = { workspace = true, optional = true }
+signal-hook = { workspace = true, optional = true }
+
+[features]
+# Nothing by default: there is no window to preview this in, since the
+# window is alpymist-solitaire. Built with --no-default-features --features
+# drm, like the login screen, the installer and the splash.
+default = []
+drm = ["alpymist-ui/drm", "dep:denise-drm", "dep:denise-evdev", "dep:signal-hook"]
+
+[lints]
+workspace = true

@@ -37,7 +37,7 @@ jobs:
       # share would otherwise be found by the package build, twenty minutes
       # into Dev, which is how it was found once. Linted here too, since clippy
       # above only ever sees the preview.
-      - run: cargo clippy --locked --no-default-features --features drm -p alpymist-greeter -p alpymist-install -p alpymist-splash --all-targets -- -D warnings
+      - run: cargo clippy --locked --no-default-features --features drm -p alpymist-greeter -p alpymist-install -p alpymist-solitaire-console -p alpymist-splash --all-targets -- -D warnings
       # Each package by itself, with its own features. The packages build
       # their programs a group at a time, and cargo shares features across a
       # group, so a crate that only compiles with a feature a neighbour turns
