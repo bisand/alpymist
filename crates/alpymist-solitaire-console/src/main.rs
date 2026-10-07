@@ -423,6 +423,30 @@ mod screen {
         }
     }
 
+    /// The game to play: dealt as the last one was, or as the command line
+    /// says, and written in a face this system has.
+    fn deal(turn: Option<usize>, nearly_out: bool) -> Play {
+        let dir = play::state();
+        let mut kept = dir.as_deref().map_or_else(Kept::default, play::recall);
+        if let Some(turn) = turn {
+            kept.turn = turn;
+        }
+        // No two games alike, and nothing to keep secret: the clock will do.
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let seed = u64::try_from(now & u128::from(u64::MAX)).unwrap_or(0);
+        let mut appearance = alpymist_widget::appearance();
+        appearance.font = super::face::choose(&appearance.font, |path| {
+            std::path::Path::new(path).is_file()
+        });
+        let game = Play::new(appearance, kept, dir, seed, nearly_out).with_quit();
+        for p in game.font_problems() {
+            eprintln!("font {p}");
+        }
+        game
+    }
+
     fn play(turn: Option<usize>, nearly_out: bool) -> Result<(), String> {
         let stop = Arc::new(AtomicBool::new(false));
         for signal in [SIGTERM, SIGINT, SIGHUP] {
@@ -442,24 +466,7 @@ mod screen {
         let scale = if size.height >= 1800 { 2 } else { 1 };
         eprintln!("display: {}x{} via DRM/KMS", size.width, size.height);
 
-        let dir = play::state();
-        let mut kept = dir.as_deref().map_or_else(Kept::default, play::recall);
-        if let Some(turn) = turn {
-            kept.turn = turn;
-        }
-        // No two games alike, and nothing to keep secret: the clock will do.
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos());
-        let seed = u64::try_from(now & u128::from(u64::MAX)).unwrap_or(0);
-        let mut appearance = alpymist_widget::appearance();
-        appearance.font = super::face::choose(&appearance.font, |path| {
-            std::path::Path::new(path).is_file()
-        });
-        let mut game = Play::new(appearance, kept, dir, seed, nearly_out).with_quit();
-        for p in game.font_problems() {
-            eprintln!("font {p}");
-        }
+        let mut game = deal(turn, nearly_out);
         game.resize(size, scale);
 
         let mut input: Option<InputBackend> = None;
