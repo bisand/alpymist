@@ -20,9 +20,11 @@ Each list offers the installed applications that can open that kind.
 | Archives | Zip files, tarballs | Nothing installed |
 | Calendar | Calendar files and subscriptions | Nothing installed |
 
-The file manager is Thunar: it is among the menu's applications, and a
-keyboard's Files key opens it. It shows folders as a list; Edit › Preferences
-in it changes that. Windows shares and phones need `gvfs-smb` and `gvfs-mtp`,
+The file manager is Thunar: <kbd>Super</kbd>+<kbd>E</kbd> opens it, as does
+a keyboard's Files key, and it is among the menu's applications. An account
+older than the file manager has no such key until its `hyprland.conf` is
+given the line `bind = SUPER, E, exec, alpymist open files`. It shows folders as a
+list; Edit › Preferences in it changes that. Windows shares and phones need `gvfs-smb` and `gvfs-mtp`,
 which the menu's Install › Alpine package adds.
 
 The right-hand column is a system with nothing added, and yours shows what
