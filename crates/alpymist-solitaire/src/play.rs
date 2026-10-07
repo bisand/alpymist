@@ -124,6 +124,19 @@ pub struct Play {
     /// Whether the game has to offer its own way out, a button on the bar,
     /// on a screen with no window to close.
     quit: bool,
+    /// How many games have been dealt: two tables alike in everything else
+    /// are still not the same table.
+    deals: u32,
+}
+
+/// How a table looks, the place of the hand apart: two of these alike mean
+/// the table need not be painted again, only the hand over it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Look {
+    deals: u32,
+    moves: u32,
+    scene: Scene,
+    panel: Option<Panel>,
 }
 
 /// The account's state directory for Alpymist's programs.
@@ -245,6 +258,7 @@ impl Play {
             over: None,
             dir,
             quit: false,
+            deals: 0,
         }
     }
 
@@ -299,6 +313,7 @@ impl Play {
 
     fn deal_again(&mut self, turn: usize) {
         self.game = Game::new(self.seeds.number(), turn);
+        self.deals = self.deals.wrapping_add(1);
         self.drag = None;
         self.flight = None;
         self.chosen = None;
@@ -545,6 +560,7 @@ impl Play {
             back: self.back,
             seconds: self.seconds(),
             answer,
+            without_hand: false,
         }
     }
 
@@ -788,6 +804,61 @@ impl Play {
             &scene,
             panel.as_ref(),
         );
+    }
+
+    /// How the table looks now, the place of the hand apart.
+    #[must_use]
+    pub fn look(&self) -> Look {
+        let mut scene = self.scene();
+        if let Some(lifted) = scene.lifted.as_mut() {
+            lifted.at = Point::new(0, 0);
+        }
+        Look {
+            deals: self.deals,
+            moves: self.game.moves(),
+            scene,
+            panel: self.panel(),
+        }
+    }
+
+    /// Paint the table without the cards in the hand, onto a canvas kept
+    /// from one frame to the next.
+    pub fn paint_table_on(&mut self, canvas: &mut Canvas<'_>) {
+        let mut scene = self.scene();
+        scene.without_hand = true;
+        let panel = self.panel();
+        self.shown = scene.seconds;
+        view::paint_on(
+            canvas,
+            &self.layout,
+            &self.appearance,
+            &mut self.fonts,
+            &mut self.faces,
+            &self.game,
+            &scene,
+            panel.as_ref(),
+        );
+    }
+
+    /// Paint the cards in the hand over a table painted without them.
+    pub fn paint_hand_on(&mut self, canvas: &mut Canvas<'_>) {
+        let scene = self.scene();
+        view::paint_hand_on(
+            canvas,
+            &self.layout,
+            &self.appearance,
+            &mut self.faces,
+            &self.game,
+            &scene,
+        );
+    }
+
+    /// What the cards in the hand cover, if any are in it.
+    #[must_use]
+    pub fn hand_bounds(&self) -> Option<denise::geom::Rect> {
+        self.scene()
+            .lifted
+            .map(|lifted| view::hand_bounds(&self.layout, lifted))
     }
 
     /// A key was pressed.
@@ -1151,5 +1222,34 @@ mod tests {
         play.release(over);
         assert_eq!(play.game().moves(), 1);
         assert!(play.animating(), "the clock runs from the first move");
+    }
+
+    #[test]
+    fn a_hand_that_moves_does_not_change_how_the_table_looks() {
+        let mut play = play(Kept::default(), None, true);
+        let dealt = play.look();
+        assert!(play.hand_bounds().is_none());
+        // The jack on the waste, picked up and carried about.
+        let card = play.layout().top(play.game(), Place::Waste, 1);
+        play.press(Point::new(card.x + 10, card.y + 10));
+        let held = play.look();
+        assert_ne!(held, dealt, "a card left its pile");
+        let first = play.hand_bounds().expect("a card in the hand");
+        play.pointer(Some(Point::new(600, 500)));
+        assert_eq!(play.look(), held, "only the hand moved");
+        let second = play.hand_bounds().unwrap();
+        assert_ne!(first, second);
+        assert_eq!((first.width, first.height), (second.width, second.height));
+        // It covers the card and its shadow.
+        let (w, h) = play.layout().card;
+        assert!(second.width > w && second.height > h);
+        // Let go over nothing: the table is as it was dealt.
+        play.release(Point::new(600, 500));
+        assert_eq!(play.look(), dealt);
+        // Another deal is another table, though nothing else differs.
+        let mut fresh = super::Play::new(Appearance::default(), Kept::default(), None, 42, false);
+        let before = fresh.look();
+        fresh.text('n');
+        assert_ne!(fresh.look(), before);
     }
 }

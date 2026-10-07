@@ -66,7 +66,7 @@ pub struct Lifted {
 }
 
 /// What to paint beside the game itself.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Scene {
     /// Cards drawn where they are held and not where they lie.
     pub lifted: Option<Lifted>,
@@ -82,6 +82,10 @@ pub struct Scene {
     pub seconds: Option<u32>,
     /// The button of a panel under the pointer.
     pub answer: Option<usize>,
+    /// Leave the cards in the hand out, though they are still gone from
+    /// their pile: whoever paints them apart, with [`paint_hand_on`], so
+    /// that a hand moving does not mean a table painted again.
+    pub without_hand: bool,
 }
 
 /// Something said over the table, to be answered before the game goes on:
@@ -504,6 +508,61 @@ impl Brush<'_> {
     }
 }
 
+/// The cards in the hand, and their shadow.
+#[allow(clippy::many_single_char_names)] // m, w, h, k, y, r
+fn hand(pen: &mut Pen<'_>, brush: &mut Brush<'_>, game: &Game, lifted: Lifted) {
+    let Some(cards) = game.held(lifted.place, lifted.count) else {
+        return;
+    };
+    let layout = brush.layout;
+    let m = &layout.metrics;
+    let (w, h) = layout.card;
+    for (k, card) in cards.iter().enumerate() {
+        let y = lifted.at.y + i32::try_from(k).unwrap_or(0) * layout.up;
+        let r = Rect::new(lifted.at.x, y, w, h);
+        if k == 0 {
+            let tail = i32::try_from(cards.len() - 1).unwrap_or(0) * layout.up;
+            let shade = Rect::new(r.x + m.px(4), r.y + m.px(6), w, h + tail);
+            pen.fill_rounded_rect(shade, layout.radius, SHADOW);
+        }
+        brush.face(pen, *card, r);
+    }
+}
+
+/// Everything the cards in the hand cover, their shadow with them: what has
+/// to be painted again when they move.
+#[must_use]
+pub fn hand_bounds(layout: &Layout, lifted: Lifted) -> Rect {
+    let m = &layout.metrics;
+    let (w, h) = layout.card;
+    let tail = i32::try_from(lifted.count.saturating_sub(1)).unwrap_or(0) * layout.up;
+    Rect::new(lifted.at.x, lifted.at.y, w + m.px(4), h + tail + m.px(6)).inflate(m.px(1))
+}
+
+/// Paint the cards in the hand, and nothing else, onto `canvas`: over a
+/// table painted with [`Scene::without_hand`].
+pub fn paint_hand_on(
+    canvas: &mut Canvas<'_>,
+    layout: &Layout,
+    appearance: &Appearance,
+    faces: &mut Faces,
+    game: &Game,
+    scene: &Scene,
+) {
+    let Some(lifted) = scene.lifted else {
+        return;
+    };
+    let mut pen = Pen::new(canvas);
+    let mut brush = Brush {
+        layout,
+        which: scene.back,
+        faces,
+        back: draw::mix(appearance.accent, appearance.background, 45),
+        line: layout.metrics.px(1),
+    };
+    hand(&mut pen, &mut brush, game, lifted);
+}
+
 /// Paint the table into `frame`.
 #[allow(clippy::too_many_arguments)] // what a table is painted from
 pub fn paint(
@@ -670,20 +729,10 @@ pub fn paint_on(
     }
 
     // The cards in the hand, over everything.
-    if let Some(lifted) = scene.lifted
-        && let Some(cards) = game.held(lifted.place, lifted.count)
+    if !scene.without_hand
+        && let Some(lifted) = scene.lifted
     {
-        let (w, h) = layout.card;
-        for (k, card) in cards.iter().enumerate() {
-            let y = lifted.at.y + i32::try_from(k).unwrap_or(0) * layout.up;
-            let r = Rect::new(lifted.at.x, y, w, h);
-            if k == 0 {
-                let tail = i32::try_from(cards.len() - 1).unwrap_or(0) * layout.up;
-                let shade = Rect::new(r.x + m.px(4), r.y + m.px(6), w, h + tail);
-                pen.fill_rounded_rect(shade, radius, SHADOW);
-            }
-            brush.face(&mut pen, *card, r);
-        }
+        hand(&mut pen, &mut brush, game, lifted);
     }
 
     // What is said over the table: the table dimmed, and a panel on it.

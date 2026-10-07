@@ -46,6 +46,11 @@ fn main() -> ExitCode {
         ["--three"] => (Some(3), false),
         // Not in the usage: a game five cards from out, to try how one ends.
         ["--nearly-out"] => (None, true),
+        // Nor this: what a frame costs on this machine, with no screen.
+        ["--bench"] => {
+            frame::bench();
+            return ExitCode::SUCCESS;
+        }
         ["-V" | "--version"] => {
             println!("alpymist-solitaire-console {}", env!("CARGO_PKG_VERSION"));
             return ExitCode::SUCCESS;
@@ -78,7 +83,166 @@ fn run(turn: Option<usize>, nearly_out: bool) -> Result<(), String> {
     screen::run(turn, nearly_out)
 }
 
+/// A frame: the table, kept from one to the next, and over it whatever
+/// moves.
+///
+/// A table is fifty-two pictures and takes its time; a pointer crossing it
+/// changes a few hundred pixels. So the table is painted into memory of its
+/// own, only when it looks different, and a frame is that memory copied
+/// where something moved, with the cards in the hand over it. What Denise's
+/// own examples do with a tree's damage, done by hand for a game.
+mod frame {
+    use alpymist_solitaire::kept::Kept;
+    use alpymist_solitaire::play::{Look, Play};
+    use denise::geom::{Point, Rect, Size};
+    use denise::painter::Pen;
+    use denise::{PixelFormat, PixelView};
+    use denise_render::Canvas;
+    use std::time::Instant;
+
+    /// The table as last painted.
+    pub struct Table {
+        pixels: Vec<u32>,
+        size: Size,
+        look: Option<Look>,
+    }
+
+    impl Table {
+        pub fn new(size: Size) -> Self {
+            let len = usize::try_from(u64::from(size.width) * u64::from(size.height)).unwrap_or(0);
+            Self {
+                pixels: vec![0; len],
+                size,
+                look: None,
+            }
+        }
+
+        /// Paint the table again if it looks different. Returns whether it
+        /// was: then the whole frame is new, and not only where a hand was.
+        pub fn refresh(&mut self, game: &mut Play) -> bool {
+            let look = game.look();
+            if self.look.as_ref() == Some(&look) {
+                return false;
+            }
+            if let Some(mut canvas) = Canvas::from_pixels(
+                &mut self.pixels,
+                self.size,
+                self.size.width,
+                PixelFormat::Argb8888,
+            ) {
+                game.paint_table_on(&mut canvas);
+            }
+            self.look = Some(look);
+            true
+        }
+
+        /// Put the table's `area` on `canvas`, and the cards in the hand
+        /// over it.
+        pub fn compose(&self, canvas: &mut Canvas<'_>, area: Rect, game: &mut Play) {
+            if let Some(view) = PixelView::new(&self.pixels, self.size, self.size.width) {
+                let mut pen = Pen::new(canvas);
+                pen.with_clip(area).blit(&view, Point::new(0, 0));
+            }
+            game.paint_hand_on(canvas);
+        }
+    }
+
+    /// The smallest rectangle holding all of `parts`.
+    pub fn around(parts: [Option<Rect>; 4]) -> Option<Rect> {
+        parts
+            .into_iter()
+            .flatten()
+            .reduce(|all, part| all.union(&part))
+    }
+
+    fn median(mut times: Vec<f64>) -> f64 {
+        times.sort_by(f64::total_cmp);
+        times.get(times.len() / 2).copied().unwrap_or(0.0)
+    }
+
+    /// Print what a frame costs here: a table painted whole, and a card
+    /// carried across it.
+    pub fn bench() {
+        let size = Size::new(1920, 1080);
+        let mut game = Play::new(
+            alpymist_widget::Appearance::default(),
+            Kept::default(),
+            None,
+            1,
+            false,
+        )
+        .with_quit();
+        game.resize(size, 1);
+        let mut table = Table::new(size);
+        let mut screen = vec![0u32; table.pixels.len()];
+
+        let started = Instant::now();
+        table.refresh(&mut game);
+        let first = started.elapsed().as_secs_f64() * 1000.0;
+        let whole: Vec<f64> = (0..10)
+            .map(|_| {
+                table.look = None;
+                let started = Instant::now();
+                table.refresh(&mut game);
+                started.elapsed().as_secs_f64() * 1000.0
+            })
+            .collect();
+
+        // The last pile's top card, picked up and carried.
+        let card = game
+            .layout()
+            .top(game.game(), alpymist_solitaire::game::Place::Tableau(6), 1);
+        game.press(Point::new(card.x + 20, card.y + 20));
+        table.refresh(&mut game);
+        let mut last = game.hand_bounds();
+        let carried: Vec<f64> = (0..200)
+            .map(|i| {
+                let started = Instant::now();
+                game.pointer(Some(Point::new(200 + i * 7, 300 + i * 3)));
+                let repainted = table.refresh(&mut game);
+                let now = game.hand_bounds();
+                if let (Some(area), Some(mut canvas)) = (
+                    around([last, now, None, None]),
+                    Canvas::from_pixels(&mut screen, size, size.width, PixelFormat::Argb8888),
+                ) {
+                    table.compose(&mut canvas, area, &mut game);
+                }
+                last = now;
+                assert!(!repainted, "a hand moving repainted the table");
+                started.elapsed().as_secs_f64() * 1000.0
+            })
+            .collect();
+
+        println!("alpymist-solitaire-console --bench, at 1920x1080, in memory");
+        println!("  the first table, faces scaled   {first:8.2} ms");
+        println!("  a table painted whole, median   {:8.2} ms", median(whole));
+        println!(
+            "  a card carried, median          {:8.2} ms",
+            median(carried)
+        );
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::around;
+        use denise::geom::Rect;
+
+        #[test]
+        fn what_moved_is_one_rectangle_around_all_of_it() {
+            assert_eq!(around([None, None, None, None]), None);
+            let a = Rect::new(10, 10, 5, 5);
+            let b = Rect::new(100, 50, 10, 10);
+            assert_eq!(around([Some(a), None, None, None]), Some(a));
+            assert_eq!(
+                around([Some(a), None, Some(b), None]),
+                Some(Rect::new(10, 10, 100, 50))
+            );
+        }
+    }
+}
+
 /// A face to write with, on a system that is not Alpymist.
+#[cfg(feature = "drm")]
 mod face {
     /// Where other systems keep a plain sans-serif: Debian and Raspberry Pi
     /// OS first, then Alpine, Arch and Fedora. None of them is carried in
@@ -176,11 +340,13 @@ mod keys {
 /// On the machine: KMS for the picture, evdev for the hand.
 #[cfg(feature = "drm")]
 mod screen {
+    use super::frame::{Table, around};
     use super::keys;
     use alpymist_solitaire::kept::Kept;
     use alpymist_solitaire::play::{self, Outcome, Play};
     use alpymist_ui::display::{self, Screen};
     use alpymist_ui::render::{new_cursor, paint_cursor};
+    use denise::geom::Rect;
     use denise::input::{ElementState, PointerButton};
     use denise::painter::Pen;
     use denise::{InputEvent, InputSource};
@@ -191,11 +357,10 @@ mod screen {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-    /// The least time between two pictures: a mouse reports far more often
-    /// than a screen is worth painting.
-    const FRAME: Duration = Duration::from_millis(25);
-    /// How long to rest when there is nothing to do.
-    const REST: Duration = Duration::from_millis(8);
+    /// How long to rest when there is nothing to do: short, since what is
+    /// waited for is a hand, and a pointer that answers late is what a
+    /// choppy one is.
+    const REST: Duration = Duration::from_millis(3);
 
     pub fn run(turn: Option<usize>, nearly_out: bool) -> Result<(), String> {
         // Graphics mode stops the text console drawing over the table, and a
@@ -301,7 +466,10 @@ mod screen {
         let mut events: Vec<InputEvent> = Vec::new();
         let mut cursor = new_cursor();
         let mut dirty = true;
-        let mut painted = Instant::now();
+        let mut table = Table::new(size);
+        // Where the hand and the arrow were in the frame on the screen.
+        let mut shown: [Option<Rect>; 2] = [None, None];
+        let whole = Rect::from_size(size);
 
         loop {
             // A keyboard or a mouse that turns up a moment late is ordinary;
@@ -336,15 +504,26 @@ mod screen {
                 dirty = true;
             }
 
-            if dirty && painted.elapsed() >= FRAME {
-                screen
-                    .present_with(|canvas| {
-                        game.paint_on(canvas);
-                        let mut pen = Pen::new(canvas);
-                        paint_cursor(&mut pen, &cursor, &denise::theme::DARK);
-                    })
-                    .map_err(|e| format!("the display stopped taking pictures: {e}"))?;
-                painted = Instant::now();
+            if dirty {
+                // The table only when it looks different; otherwise just
+                // where the hand and the arrow were and are.
+                let repainted = table.refresh(&mut game);
+                let now = [game.hand_bounds(), cursor.visible.then(|| cursor.bounds())];
+                let area = if repainted {
+                    Some(whole)
+                } else {
+                    around([shown[0], shown[1], now[0], now[1]])
+                };
+                if let Some(area) = area {
+                    screen
+                        .present_area(area, |canvas| {
+                            table.compose(canvas, area, &mut game);
+                            let mut pen = Pen::new(canvas);
+                            paint_cursor(&mut pen, &cursor, &denise::theme::DARK);
+                        })
+                        .map_err(|e| format!("the display stopped taking pictures: {e}"))?;
+                }
+                shown = now;
                 dirty = false;
             } else {
                 std::thread::sleep(REST);
