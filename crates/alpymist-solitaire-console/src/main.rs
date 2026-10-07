@@ -93,7 +93,7 @@ fn run(turn: Option<usize>, nearly_out: bool) -> Result<(), String> {
 /// own examples do with a tree's damage, done by hand for a game.
 mod frame {
     use alpymist_solitaire::kept::Kept;
-    use alpymist_solitaire::play::{Look, Play};
+    use alpymist_solitaire::play::{Change, Look, Play};
     use denise::geom::{Point, Rect, Size};
     use denise::painter::Pen;
     use denise::{PixelFormat, PixelView};
@@ -117,23 +117,25 @@ mod frame {
             }
         }
 
-        /// Paint the table again if it looks different. Returns whether it
-        /// was: then the whole frame is new, and not only where a hand was.
-        pub fn refresh(&mut self, game: &mut Play) -> bool {
-            let look = game.look();
-            if self.look.as_ref() == Some(&look) {
-                return false;
-            }
+        /// Paint what of the table looks different, and say how much that
+        /// was.
+        pub fn refresh(&mut self, game: &mut Play) -> Change {
+            let (look, change) = game.since(self.look.as_ref());
+            let only = match change {
+                Change::Nothing => return change,
+                Change::Within(area) => Some(area),
+                Change::Everything => None,
+            };
             if let Some(mut canvas) = Canvas::from_pixels(
                 &mut self.pixels,
                 self.size,
                 self.size.width,
                 PixelFormat::Argb8888,
             ) {
-                game.paint_table_on(&mut canvas);
+                game.paint_table_on(&mut canvas, only);
             }
             self.look = Some(look);
-            true
+            change
         }
 
         /// Put the table's `area` on `canvas`, and the cards in the hand
@@ -200,7 +202,7 @@ mod frame {
             .map(|i| {
                 let started = Instant::now();
                 game.pointer(Some(Point::new(200 + i * 7, 300 + i * 3)));
-                let repainted = table.refresh(&mut game);
+                let change = table.refresh(&mut game);
                 let now = game.hand_bounds();
                 if let (Some(area), Some(mut canvas)) = (
                     around([last, now, None, None]),
@@ -209,7 +211,36 @@ mod frame {
                     table.compose(&mut canvas, area, &mut game);
                 }
                 last = now;
-                assert!(!repainted, "a hand moving repainted the table");
+                assert_eq!(change, Change::Nothing, "a hand moving repainted the table");
+                started.elapsed().as_secs_f64() * 1000.0
+            })
+            .collect();
+
+        // Let go, and run the pointer along the bar's buttons and back.
+        game.release(Point::new(-50, -50));
+        table.refresh(&mut game);
+        let spots: Vec<Point> = game
+            .layout()
+            .buttons
+            .iter()
+            .map(|(_, r)| Point::new(r.x + r.width / 2, r.y + r.height / 2))
+            .collect();
+        let lit: Vec<f64> = (0..100)
+            .map(|i| {
+                let started = Instant::now();
+                game.pointer(Some(spots[i % spots.len()]));
+                let change = table.refresh(&mut game);
+                if let (Change::Within(area), Some(mut canvas)) = (
+                    change,
+                    Canvas::from_pixels(&mut screen, size, size.width, PixelFormat::Argb8888),
+                ) {
+                    table.compose(&mut canvas, area, &mut game);
+                }
+                assert_ne!(
+                    change,
+                    Change::Everything,
+                    "a button lit repainted the table"
+                );
                 started.elapsed().as_secs_f64() * 1000.0
             })
             .collect();
@@ -221,6 +252,7 @@ mod frame {
             "  a card carried, median          {:8.2} ms",
             median(carried)
         );
+        println!("  a button lit, median            {:8.2} ms", median(lit));
     }
 
     #[cfg(test)]
@@ -344,6 +376,7 @@ mod screen {
     use super::frame::{Table, around};
     use super::keys;
     use alpymist_solitaire::kept::Kept;
+    use alpymist_solitaire::play::Change;
     use alpymist_solitaire::play::{self, Outcome, Play};
     use alpymist_ui::display::{self, Screen};
     use alpymist_ui::render::{new_cursor, paint_cursor};
@@ -517,16 +550,17 @@ mod screen {
             if dirty {
                 // The table only when it looks different; otherwise just
                 // where the hand and the arrow were and are.
-                let repainted = table.refresh(&mut game);
+                let change = table.refresh(&mut game);
                 let now = [game.hand_bounds(), cursor.visible.then(|| cursor.bounds())];
                 // The clock's words, where they changed: a second passing
                 // is a strip of the bar, not a table.
                 let ticked = game.status().filter(|(words, _)| *words != said);
-                let area = if repainted {
-                    Some(whole)
-                } else {
-                    let moved = around([shown[0], shown[1], now[0], now[1]]);
-                    around([moved, ticked.as_ref().map(|(_, at)| *at), None, None])
+                let moved = around([shown[0], shown[1], now[0], now[1]]);
+                let said_at = ticked.as_ref().map(|(_, at)| *at);
+                let area = match change {
+                    Change::Everything => Some(whole),
+                    Change::Within(part) => around([moved, said_at, Some(part), None]),
+                    Change::Nothing => around([moved, said_at, None, None]),
                 };
                 if let Some((words, _)) = ticked {
                     said = words;
