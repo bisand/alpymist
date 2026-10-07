@@ -1,6 +1,7 @@
 //! The cards' faces: pictures in the program, scaled to the size drawn at.
 //!
-//! Fifty-two PNGs of 300 by 436 are carried in the binary, 750 KiB of it.
+//! Fifty-two PNGs of 300 by 436 are carried in the binary, 750 KiB of it,
+//! and one more for the backs.
 //! Denise scales pictures to the nearest pixel, which is wrong for a picture
 //! shrunk to a third, so each face is resampled by area to exactly the size
 //! of a card in this window, the first time it is shown, and kept until the
@@ -19,12 +20,16 @@ pub struct Face {
     pub height: u32,
 }
 
-/// The faces, at one size.
+/// The faces, at one size, and the picture on the cards' backs.
 #[derive(Debug, Default)]
 pub struct Faces {
     size: (u32, u32),
     scaled: Vec<Option<Face>>,
+    back: Option<Face>,
 }
+
+/// The picture on the back of every card.
+const BACK: &[u8] = include_bytes!("../cards/back.png");
 
 macro_rules! pictures {
     ($($name:literal),* $(,)?) => {
@@ -55,6 +60,18 @@ impl Faces {
             *slot = decode(PICTURES[card.index()]).map(|p| scale(&p, width, height));
         }
         slot.as_ref()
+    }
+
+    /// The picture on the cards' backs, `width` by `height` pixels.
+    pub fn back(&mut self, width: u32, height: u32) -> Option<&Face> {
+        if self
+            .back
+            .as_ref()
+            .is_none_or(|b| (b.width, b.height) != (width, height))
+        {
+            self.back = decode(BACK).map(|p| scale(&p, width, height));
+        }
+        self.back.as_ref()
     }
 }
 
@@ -161,6 +178,10 @@ mod tests {
             );
         }
         assert_eq!(ASPECT, (300, 436));
+        let back = decode(super::BACK).expect("the back does not decode");
+        assert_eq!((back.width, back.height), (300, 436));
+        let mut faces = Faces::default();
+        assert_eq!(faces.back(27, 40).map(|b| b.pixels.len()), Some(27 * 40));
     }
 
     /// A red card's corner is red and a black one's is not: the pictures are

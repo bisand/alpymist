@@ -342,7 +342,6 @@ struct Brush<'a> {
     layout: &'a Layout,
     faces: &'a mut Faces,
     back: Color,
-    trim: Color,
     line: i32,
 }
 
@@ -365,13 +364,27 @@ impl Brush<'_> {
         pen.stroke_rounded_rect(r, self.layout.radius, self.line, EDGE);
     }
 
-    fn back(&self, pen: &mut Pen<'_>, r: Rect) {
+    /// A back: the picture inside a rim of paper, or the theme's colour
+    /// where the picture will not decode.
+    fn back(&mut self, pen: &mut Pen<'_>, r: Rect) {
         let radius = self.layout.radius;
         pen.fill_rounded_rect(r, radius, PAPER);
         let rim = (r.width * 5 / 100).max(2);
         let inner = r.inflate(-rim);
-        pen.fill_rounded_rect(inner, radius / 2, self.back);
-        pen.stroke_rounded_rect(inner.inflate(-rim), radius / 2, self.line, self.trim);
+        let (w, h) = (
+            u32::try_from(inner.width).unwrap_or(1),
+            u32::try_from(inner.height).unwrap_or(1),
+        );
+        let drawn = self.faces.back(w, h).is_some_and(|back| {
+            PixelView::new(&back.pixels, Size::new(back.width, back.height), back.width)
+                .is_some_and(|view| {
+                    pen.blit_rounded(&view, inner, inner, radius / 2);
+                    true
+                })
+        });
+        if !drawn {
+            pen.fill_rounded_rect(inner, radius / 2, self.back);
+        }
         pen.stroke_rounded_rect(r, radius, self.line, EDGE);
     }
 }
@@ -431,7 +444,6 @@ pub fn paint(
         layout,
         faces,
         back: draw::mix(appearance.accent, appearance.background, 45),
-        trim: ink.accent,
         line: m.px(1),
     };
     let radius = layout.radius;
