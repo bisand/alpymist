@@ -274,6 +274,11 @@ package() {
 	# file. Its own name, beside WirePlumber's files, so no package's clashes.
 	install -Dm644 "$builddir"/desktop/wireplumber/alpymist-docks.conf \
 		"$pkgdir"/usr/share/wireplumber/wireplumber.conf.d/alpymist-docks.conf
+	# What Hyprland asks its questions through, so that asking does not end
+	# it; see the file. If Alpine comes to package hyprland-guiutils, its
+	# hyprland-dialog and this one are the same path, and this one goes.
+	install -Dm755 "$builddir"/desktop/hypr/hyprland-dialog \
+		"$pkgdir"/usr/bin/hyprland-dialog
 	# Which windows float as dialogs, which hyprland-security.conf sources.
 	install -Dm644 "$builddir"/desktop/hypr/hyprland-windows.conf \
 		"$pkgdir"/usr/share/alpymist/hyprland-windows.conf

@@ -233,6 +233,11 @@ says:
 grim -g "$(slurp)" ~/test.png
 ```
 
+If it says nothing and does not come back, Hyprland is holding it for a
+permission nobody can give: a fault in Hyprland 0.54 that a screenshot taken
+while the screen was changing can set off, and that lasts until you log out.
+Press <kbd>Ctrl</kbd>+<kbd>C</kbd> and try again; most go through.
+
 ## The pointer moves but cannot be seen
 
 Some graphics drivers show nothing where Hyprland puts the pointer. On the
