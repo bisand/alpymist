@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-solitaire
-pkgver=0.5.0
+pkgver=0.6.0
 pkgrel=0
 pkgdesc="Alpymist's Solitaire: Klondike in a window, in the theme's colours"
 url="https://github.com/bisand/alpymist"

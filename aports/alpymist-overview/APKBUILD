@@ -1,7 +1,7 @@
 # Contributor: André Biseth <andre@biseth.net>
 # Maintainer: André Biseth <andre@biseth.net>
 pkgname=alpymist-overview
-pkgver=0.5.0
+pkgver=0.6.0
 pkgrel=0
 pkgdesc="Alpymist's overview: a screen's nine workspaces side by side, each window an outline"
 url="https://github.com/bisand/alpymist"
