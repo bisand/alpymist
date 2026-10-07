@@ -278,15 +278,44 @@ pub fn focused_id(n: u32, monitors: &[Monitor], layouts: &Layouts) -> i32 {
     block.map_or(plain, |b| workspaces::id(b, n))
 }
 
+/// The variable `alpymist session` gives Hyprland where the overview can
+/// load, and `hyprland-security.conf` loads hyprexpo under: a plugin that
+/// cannot load puts an error across the top of the desktop at every login.
+pub const OVERVIEW: &str = "ALPYMIST_OVERVIEW";
+
+/// Whether Hyprland can hook a function for a plugin, which is how hyprexpo
+/// draws: only on `x86_64`, where Hyprland's hooks are written (0.54).
+const HOOKS: bool = cfg!(target_arch = "x86_64");
+
+/// What Super+Tab says where there are no hooks.
+const NO_HOOKS: &str =
+    "Hyprland's overview is a plugin that works only on Intel and AMD processors";
+
+/// Whether hyprexpo can load in a session started now. Hyprland finds the
+/// function a plugin hooks by running `nm` over itself, so without binutils
+/// there is no overview on any machine.
+#[must_use]
+pub fn overview_loads() -> bool {
+    loads(HOOKS, std::env::var_os("PATH").as_deref())
+}
+
+fn loads(hooks: bool, path: Option<&std::ffi::OsStr>) -> bool {
+    hooks && path.is_some_and(|p| std::env::split_paths(p).any(|d| d.join("nm").is_file()))
+}
+
 /// Super+Tab: every workspace of the screen with the focus, side by side on
 /// it, to pick one from; again, and it goes. hyprexpo draws it, and is told
 /// first which workspace its grid starts at: the screen's own first, since
 /// it knows nothing of each screen having its own.
 ///
 /// # Errors
-/// Hyprland could not be asked, or has no overview: a session that began
-/// before the package that brought it was installed.
+/// Hyprland could not be asked, or has no overview: this machine cannot
+/// have one, or the session began before the package that brought it was
+/// installed.
 pub fn overview() -> Result<(), String> {
+    if !HOOKS {
+        return Err(NO_HOOKS.into());
+    }
     let monitors = screen::parse(&hypr::request("j/monitors all")?)?;
     let layouts = Layouts::load(&layout::path());
     let first = focused_id(1, &monitors, &layouts);
@@ -540,5 +569,21 @@ mod tests {
         assert!(lid_closed(&dir));
         assert!(!lid_closed(&dir.join("none")), "no lid is never closed");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_overview_loads_only_with_hooks_and_nm() {
+        let d = std::env::temp_dir().join(format!("alpymist-overview-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("bin")).unwrap();
+        std::fs::create_dir_all(d.join("empty")).unwrap();
+        std::fs::write(d.join("bin/nm"), "").unwrap();
+        let with = std::env::join_paths([d.join("empty"), d.join("bin")]).unwrap();
+        let without = std::env::join_paths([d.join("empty")]).unwrap();
+        assert!(super::loads(true, Some(&with)));
+        assert!(!super::loads(true, Some(&without)));
+        assert!(!super::loads(true, None));
+        assert!(!super::loads(false, Some(&with)), "no hooks, no overview");
+        std::fs::remove_dir_all(&d).unwrap();
     }
 }

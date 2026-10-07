@@ -233,6 +233,11 @@ fn notify(said: &Said) {
         .status();
 }
 
+/// Put a title and a line under it up, for a key of another command's.
+pub fn say(title: &str, body: &str) {
+    notify(&Said::plain(title, body));
+}
+
 /// Run `program`, and return what it printed.
 fn output(program: &str, args: &[&str]) -> Result<String, String> {
     let out = Command::new(program)
