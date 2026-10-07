@@ -236,7 +236,8 @@ grim -g "$(slurp)" ~/test.png
 If it says nothing and does not come back, Hyprland is holding it for a
 permission nobody can give: a fault in Hyprland 0.54 that a screenshot taken
 while the screen was changing can set off, and that lasts until you log out.
-Press <kbd>Ctrl</kbd>+<kbd>C</kbd> and try again; most go through.
+Press <kbd>Ctrl</kbd>+<kbd>C</kbd> and try again: about half go through.
+Logging out and in clears it.
 
 ## The pointer moves but cannot be seen
 
