@@ -561,6 +561,7 @@ impl Play {
             seconds: self.seconds(),
             answer,
             without_hand: false,
+            without_status: false,
         }
     }
 
@@ -813,6 +814,11 @@ impl Play {
         if let Some(lifted) = scene.lifted.as_mut() {
             lifted.at = Point::new(0, 0);
         }
+        // Under a panel the bar is dimmed with the table, and is the
+        // table's; otherwise the clock is painted apart and is not a look.
+        if self.over.is_none() {
+            scene.seconds = None;
+        }
         Look {
             deals: self.deals,
             moves: self.game.moves(),
@@ -826,6 +832,7 @@ impl Play {
     pub fn paint_table_on(&mut self, canvas: &mut Canvas<'_>) {
         let mut scene = self.scene();
         scene.without_hand = true;
+        scene.without_status = self.over.is_none();
         let panel = self.panel();
         self.shown = scene.seconds;
         view::paint_on(
@@ -848,6 +855,33 @@ impl Play {
             &self.layout,
             &self.appearance,
             &mut self.faces,
+            &self.game,
+            &scene,
+        );
+    }
+
+    /// What the bar says of the game now, and where: to paint with
+    /// [`Play::paint_status_on`] when it has changed. `None` while a panel
+    /// is up, when the bar is part of the dimmed table.
+    #[must_use]
+    pub fn status(&self) -> Option<(String, denise::geom::Rect)> {
+        self.over
+            .is_none()
+            .then(|| (view::status(&self.game, self.seconds()), self.layout.status))
+    }
+
+    /// Paint what the bar says over a table painted without it.
+    pub fn paint_status_on(&mut self, canvas: &mut Canvas<'_>) {
+        if self.over.is_some() {
+            return;
+        }
+        let scene = self.scene();
+        self.shown = scene.seconds;
+        view::paint_status_on(
+            canvas,
+            &self.layout,
+            &self.appearance,
+            &mut self.fonts,
             &self.game,
             &scene,
         );
@@ -1246,6 +1280,19 @@ mod tests {
         // Let go over nothing: the table is as it was dealt.
         play.release(Point::new(600, 500));
         assert_eq!(play.look(), dealt);
+        // The clock ticking is not another table either: the bar's words
+        // are painted apart.
+        play.press(Point::new(card.x + 10, card.y + 10));
+        let target = play.layout().top(play.game(), Place::Foundation(2), 1);
+        play.release(Point::new(target.x + 10, target.y + 10));
+        assert_eq!(play.game().moves(), 1, "the jack went home");
+        let moved = play.look();
+        let (said, at) = play.status().expect("the bar says how it stands");
+        assert_eq!(said, "0:00  ·  1 move");
+        assert_eq!(at, play.layout().status);
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        assert_eq!(play.status().unwrap().0, "0:01  ·  1 move");
+        assert_eq!(play.look(), moved);
         // Another deal is another table, though nothing else differs.
         let mut fresh = super::Play::new(Appearance::default(), Kept::default(), None, 42, false);
         let before = fresh.look();

@@ -143,6 +143,7 @@ mod frame {
                 let mut pen = Pen::new(canvas);
                 pen.with_clip(area).blit(&view, Point::new(0, 0));
             }
+            game.paint_status_on(canvas);
             game.paint_hand_on(canvas);
         }
     }
@@ -467,8 +468,10 @@ mod screen {
         let mut cursor = new_cursor();
         let mut dirty = true;
         let mut table = Table::new(size);
-        // Where the hand and the arrow were in the frame on the screen.
+        // Where the hand and the arrow were in the frame on the screen, and
+        // what the bar said in it.
         let mut shown: [Option<Rect>; 2] = [None, None];
+        let mut said = String::new();
         let whole = Rect::from_size(size);
 
         loop {
@@ -509,11 +512,18 @@ mod screen {
                 // where the hand and the arrow were and are.
                 let repainted = table.refresh(&mut game);
                 let now = [game.hand_bounds(), cursor.visible.then(|| cursor.bounds())];
+                // The clock's words, where they changed: a second passing
+                // is a strip of the bar, not a table.
+                let ticked = game.status().filter(|(words, _)| *words != said);
                 let area = if repainted {
                     Some(whole)
                 } else {
-                    around([shown[0], shown[1], now[0], now[1]])
+                    let moved = around([shown[0], shown[1], now[0], now[1]]);
+                    around([moved, ticked.as_ref().map(|(_, at)| *at), None, None])
                 };
+                if let Some((words, _)) = ticked {
+                    said = words;
+                }
                 if let Some(area) = area {
                     screen
                         .present_area(area, |canvas| {
