@@ -6,6 +6,8 @@
 //! behind. [`view`] lays a game out for a window and paints it with Denise,
 //! and answers where a click landed. The program joins the two to a window,
 //! and is where a drag, a double click and a card's flight home live.
+//! [`kept`] is what stays from one opening to the next: the back, the way
+//! the stock turns, and the best games.
 //!
 //! The table, the backs of the cards and the buttons take the theme's
 //! colours. The faces are pictures, carried in the program: `cards/README.md`
@@ -16,4 +18,5 @@
 pub mod cards;
 pub mod faces;
 pub mod game;
+pub mod kept;
 pub mod view;

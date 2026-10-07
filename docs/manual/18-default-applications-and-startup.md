@@ -49,8 +49,14 @@ more cards or fewer, <kbd>Space</kbd> turns the stock, <kbd>H</kbd> sends a
 card home, <kbd>U</kbd> takes a move back and <kbd>N</kbd> deals again. The
 bar chooses between turning one card and three, and <kbd>B</kbd> or its
 last button changes the picture on the cards' backs: twelve of them, from
-mountains in mist to the home computers of the 1980s, and the one chosen is
-kept.
+mountains in mist to the home computers of the 1980s.
+
+A clock on the bar starts at a game's first move. The five shortest games
+are kept, apart for turning one card and for three, and a game that makes
+it among them asks for three initials; <kbd>S</kbd> or the bar's Best shows
+them. Dealing again while a game is under way asks first. The back, the way
+of turning and the best games are kept from one opening to the next, in
+`~/.local/state/alpymist/solitaire`.
 
 The right-hand column is a system with nothing added, and yours shows what
 you have installed. Where nothing installed opens a kind, the page says so; the Store has
