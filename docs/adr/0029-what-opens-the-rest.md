@@ -84,7 +84,8 @@ someone typed a command. They cannot be removed while the desktop is
 installed.
 
 **They are in the menu.** btop and cliamp bring desktop entries;
-`alpymist-tui` ships one each for lazygit, ncdu and tmux, which have none,
+`alpymist-tui` ships one each for lazygit, ncdu, tmux and tty-solitaire,
+which have none,
 under names of our own, and the desktop one each for impala and bluetuith,
 which it already brought. fastfetch prints and ends, and a terminal opened
 for it would close before it was read.
@@ -126,3 +127,10 @@ lists and in `FETCHED`. Nothing of its source is changed.
   Ristretto opening a picture with the defaults in place, as one window
   and no message. Not tried: sound out of cliamp, the aport on x86_64, the
   image, and `alpymist-tui` as a package, which only CI builds.
+
+## Addendum, 2026-10-07 — a card game
+
+`alpymist-tui` also brings `tty-solitaire`, Klondike in a terminal, 65 KiB,
+as Solitaire in the menu. A desktop had no game at all, and the one in
+Alpine with a window, `aisleriot`, is 67 MiB in five packages, 51 of them
+Guile, which nothing else here uses. It stays one that someone installs.

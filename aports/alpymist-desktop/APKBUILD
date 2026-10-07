@@ -353,7 +353,8 @@ _tools() {
 
 # A terminal's programs, for whoever lives in one: lazygit for a repository,
 # cliamp for music and the radio, btop for what the machine is doing, ncdu
-# for what fills the disk, tmux, and fastfetch to say what the machine is.
+# for what fills the disk, tmux, fastfetch to say what the machine is, and
+# tty-solitaire, a game of cards in 65 KiB.
 # About 64 MiB, most of it lazygit and cliamp, each one Go binary. The
 # desktop depends on it, as it does on the tools, so an upgrade brings them
 # to a system that was installed before they were. cliamp plays
@@ -362,7 +363,7 @@ _tools() {
 # already. None of them is pinned but cliamp, which is our own aport of a
 # release Alpine does not package (ADR 0029).
 _tui() {
-	pkgdesc="Alpymist terminal programs: lazygit, cliamp, btop, ncdu, tmux and fastfetch"
+	pkgdesc="Alpymist terminal programs: lazygit, cliamp, btop, ncdu, tmux, fastfetch and a card game"
 	depends="
 		btop
 		cliamp
@@ -372,14 +373,15 @@ _tui() {
 		ncdu
 		pipewire-alsa
 		tmux
+		tty-solitaire
 		"
 	mkdir -p "$subpkgdir"
 	# The menu lists what has a desktop entry. btop and cliamp bring their
-	# own; these three have none, in Alpine or upstream. Named as ours, so
+	# own; these four have none, in Alpine or upstream. Named as ours, so
 	# that one of Alpine's arriving later is a second line in the menu and
 	# not two packages owning a file.
 	local entry
-	for entry in lazygit ncdu tmux; do
+	for entry in lazygit ncdu tmux ttysolitaire; do
 		install -Dm644 "$builddir"/desktop/tui/alpymist-$entry.desktop \
 			"$subpkgdir"/usr/share/applications/alpymist-$entry.desktop
 	done

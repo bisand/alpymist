@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Solitaire
+GenericName=Klondike in a terminal
+Comment=The card game, played with the keyboard
+Exec=ttysolitaire
+Icon=utilities-terminal
+Terminal=true
+Categories=Game;CardGame;ConsoleOnly;
+Keywords=cards;patience;klondike;game;tty-solitaire;

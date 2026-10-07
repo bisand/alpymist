@@ -62,6 +62,7 @@ There are also a few programs that fill a terminal's window:
 | What fills the disk | `ncdu` |
 | Several terminals in one, that outlive it | `tmux` |
 | What the machine is | `fastfetch` |
+| A game of Klondike | `ttysolitaire`, Solitaire in the menu |
 
 They come with the desktop, as the package `alpymist-tui`. All but
 fastfetch are among the menu's applications too, each opening in a terminal
