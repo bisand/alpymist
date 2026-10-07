@@ -218,6 +218,19 @@ published file for any version already out and lists the packages that are new
 publish is a single force-pushed commit, keeping the site under Pages' size
 limit; to roll back, publish an older run.
 
+## The standalone Solitaire
+
+`ci/build-standalone.sh OUT [TARGET...]` builds `alpymist-solitaire-console`
+as one static file for each target, for a system that is not Alpymist
+(ADR 0030). Release runs it for x86_64, aarch64 and armv7 and attaches the
+files; CI builds the x86_64 one and runs its `--bench`, which paints a table
+in memory. It needs rustup and nothing else: each target's own linker and C
+runtime link it.
+
+```sh
+sh ci/build-standalone.sh out/standalone aarch64-unknown-linux-musl
+```
+
 ## Versions
 
 Every first-party package is `<the workspace version>-r<the run number of the

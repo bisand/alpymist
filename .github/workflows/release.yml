@@ -2,7 +2,8 @@ name: Release
 
 # What a release is made of: every Alpymist package and an ISO, for x86_64 and
 # aarch64, built when a GitHub release is published. The ISOs are attached to
-# the release. The packages are an artifact and nothing more: the repository
+# the release, and beside them Solitaire's console program as one file for a
+# system that is not Alpymist. The packages are an artifact and nothing more: the repository
 # index is signed with a key CI never sees, by `cargo xtask publish --run <id>`
 # (ADR 0002), so what this workflow produces is a candidate, not an update.
 #
@@ -40,6 +41,52 @@ jobs:
           else
             cargo run -q -p xtask -- version
           fi
+
+  # Solitaire's console program as one static file for each of three
+  # processors, for a system that is not Alpymist (ADR 0030). Beside the
+  # packages and not of them: nothing installs it, and a release whose game
+  # does not build is still a release, so its failing does not fail the run
+  # that stable is published from. The files missing from the release is how
+  # that shows; the release skill counts them.
+  standalone:
+    name: Standalone Solitaire
+    needs: version
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.96
+      - name: Build one file for each processor
+        run: >
+          sh ci/build-standalone.sh out/standalone
+          x86_64-unknown-linux-musl
+          aarch64-unknown-linux-musl
+          armv7-unknown-linux-musleabihf
+      # On Ubuntu, which has no musl: that it starts at all is that it is
+      # static. The frame it paints in memory is every card decoded and
+      # scaled, with no screen needed.
+      - name: The x86_64 one runs where nothing of Alpymist is
+        run: |
+          out/standalone/alpymist-solitaire-console-x86_64 --version
+          out/standalone/alpymist-solitaire-console-x86_64 --bench
+      - name: None of them asks for a library
+        run: |
+          for f in x86_64 aarch64 armv7; do
+            file "out/standalone/alpymist-solitaire-console-$f" | tee /dev/stderr | grep -Eq "statically linked|static-pie linked"
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: alpymist-solitaire-console
+          path: out/standalone/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Attach them to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" out/standalone/* --clobber
 
   packages:
     needs: version

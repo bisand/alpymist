@@ -5,7 +5,7 @@
 #
 #   sh ci/build-standalone.sh OUT [TARGET...]
 #
-# Run in the rust:alpine container, at the workspace's root. With no TARGET
+# Run at the workspace's root, on Alpine or anything else with rustup. With no TARGET
 # it builds for the machine it runs on. Each file is written to OUT as
 # alpymist-solitaire-console-ARCH, with its SHA-256 beside it.
 #
