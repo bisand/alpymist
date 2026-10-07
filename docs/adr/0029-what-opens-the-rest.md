@@ -1,6 +1,6 @@
 # ADR 0029 — What opens the rest: a viewer, a player, an archiver, and a terminal's programs
 
-**Status:** proposed · **Date:** 2026-10-07
+**Status:** accepted · **Date:** 2026-10-07
 
 ## Context
 
@@ -161,3 +161,24 @@ drawn in the theme's colour is kept for where a picture cannot be decoded.
 Tried: the rules by their tests, the table as pictures drawn offscreen, and
 the window opened on the development machine. Not tried by anyone but the
 person playing: how dragging feels.
+
+## Addendum, 2026-10-07 — Solitaire keeps time, and the best games
+
+A clock starts at a game's first move and stops when the last card is
+home. The five shortest games are kept for each way of turning the stock,
+with three initials asked of whoever makes it among them; of two games as
+long, the one in fewer moves is the better. A game that is out can no
+longer be taken back, since its time is taken. Dealing again with a game
+under way asks first.
+
+What is kept is one file of lines, `~/.local/state/alpymist/solitaire`:
+the back's name, the way of turning, and the best games. It is the
+account's own, holds nothing but that, and is read as whatever a file may
+hold: a line that makes no sense is passed over. The file of the first
+release, which kept the back alone, is read where the newer one is not
+there. Nothing is sent anywhere, and there is no list but the machine's
+own.
+
+`alpymist-solitaire --nearly-out`, which the usage does not list, sets out
+a game five cards from its end, to try how one ends. A record can be had
+with it, as it can by writing one into the file.

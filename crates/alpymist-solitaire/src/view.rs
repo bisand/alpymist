@@ -8,6 +8,7 @@
 use crate::cards::Card;
 use crate::faces::{ASPECT, BACKS, Faces};
 use crate::game::{Game, PILES, Pile, Place};
+use crate::kept::clock;
 use alpymist_widget::Appearance;
 use alpymist_widget::draw::{self, Fonts, Ink, Metrics};
 use denise::geom::{Point, Rect, Size};
@@ -26,6 +27,8 @@ pub enum Button {
     Turn,
     /// The next picture for the cards' backs.
     Back,
+    /// The best games.
+    Best,
 }
 
 /// What is under a point.
@@ -73,6 +76,37 @@ pub struct Scene {
     pub chosen: Option<(Place, usize)>,
     /// Which of the backs the cards wear.
     pub back: usize,
+    /// How long the game has been played, in seconds, once it has begun.
+    pub seconds: Option<u32>,
+    /// The button of a panel under the pointer.
+    pub answer: Option<usize>,
+}
+
+/// Something said over the table, to be answered before the game goes on:
+/// a question, the best games, or whose record this is.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Panel {
+    /// What it is about.
+    pub title: String,
+    /// Its lines: what stands at the left of each and what at the right.
+    pub lines: Vec<(String, String)>,
+    /// Its buttons, the first the one Enter presses.
+    pub buttons: Vec<String>,
+}
+
+/// Where a panel and its buttons are.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PanelLayout {
+    /// The panel.
+    pub frame: Rect,
+    /// The title.
+    pub title: Rect,
+    /// The first line; the rest follow, each `row` under the last.
+    pub first: Rect,
+    /// A line's height.
+    pub row: i32,
+    /// The buttons, in the panel's order.
+    pub buttons: Vec<Rect>,
 }
 
 /// Where everything is, in physical pixels.
@@ -85,7 +119,7 @@ pub struct Layout {
     /// The bar of buttons along the top.
     pub bar: Rect,
     /// The buttons on it.
-    pub buttons: [(Button, Rect); 4],
+    pub buttons: [(Button, Rect); 5],
     /// Where the bar says how the game stands.
     pub status: Rect,
     /// A card's width and height.
@@ -132,6 +166,7 @@ impl Layout {
             (Button::Undo, place(u * 5)),
             (Button::Turn, place(u * 8)),
             (Button::Back, place(u * 10)),
+            (Button::Best, place(u * 5)),
         ];
         let status = Rect::new(x + u / 2, by, (w - x - u * 3 / 2).max(0), button_h);
 
@@ -294,6 +329,54 @@ impl Layout {
         None
     }
 
+    /// Where `panel` and its buttons go: in the middle of the window.
+    #[must_use]
+    pub fn panel(&self, panel: &Panel) -> PanelLayout {
+        let m = &self.metrics;
+        let u = m.unit;
+        let count = |n: usize| i32::try_from(n).unwrap_or(0);
+        let width = (u * 24).min(i32::try_from(self.size.width).unwrap_or(0) - u * 2);
+        let row = u * 7 / 4;
+        let button_h = u * 2;
+        let height = u + u * 2 + u / 2 + count(panel.lines.len()) * row + u + button_h + u;
+        let frame = Rect::new(
+            (i32::try_from(self.size.width).unwrap_or(0) - width) / 2,
+            (i32::try_from(self.size.height).unwrap_or(0) - height) / 2,
+            width,
+            height,
+        );
+        let inner_x = frame.x + u * 3 / 2;
+        let inner_w = frame.width - u * 3;
+        let title = Rect::new(inner_x, frame.y + u, inner_w, u * 2);
+        let first = Rect::new(inner_x, title.bottom() + u / 2, inner_w, row);
+        // The buttons from the right, the first of them last and rightmost.
+        let by = frame.bottom() - u - button_h;
+        let mut x = frame.right() - u * 3 / 2;
+        let mut buttons = vec![Rect::new(0, 0, 0, 0); panel.buttons.len()];
+        for (i, label) in panel.buttons.iter().enumerate() {
+            let w = (count(label.chars().count()) * u * 6 / 10 + u * 2).max(u * 5);
+            x -= w;
+            buttons[i] = Rect::new(x, by, w, button_h);
+            x -= u / 2;
+        }
+        PanelLayout {
+            frame,
+            title,
+            first,
+            row,
+            buttons,
+        }
+    }
+
+    /// The button of `panel` under `at`.
+    #[must_use]
+    pub fn answer(&self, panel: &Panel, at: Point) -> Option<usize> {
+        self.panel(panel)
+            .buttons
+            .iter()
+            .position(|r| r.contains(at))
+    }
+
     /// The pile a card let go of at `at` is meant for: the column it is
     /// over, in the row it is in.
     #[must_use]
@@ -312,16 +395,20 @@ impl Layout {
     }
 }
 
-/// What the bar says of a game.
+/// What the bar says of a game played for `seconds`.
 #[must_use]
-pub fn status(game: &Game) -> String {
-    if game.won() {
-        return format!("Out in {} moves", game.moves());
-    }
-    match game.moves() {
-        0 => String::new(),
-        1 => "1 move".into(),
+pub fn status(game: &Game, seconds: Option<u32>) -> String {
+    let moves = match game.moves() {
+        0 => return String::new(),
+        1 => "1 move".to_owned(),
         n => format!("{n} moves"),
+    };
+    let time = seconds.map(clock);
+    match (game.won(), time) {
+        (true, Some(time)) => format!("Out in {time}  ·  {moves}"),
+        (true, None) => format!("Out in {moves}"),
+        (false, Some(time)) => format!("{time}  ·  {moves}"),
+        (false, None) => moves,
     }
 }
 
@@ -333,6 +420,7 @@ pub fn label(button: Button, game: &Game, back: usize) -> String {
         Button::Undo => "Undo".into(),
         Button::Turn if game.turn() == 3 => "Turn three".into(),
         Button::Turn => "Turn one".into(),
+        Button::Best => "Best".into(),
         Button::Back => format!(
             "Back: {}",
             BACKS.get(back).map_or("plain", |(name, _)| name)
@@ -400,7 +488,12 @@ impl Brush<'_> {
 }
 
 /// Paint the table into `frame`.
-#[allow(clippy::too_many_lines, clippy::many_single_char_names)] // one table, top to bottom
+// One table, top to bottom, and what it is painted from.
+#[allow(
+    clippy::too_many_lines,
+    clippy::many_single_char_names,
+    clippy::too_many_arguments
+)]
 pub fn paint(
     frame: &mut Frame<'_>,
     layout: &Layout,
@@ -409,6 +502,7 @@ pub fn paint(
     faces: &mut Faces,
     game: &Game,
     scene: &Scene,
+    panel: Option<&Panel>,
 ) {
     let mut canvas = Canvas::new(frame);
     let mut pen = Pen::new(&mut canvas);
@@ -422,7 +516,7 @@ pub fn paint(
     pen.fill_rect(layout.bar, ink.card);
     for (button, rect) in layout.buttons {
         let hovered = scene.hover == Some(button);
-        let dead = button == Button::Undo && !game.can_undo();
+        let dead = button == Button::Undo && (!game.can_undo() || game.won());
         if dead {
             draw::button(
                 &mut pen,
@@ -446,7 +540,7 @@ pub fn paint(
             );
         }
     }
-    let said = status(game);
+    let said = status(game, scene.seconds);
     let colour = if game.won() { ink.accent } else { ink.dim };
     draw::right_label(&mut pen, engine, st.text, layout.status, &said, colour);
 
@@ -548,6 +642,49 @@ pub fn paint(
                 pen.fill_rounded_rect(shade, radius, SHADOW);
             }
             brush.face(&mut pen, *card, r);
+        }
+    }
+
+    // What is said over the table: the table dimmed, and a panel on it.
+    if let Some(panel) = panel {
+        let at = layout.panel(panel);
+        pen.fill_rect(Rect::from_size(layout.size), Color::rgba(0, 0, 0, 0x90));
+        // The background without what shows through it: nothing of the table.
+        pen.fill_rounded_rect(at.frame, m.radius, ink.on_accent);
+        pen.stroke_rounded_rect(at.frame, m.radius, m.border, ink.border);
+        draw::label(&mut pen, engine, st.large, at.title, &panel.title, ink.text);
+        let mut line = at.first;
+        for (left, right) in &panel.lines {
+            let x = draw::right_label(&mut pen, engine, st.text, line, right, ink.text);
+            let room = Rect::new(
+                line.x,
+                line.y,
+                (x - m.unit / 2 - line.x).max(0),
+                line.height,
+            );
+            draw::label(&mut pen, engine, st.text, room, left, ink.dim);
+            line.y += at.row;
+        }
+        for (i, (rect, label)) in at.buttons.iter().zip(&panel.buttons).enumerate() {
+            let hovered = scene.answer == Some(i);
+            if i == 0 {
+                let fill = if hovered {
+                    draw::mix(appearance.accent, appearance.text, 20)
+                } else {
+                    ink.accent
+                };
+                draw::button(
+                    &mut pen,
+                    engine,
+                    st.strong,
+                    *rect,
+                    label,
+                    (Some(fill), ink.on_accent),
+                    None,
+                );
+            } else {
+                draw::outline_button(&mut pen, engine, st.text, *rect, label, hovered, m, &ink);
+            }
         }
     }
 }
@@ -663,10 +800,40 @@ mod tests {
     #[test]
     fn the_bar_counts_moves() {
         let mut game = Game::new(1, 1);
-        assert_eq!(status(&game), "");
+        assert_eq!(status(&game, None), "");
+        assert_eq!(status(&game, Some(5)), "", "nothing played yet");
         game.deal();
-        assert_eq!(status(&game), "1 move");
+        assert_eq!(status(&game, None), "1 move");
         game.deal();
-        assert_eq!(status(&game), "2 moves");
+        assert_eq!(status(&game, Some(187)), "3:07  ·  2 moves");
+    }
+
+    #[test]
+    fn a_panel_is_in_the_window_with_its_buttons_in_it() {
+        use super::Panel;
+        let panel = Panel {
+            title: "Deal again?".into(),
+            lines: vec![("This game will be lost.".into(), String::new())],
+            buttons: vec!["New game".into(), "Keep playing".into()],
+        };
+        for (w, h) in [(720, 480), (1100, 760), (2560, 1440)] {
+            let l = layout(w, h);
+            let at = l.panel(&panel);
+            assert!(at.frame.x >= 0 && at.frame.right() <= i32::try_from(w).unwrap());
+            assert!(at.frame.y >= 0 && at.frame.bottom() <= i32::try_from(h).unwrap());
+            for (i, r) in at.buttons.iter().enumerate() {
+                assert!(
+                    r.x >= at.frame.x && r.right() <= at.frame.right(),
+                    "{w}x{h}"
+                );
+                assert_eq!(l.answer(&panel, centre(*r)), Some(i));
+            }
+            // The first button is the rightmost.
+            assert!(at.buttons[0].x > at.buttons[1].x);
+            assert_eq!(
+                l.answer(&panel, Point::new(at.frame.x + 2, at.frame.y + 2)),
+                None
+            );
+        }
     }
 }

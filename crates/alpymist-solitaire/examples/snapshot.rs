@@ -8,7 +8,7 @@
 use alpymist_solitaire::cards::{Card, Suit};
 use alpymist_solitaire::faces::Faces;
 use alpymist_solitaire::game::{Game, PILES, Pile, Place};
-use alpymist_solitaire::view::{self, Layout, Lifted, Scene};
+use alpymist_solitaire::view::{self, Layout, Lifted, Panel, Scene};
 use alpymist_widget::Appearance;
 use alpymist_widget::draw::Fonts;
 use denise::geom::{Point, Size};
@@ -66,6 +66,7 @@ fn midway() -> Game {
     Game::set_out(piles, stock, waste, [3, 2, 4, 1], 3)
 }
 
+#[allow(clippy::too_many_lines)] // one picture after another
 fn main() {
     let mut args = std::env::args().skip(1);
     let dir = args.next().unwrap_or_else(|| ".".into());
@@ -102,34 +103,41 @@ fn main() {
         ..Scene::default()
     };
 
-    for (name, game, scene) in [
-        ("dealt", &dealt, Scene::default()),
-        ("midway", &midway, Scene::default()),
-        ("held", &midway, held),
-        ("keys", &midway, keys),
+    let timed = Scene {
+        seconds: Some(187),
+        ..Scene::default()
+    };
+    let ask = Panel {
+        title: "Deal again?".into(),
+        lines: vec![("This game will be lost.".into(), String::new())],
+        buttons: vec!["New game".into(), "Keep playing".into()],
+    };
+    let best = Panel {
+        title: "A new record".into(),
+        lines: vec![
+            ("Turning one card".into(), String::new()),
+            ("1.  AB_".into(), "3:07  ·  97 moves".into()),
+            ("2.  MKB".into(), "4:41  ·  112 moves".into()),
+            ("3.  ---".into(), "6:02  ·  130 moves".into()),
+            ("Type your initials".into(), String::new()),
+        ],
+        buttons: vec!["Save".into()],
+    };
+    for (name, game, scene, panel) in [
+        ("dealt", &dealt, Scene::default(), None),
+        ("midway", &midway, timed, None),
+        ("held", &midway, held, None),
+        ("keys", &midway, keys, None),
+        ("ask", &midway, timed, Some(&ask)),
+        ("record", &midway, timed, Some(&best)),
         (
-            "back-3",
+            "back-11",
             &dealt,
             Scene {
-                back: 2,
+                back: 10,
                 ..Scene::default()
             },
-        ),
-        (
-            "back-7",
-            &dealt,
-            Scene {
-                back: 6,
-                ..Scene::default()
-            },
-        ),
-        (
-            "back-9",
-            &dealt,
-            Scene {
-                back: 8,
-                ..Scene::default()
-            },
+            None,
         ),
     ] {
         let mut pixels = vec![0u32; (w * h) as usize];
@@ -149,6 +157,7 @@ fn main() {
             &mut faces,
             game,
             &scene,
+            panel,
         );
 
         let mut rgb = Vec::with_capacity((w * h * 3) as usize);

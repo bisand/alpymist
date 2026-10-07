@@ -1,10 +1,12 @@
 //! The game in a window: the hand that drags, the double click, the
-//! keyboard, and a card's flight home.
+//! keyboard, a card's flight home, the clock, and what is asked over the
+//! table.
 
 use alpymist_solitaire::cards::Rng;
 use alpymist_solitaire::faces::{BACKS, Faces};
 use alpymist_solitaire::game::{Game, PILES, Place};
-use alpymist_solitaire::view::{self, Button, Hit, Layout, Lifted, Scene};
+use alpymist_solitaire::kept::{Kept, Score, clock, initials};
+use alpymist_solitaire::view::{self, Button, Hit, Layout, Lifted, Panel, Scene};
 use alpymist_widget::draw::Fonts;
 use alpymist_widget::host;
 use alpymist_widget::window::{self, App, Cursor, Key, Mods};
@@ -37,6 +39,20 @@ struct Flight {
     since: Instant,
 }
 
+/// What is asked or shown over the table, until it is answered.
+enum Over {
+    /// Whether to give this game up for one that turns so many cards.
+    Ask(usize),
+    /// The best games.
+    Best,
+    /// Whose record a game just won is.
+    Record {
+        seconds: u32,
+        moves: u32,
+        typed: String,
+    },
+}
+
 struct Solitaire {
     game: Game,
     seeds: Rng,
@@ -50,55 +66,71 @@ struct Solitaire {
     pressed: Option<(Hit, Instant)>,
     focus: Option<Place>,
     chosen: Option<(Place, usize)>,
+    /// The back, the way of turning and the best games, as on disk.
+    kept: Kept,
     /// Which back the cards wear.
     back: usize,
+    /// When the first move of this game was made.
+    began: Option<Instant>,
+    /// How long it took, once it is won.
+    took: Option<u32>,
+    /// The second the bar last showed.
+    shown: Option<u32>,
+    over: Option<Over>,
 }
 
-/// Where the back last chosen is kept, for the next game: a name on a line
-/// in the account's state directory.
-fn remembered() -> Option<PathBuf> {
-    let state = std::env::var_os("XDG_STATE_HOME")
+/// The account's state directory.
+fn state() -> Option<PathBuf> {
+    std::env::var_os("XDG_STATE_HOME")
         .map(PathBuf::from)
         .filter(|p| p.is_absolute())
-        .or_else(|| Some(PathBuf::from(std::env::var_os("HOME")?).join(".local/state")))?;
-    Some(state.join("alpymist/solitaire-back"))
+        .or_else(|| Some(PathBuf::from(std::env::var_os("HOME")?).join(".local/state")))
+        .map(|dir| dir.join("alpymist"))
 }
 
-/// The back last chosen, or the first.
-fn recall() -> usize {
-    remembered()
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .and_then(|name| BACKS.iter().position(|(n, _)| *n == name.trim()))
-        .unwrap_or(0)
-}
-
-/// Keep `back` for the next game. A choice that cannot be kept is still
-/// worn until the window closes.
-fn keep(back: usize) {
-    let (Some(path), Some((name, _))) = (remembered(), BACKS.get(back)) else {
-        return;
+/// What was kept at the last closing. The first release kept the back alone,
+/// in a file of its own, which is read where the newer one is not there.
+fn recall() -> Kept {
+    let Some(dir) = state() else {
+        return Kept::default();
     };
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).ok();
+    if let Ok(text) = std::fs::read_to_string(dir.join("solitaire")) {
+        return Kept::parse(&text);
     }
-    std::fs::write(path, format!("{name}\n")).ok();
+    let back = std::fs::read_to_string(dir.join("solitaire-back")).unwrap_or_default();
+    Kept::parse(&format!("back={}", back.trim()))
 }
 
-/// Open the window and play until it closes.
-pub fn run(turn: usize) -> Result<(), String> {
+/// Open the window and play until it closes. `turn` is how many cards the
+/// stock turns when the command line says; otherwise it is as last time.
+/// `nearly_out` sets out a game five cards from its end and not a deal.
+pub fn run(turn: Option<usize>, nearly_out: bool) -> Result<(), String> {
     let appearance = alpymist_widget::appearance();
     let fonts = Fonts::load(&appearance);
     for p in &fonts.problems {
         eprintln!("{NAME}: font {p}");
     }
+    let mut kept = recall();
+    if let Some(turn) = turn {
+        kept.turn = turn;
+    }
+    let back = BACKS
+        .iter()
+        .position(|(name, _)| *name == kept.back)
+        .unwrap_or(0);
     // No two games alike, and nothing to keep secret: the clock will do.
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
     let mut seeds = Rng::new(u64::try_from(now & u128::from(u64::MAX)).unwrap_or(0));
     let layout = Layout::new(&appearance, Size::new(1100, 760), 1);
+    let game = if nearly_out {
+        nearly(kept.turn)
+    } else {
+        Game::new(seeds.number(), kept.turn)
+    };
     let app = Solitaire {
-        game: Game::new(seeds.number(), turn),
+        game,
         seeds,
         appearance,
         fonts,
@@ -110,15 +142,32 @@ pub fn run(turn: usize) -> Result<(), String> {
         pressed: None,
         focus: None,
         chosen: None,
-        back: recall(),
+        kept,
+        back,
+        began: None,
+        took: None,
+        shown: None,
+        over: None,
     };
     let options = window::Options {
         app_id: NAME.into(),
-        min_size: (560, 420),
+        min_size: (760, 480),
         max_size: None,
     };
     let (_sender, events) = host::events::<()>();
     window::run(app, &options, events, None)
+}
+
+/// A game with two kings, two queens and a jack left to go home.
+fn nearly(turn: usize) -> Game {
+    use alpymist_solitaire::cards::{Card, KING, Suit};
+    use alpymist_solitaire::game::Pile;
+    let card = |suit, rank| Card { suit, rank };
+    let mut piles: [Pile; PILES] = Default::default();
+    piles[0].up = vec![card(Suit::Spades, KING), card(Suit::Hearts, 12)];
+    piles[1].up = vec![card(Suit::Hearts, KING), card(Suit::Spades, 12)];
+    let waste = vec![card(Suit::Hearts, 11)];
+    Game::set_out(piles, Vec::new(), waste, [KING, KING, 10, 11], turn)
 }
 
 /// The piles of the top row, by the column each stands in; the third
@@ -143,15 +192,62 @@ fn column(place: Place) -> (usize, bool) {
     }
 }
 
+/// A line of the best games: its place and whose, and how it went.
+fn line(place: usize, who: &str, seconds: u32, moves: u32) -> (String, String) {
+    let who = if who.is_empty() { "---" } else { who };
+    (
+        format!("{}.  {who}", place + 1),
+        format!("{}  ·  {moves} moves", clock(seconds)),
+    )
+}
+
+fn turning(turn: usize) -> String {
+    if turn == 3 {
+        "Turning three cards".into()
+    } else {
+        "Turning one card".into()
+    }
+}
+
 impl Solitaire {
+    /// Write what is kept. A choice that cannot be written still holds
+    /// until the window closes.
+    fn keep(&self) {
+        let Some(dir) = state() else {
+            return;
+        };
+        std::fs::create_dir_all(&dir).ok();
+        std::fs::write(dir.join("solitaire"), self.kept.text()).ok();
+    }
+
     fn deal_again(&mut self, turn: usize) {
         self.game = Game::new(self.seeds.number(), turn);
         self.drag = None;
         self.flight = None;
         self.chosen = None;
+        self.began = None;
+        self.took = None;
+        self.shown = None;
+        if self.kept.turn != self.game.turn() {
+            self.kept.turn = self.game.turn();
+            self.keep();
+        }
+    }
+
+    /// Deal again, asking first if there is a game under way to lose.
+    fn ask_new(&mut self, turn: usize) {
+        if self.game.moves() > 0 && !self.game.won() {
+            self.over = Some(Over::Ask(turn));
+        } else {
+            self.deal_again(turn);
+        }
     }
 
     fn undo(&mut self) -> Outcome {
+        // A game that is out is over: its time is taken.
+        if self.game.won() {
+            return Outcome::Unchanged;
+        }
         self.flight = None;
         self.chosen = None;
         if self.game.undo() {
@@ -163,10 +259,11 @@ impl Solitaire {
 
     fn button(&mut self, button: Button) -> Outcome {
         match button {
-            Button::New => self.deal_again(self.game.turn()),
+            Button::New => self.ask_new(self.game.turn()),
             Button::Undo => return self.undo(),
-            Button::Turn => self.deal_again(if self.game.turn() == 3 { 1 } else { 3 }),
+            Button::Turn => self.ask_new(if self.game.turn() == 3 { 1 } else { 3 }),
             Button::Back => self.wear(1),
+            Button::Best => self.over = Some(Over::Best),
         }
         Outcome::Redraw
     }
@@ -174,7 +271,113 @@ impl Solitaire {
     /// Wear the back `by` after this one, round and round.
     fn wear(&mut self, by: usize) {
         self.back = (self.back + by) % BACKS.len();
-        keep(self.back);
+        BACKS[self.back].0.clone_into(&mut self.kept.back);
+        self.keep();
+    }
+
+    /// How long this game has been played, in whole seconds.
+    fn seconds(&self) -> Option<u32> {
+        self.took.or_else(|| {
+            self.began
+                .map(|at| u32::try_from(at.elapsed().as_secs()).unwrap_or(u32::MAX))
+        })
+    }
+
+    /// After anything that may have moved a card: start the clock at the
+    /// first move, and stop it when the last card is home.
+    fn settle(&mut self) {
+        if self.began.is_none() && self.game.moves() > 0 {
+            self.began = Some(Instant::now());
+        }
+        if self.game.won() && self.took.is_none() {
+            let seconds = self.seconds().unwrap_or(0);
+            let moves = self.game.moves();
+            self.took = Some(seconds);
+            if self.kept.place(self.game.turn(), seconds, moves).is_some() {
+                self.over = Some(Over::Record {
+                    seconds,
+                    moves,
+                    typed: String::new(),
+                });
+            }
+        }
+    }
+
+    /// What is said over the table now.
+    fn panel(&self) -> Option<Panel> {
+        let table = |turn: usize, lines: &mut Vec<(String, String)>| {
+            lines.push((turning(turn), String::new()));
+            let best = self.kept.best(turn);
+            if best.is_empty() {
+                lines.push(("    No game won yet".into(), String::new()));
+            }
+            for (i, s) in best.iter().enumerate() {
+                lines.push(line(i, &s.initials, s.seconds, s.moves));
+            }
+        };
+        Some(match self.over.as_ref()? {
+            Over::Ask(_) => Panel {
+                title: "Deal again?".into(),
+                lines: vec![("This game will be lost.".into(), String::new())],
+                buttons: vec!["New game".into(), "Keep playing".into()],
+            },
+            Over::Best => {
+                let mut lines = Vec::new();
+                table(1, &mut lines);
+                table(3, &mut lines);
+                Panel {
+                    title: "Best games".into(),
+                    lines,
+                    buttons: vec!["Close".into()],
+                }
+            }
+            Over::Record {
+                seconds,
+                moves,
+                typed,
+            } => {
+                let turn = self.game.turn();
+                let place = self.kept.place(turn, *seconds, *moves).unwrap_or(0);
+                let mut lines = vec![(turning(turn), String::new())];
+                let best = self.kept.best(turn);
+                for (i, s) in best.iter().take(place).enumerate() {
+                    lines.push(line(i, &s.initials, s.seconds, s.moves));
+                }
+                lines.push(line(place, &format!("{typed}_"), *seconds, *moves));
+                for (i, s) in best.iter().enumerate().skip(place).take(4 - place.min(4)) {
+                    lines.push(line(i + 1, &s.initials, s.seconds, s.moves));
+                }
+                lines.push(("Type your initials, then Enter".into(), String::new()));
+                Panel {
+                    title: "A new record".into(),
+                    lines,
+                    buttons: vec!["Save".into()],
+                }
+            }
+        })
+    }
+
+    /// A panel's button was pressed: the first is the one Enter means.
+    fn answer(&mut self, button: usize) -> Outcome {
+        match self.over.take() {
+            Some(Over::Ask(turn)) if button == 0 => self.deal_again(turn),
+            Some(Over::Record {
+                seconds,
+                moves,
+                typed,
+            }) => {
+                let score = Score {
+                    seconds,
+                    moves,
+                    initials: initials(&typed),
+                };
+                self.kept.record(self.game.turn(), score);
+                self.keep();
+                self.over = Some(Over::Best);
+            }
+            _ => {}
+        }
+        Outcome::Redraw
     }
 
     /// Send the top card of `from` to its foundation, flying.
@@ -228,18 +431,26 @@ impl Solitaire {
             }
             _ => None,
         };
-        let hover = self
-            .pointer
-            .and_then(|at| match self.layout.hit(&self.game, at) {
+        let panel = self.panel();
+        let hover = match (&panel, self.pointer) {
+            (None, Some(at)) => match self.layout.hit(&self.game, at) {
                 Some(Hit::Button(b)) => Some(b),
                 _ => None,
-            });
+            },
+            _ => None,
+        };
+        let answer = panel
+            .as_ref()
+            .zip(self.pointer)
+            .and_then(|(panel, at)| self.layout.answer(panel, at));
         Scene {
             lifted,
             hover,
             focus: self.focus,
             chosen: self.chosen,
             back: self.back,
+            seconds: self.seconds(),
+            answer,
         }
     }
 
@@ -319,37 +530,29 @@ impl Solitaire {
         }
         Outcome::Redraw
     }
-}
 
-impl App for Solitaire {
-    type Event = ();
-
-    fn title(&self) -> String {
-        "Solitaire".into()
+    /// A key while something is asked over the table.
+    fn key_over(&mut self, key: Key, mods: Mods) -> Outcome {
+        match key {
+            Key::Enter => self.answer(0),
+            // Escape is the answer that loses nothing: keep playing, close,
+            // or a record saved without a name.
+            Key::Escape => self.answer(1),
+            Key::Backspace => {
+                if let Some(Over::Record { typed, .. }) = &mut self.over
+                    && typed.pop().is_some()
+                {
+                    Outcome::Redraw
+                } else {
+                    Outcome::Unchanged
+                }
+            }
+            Key::Chord('q' | 'w') if mods.ctrl => Outcome::Close,
+            _ => Outcome::Unchanged,
+        }
     }
 
-    fn preferred_size(&self) -> (u32, u32) {
-        (1100, 760)
-    }
-
-    fn resize(&mut self, size: Size, scale: u32) {
-        self.layout = Layout::new(&self.appearance, size, scale);
-    }
-
-    fn paint(&mut self, frame: &mut Frame<'_>) {
-        let scene = self.scene();
-        view::paint(
-            frame,
-            &self.layout,
-            &self.appearance,
-            &mut self.fonts,
-            &mut self.faces,
-            &self.game,
-            &scene,
-        );
-    }
-
-    fn key(&mut self, key: Key, mods: Mods) -> Outcome {
+    fn key_table(&mut self, key: Key, mods: Mods) -> Outcome {
         match key {
             Key::Left | Key::Right | Key::Up | Key::Down => self.step(key),
             Key::Enter => self.act(),
@@ -370,7 +573,25 @@ impl App for Solitaire {
         }
     }
 
-    fn text(&mut self, ch: char) -> Outcome {
+    fn text_over(&mut self, ch: char) -> Outcome {
+        match &mut self.over {
+            Some(Over::Record { typed, .. }) => {
+                if ch.is_ascii_alphanumeric() && typed.len() < 3 {
+                    typed.push(ch.to_ascii_uppercase());
+                    return Outcome::Redraw;
+                }
+                Outcome::Unchanged
+            }
+            Some(Over::Ask(_)) => match ch.to_ascii_lowercase() {
+                'y' => self.answer(0),
+                'n' => self.answer(1),
+                _ => Outcome::Unchanged,
+            },
+            _ => Outcome::Unchanged,
+        }
+    }
+
+    fn text_table(&mut self, ch: char) -> Outcome {
         // B for the next back, Shift+B for the one before.
         if ch == 'B' {
             self.wear(BACKS.len() - 1);
@@ -379,6 +600,7 @@ impl App for Solitaire {
         match ch.to_ascii_lowercase() {
             'b' => self.button(Button::Back),
             'n' => self.button(Button::New),
+            's' => self.button(Button::Best),
             'u' => self.undo(),
             // Home: the card under the keyboard, to its foundation.
             'h' => {
@@ -394,18 +616,7 @@ impl App for Solitaire {
         }
     }
 
-    fn pointer(&mut self, at: Option<Point>) -> Outcome {
-        let before = self.scene().hover;
-        self.pointer = at;
-        if self.drag.is_some() || self.scene().hover != before {
-            Outcome::Redraw
-        } else {
-            Outcome::Unchanged
-        }
-    }
-
-    fn press(&mut self, at: Point) -> Outcome {
-        self.pointer = Some(at);
+    fn press_table(&mut self, at: Point) -> Outcome {
         self.focus = None;
         self.chosen = None;
         let Some(hit) = self.layout.hit(&self.game, at) else {
@@ -439,6 +650,82 @@ impl App for Solitaire {
         });
         Outcome::Redraw
     }
+}
+
+impl App for Solitaire {
+    type Event = ();
+
+    fn title(&self) -> String {
+        "Solitaire".into()
+    }
+
+    fn preferred_size(&self) -> (u32, u32) {
+        (1100, 760)
+    }
+
+    fn resize(&mut self, size: Size, scale: u32) {
+        self.layout = Layout::new(&self.appearance, size, scale);
+    }
+
+    fn paint(&mut self, frame: &mut Frame<'_>) {
+        let scene = self.scene();
+        let panel = self.panel();
+        self.shown = scene.seconds;
+        view::paint(
+            frame,
+            &self.layout,
+            &self.appearance,
+            &mut self.fonts,
+            &mut self.faces,
+            &self.game,
+            &scene,
+            panel.as_ref(),
+        );
+    }
+
+    fn key(&mut self, key: Key, mods: Mods) -> Outcome {
+        let outcome = if self.over.is_some() {
+            self.key_over(key, mods)
+        } else {
+            self.key_table(key, mods)
+        };
+        self.settle();
+        outcome
+    }
+
+    fn text(&mut self, ch: char) -> Outcome {
+        let outcome = if self.over.is_some() {
+            self.text_over(ch)
+        } else {
+            self.text_table(ch)
+        };
+        self.settle();
+        outcome
+    }
+
+    fn pointer(&mut self, at: Option<Point>) -> Outcome {
+        let before = self.scene();
+        self.pointer = at;
+        let after = self.scene();
+        if self.drag.is_some() || after.hover != before.hover || after.answer != before.answer {
+            Outcome::Redraw
+        } else {
+            Outcome::Unchanged
+        }
+    }
+
+    fn press(&mut self, at: Point) -> Outcome {
+        self.pointer = Some(at);
+        let outcome = match self.panel() {
+            Some(panel) => match self.layout.answer(&panel, at) {
+                Some(button) => self.answer(button),
+                None => Outcome::Unchanged,
+            },
+            None => self.press_table(at),
+        };
+        self.settle();
+        outcome
+    }
 
     fn release(&mut self, at: Point) -> Outcome {
         self.pointer = Some(at);
@@ -451,6 +738,7 @@ impl App for Solitaire {
         if let Some(to) = self.layout.target(over) {
             self.game.play(drag.place, drag.count, to);
         }
+        self.settle();
         Outcome::Redraw
     }
 
@@ -459,6 +747,12 @@ impl App for Solitaire {
     }
 
     fn cursor(&self, at: Point) -> Cursor {
+        if let Some(panel) = self.panel() {
+            return match self.layout.answer(&panel, at) {
+                Some(_) => Cursor::Pointer,
+                None => Cursor::Default,
+            };
+        }
         match self.layout.hit(&self.game, at) {
             Some(Hit::Button(_) | Hit::Stock) => Cursor::Pointer,
             Some(hit) if self.picked(hit).is_some() => Cursor::Pointer,
@@ -467,10 +761,14 @@ impl App for Solitaire {
     }
 
     fn animating(&self) -> bool {
-        self.flight.is_some() || (self.drag.is_none() && self.game.runs_out())
+        self.flight.is_some()
+            || (self.drag.is_none() && self.game.runs_out())
+            // The clock, while it runs.
+            || (self.began.is_some() && self.took.is_none())
     }
 
     fn tick(&mut self) -> Outcome {
+        let flying = self.flight.is_some();
         if self
             .flight
             .as_ref()
@@ -481,12 +779,20 @@ impl App for Solitaire {
         // Nothing hidden and nothing left to turn: the rest plays itself.
         if self.flight.is_none()
             && self.drag.is_none()
+            && self.over.is_none()
             && self.game.runs_out()
             && let Some(from) = self.game.next_home()
         {
             self.send_home(from);
         }
-        Outcome::Redraw
+        self.settle();
+        // A frame for a card in the air, or for the clock's next second:
+        // the window is not painted twenty-five times a second to show one.
+        if flying || self.flight.is_some() || self.seconds() != self.shown {
+            Outcome::Redraw
+        } else {
+            Outcome::Unchanged
+        }
     }
 
     fn event(&mut self, (): ()) -> Outcome {
