@@ -86,7 +86,7 @@ fn from_entry(id: &str, entry: &Entry, env: &Environment) -> Option<App> {
         icon: icon_for(entry.raw("Categories").unwrap_or("")),
         launch: Launch::Argv {
             argv,
-            terminal: entry.yes("Terminal"),
+            terminal: entry.wants_terminal(),
         },
     })
 }
@@ -160,6 +160,25 @@ mod tests {
         [Desktop Action new-window]\n\
         Name=Should not replace the name\n\
         Exec=foot --other\n";
+
+    fn terminal(app: &super::App) -> bool {
+        match &app.launch {
+            Launch::Argv { terminal, .. } | Launch::Shell { terminal, .. } => *terminal,
+        }
+    }
+
+    /// Solitaire from Flathub says both; GNOME starts it over the bus and
+    /// shows no terminal, and neither do we.
+    #[test]
+    fn a_program_started_over_the_bus_elsewhere_gets_no_terminal() {
+        let entry = |more: &str| {
+            format!("[Desktop Entry]\nType=Application\nName=A\nExec=a\nTerminal=true\n{more}")
+        };
+        let plain = parse("a.desktop", &entry(""), &env()).unwrap();
+        assert!(terminal(&plain));
+        let bus = parse("a.desktop", &entry("DBusActivatable=true\n"), &env()).unwrap();
+        assert!(!terminal(&bus));
+    }
 
     #[test]
     fn a_plain_entry_parses() {

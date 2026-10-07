@@ -69,6 +69,17 @@ impl Entry {
         self.raw(key) == Some("true")
     }
 
+    /// Whether it is to be run in a terminal: `Terminal`, unless the entry is
+    /// also `DBusActivatable`. A desktop that starts such a program over the
+    /// bus gives it no terminal whatever `Terminal` says, so a graphical
+    /// program can say both and never be seen with one; some do. We run its
+    /// `Exec`, and would be the only desktop that opened a terminal beside
+    /// its window.
+    #[must_use]
+    pub fn wants_terminal(&self) -> bool {
+        self.yes("Terminal") && !self.yes("DBusActivatable")
+    }
+
     /// Whether it applies to this desktop and its program is installed:
     /// `OnlyShowIn`, `NotShowIn` and `TryExec`.
     #[must_use]
