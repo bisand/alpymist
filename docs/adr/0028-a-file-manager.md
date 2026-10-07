@@ -1,6 +1,6 @@
 # ADR 0028 — A file manager: Thunar, with drives opened by hand
 
-**Status:** proposed · **Date:** 2026-10-07
+**Status:** accepted · **Date:** 2026-10-07
 
 ## Context
 
