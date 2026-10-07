@@ -130,12 +130,13 @@ pub struct Play {
 }
 
 /// How much of a table has to be painted again.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
     /// None of it.
     Nothing,
-    /// What is inside this: a button lit or unlit, a clock under a panel.
-    Within(denise::geom::Rect),
+    /// What is inside these: a button lit or unlit, a clock under a panel,
+    /// the piles a move took cards from and put them on.
+    Within(Vec<denise::geom::Rect>),
     /// All of it.
     Everything,
 }
@@ -145,9 +146,25 @@ pub enum Change {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Look {
     deals: u32,
-    moves: u32,
     scene: Scene,
     panel: Option<Panel>,
+    /// What lies at each place, as a number that differs when the cards
+    /// shown there do: the stock, the waste, the four foundations and the
+    /// seven piles.
+    piles: [u64; PLACES],
+    /// Whether Undo is greyed.
+    undo_dead: bool,
+}
+
+/// How many places cards lie at.
+const PLACES: usize = 2 + 4 + PILES;
+
+/// Every place, in the order [`Look`] keeps them.
+fn places() -> impl Iterator<Item = Place> {
+    [Place::Stock, Place::Waste]
+        .into_iter()
+        .chain((0..4).map(Place::Foundation))
+        .chain((0..PILES).map(Place::Tableau))
 }
 
 /// The account's state directory for Alpymist's programs.
@@ -819,10 +836,45 @@ impl Play {
         );
     }
 
+    /// What shows at `place`: a number that differs when the cards painted
+    /// there do, those in the hand being gone from it.
+    fn mark(&self, place: Place, scene: &Scene) -> u64 {
+        // FNV-1a, over how many lie face down, how many are in the hand,
+        // and each card face up.
+        let mut mark: u64 = 0xcbf2_9ce4_8422_2325;
+        let mut add = |value: usize| {
+            mark ^= u64::try_from(value).unwrap_or(u64::MAX);
+            mark = mark.wrapping_mul(0x0000_0100_0000_01b3);
+        };
+        let gone = match scene.lifted {
+            Some(lifted) if lifted.place == place => lifted.count,
+            _ => 0,
+        };
+        add(gone);
+        match place {
+            // A back or a ring or nothing: how many, and whether the waste
+            // has any to turn over again.
+            Place::Stock => {
+                add(self.game.stock().len());
+                add(usize::from(self.game.waste().is_empty()));
+            }
+            Place::Tableau(i) => add(self.game.tableau().get(i).map_or(0, |p| p.down.len())),
+            Place::Waste | Place::Foundation(_) => {}
+        }
+        for card in self.game.face_up(place) {
+            add(card.index() + 1);
+        }
+        mark
+    }
+
     /// How the table looks now, the place of the hand apart.
     #[must_use]
     pub fn look(&self) -> Look {
         let mut scene = self.scene();
+        let mut piles = [0; PLACES];
+        for (mark, place) in piles.iter_mut().zip(places()) {
+            *mark = self.mark(place, &scene);
+        }
         if let Some(lifted) = scene.lifted.as_mut() {
             lifted.at = Point::new(0, 0);
         }
@@ -833,16 +885,18 @@ impl Play {
         }
         Look {
             deals: self.deals,
-            moves: self.game.moves(),
             scene,
             panel: self.panel(),
+            piles,
+            undo_dead: !self.game.can_undo() || self.game.won(),
         }
     }
 
     /// How the table looks now, and how much of it differs from how it
-    /// `was`. A button lit under the pointer is a button's worth, not a
-    /// table's: on a small machine that is the difference between a pointer
-    /// that glides over the bar and one that stops at every button.
+    /// `was`. A button lit under the pointer is a button's worth, and a card
+    /// moved is the pile it left and the pile it went to: on a small machine
+    /// that is the difference between a game that answers and one that
+    /// thinks about every move.
     #[must_use]
     pub fn since(&self, was: Option<&Look>) -> (Look, Change) {
         let now = self.look();
@@ -852,11 +906,18 @@ impl Play {
         if *was == now {
             return (now, Change::Nothing);
         }
+        // What is left when everything that can be painted by its own
+        // corner is taken away: if that differs, it is the whole table.
         let plain = |look: &Look| {
             let mut look = look.clone();
             look.scene.hover = None;
             look.scene.answer = None;
             look.scene.seconds = None;
+            look.scene.lifted = None;
+            look.scene.focus = None;
+            look.scene.chosen = None;
+            look.piles = [0; PLACES];
+            look.undo_dead = false;
             look
         };
         if plain(was) != plain(&now) {
@@ -869,29 +930,30 @@ impl Play {
             };
             if let (Some(before), Some(after)) = (&was.panel, &now.panel)
                 && bare(was) == bare(&now)
+                && was.piles == now.piles
             {
                 let area = self
                     .layout
                     .panel(before)
                     .frame
                     .union(&self.layout.panel(after).frame);
-                return (now, Change::Within(area.inflate(4)));
+                return (now, Change::Within(vec![area.inflate(4)]));
             }
             return (now, Change::Everything);
         }
-        let button = |hover: Option<Button>| {
+        let button = |which: Option<Button>| {
             self.layout
                 .buttons
                 .iter()
-                .find(|(b, _)| Some(*b) == hover)
-                .map(|(_, rect)| *rect)
+                .find(|(b, _)| Some(*b) == which)
+                .map(|(_, rect)| rect.inflate(2))
         };
         let answers = now.panel.as_ref().map(|panel| self.layout.panel(panel));
         let answer = |index: Option<usize>| {
             answers
                 .as_ref()
                 .zip(index)
-                .and_then(|(at, i)| at.buttons.get(i).copied())
+                .and_then(|(at, i)| at.buttons.get(i).map(|r| r.inflate(2)))
         };
         let mut parts: Vec<denise::geom::Rect> = Vec::new();
         if was.scene.hover != now.scene.hover {
@@ -903,18 +965,41 @@ impl Play {
             parts.extend(answer(now.scene.answer));
         }
         if was.scene.seconds != now.scene.seconds {
-            parts.push(self.layout.status);
+            parts.push(self.layout.status.inflate(2));
         }
-        let change = parts
-            .into_iter()
-            .reduce(|all, part| all.union(&part))
-            .map_or(Change::Nothing, |r| Change::Within(r.inflate(2)));
+        if was.undo_dead != now.undo_dead {
+            parts.extend(button(Some(Button::Undo)));
+        }
+        // The piles whose cards differ, and those the keyboard's rings are
+        // round or were.
+        let mut touched = [false; PLACES];
+        for (i, place) in places().enumerate() {
+            let ringed = |scene: &Scene| {
+                scene.focus == Some(place) || scene.chosen.is_some_and(|(at, _)| at == place)
+            };
+            let rings_moved = (was.scene.focus, was.scene.chosen)
+                != (now.scene.focus, now.scene.chosen)
+                && (ringed(&was.scene) || ringed(&now.scene));
+            touched[i] = was.piles[i] != now.piles[i] || rings_moved;
+        }
+        parts.extend(
+            places()
+                .zip(touched)
+                .filter(|(_, touched)| *touched)
+                .map(|(place, _)| self.layout.reach(place)),
+        );
+        let change = if parts.is_empty() {
+            Change::Nothing
+        } else {
+            Change::Within(parts)
+        };
         (now, change)
     }
 
     /// Paint the table without the cards in the hand, onto a canvas kept
     /// from one frame to the next: all of it, or `only` what is inside.
     pub fn paint_table_on(&mut self, canvas: &mut Canvas<'_>, only: Option<denise::geom::Rect>) {
+        // `shown` is set by whoever paints the bar's words.
         let mut scene = self.scene();
         scene.only = only;
         scene.without_hand = true;
@@ -1131,6 +1216,19 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         panic!("the game did not run out");
+    }
+
+    /// Everything a change is within, as one rectangle; a panic with
+    /// `what` if it was nothing or everything.
+    fn within(change: &super::Change, what: &str) -> Rect {
+        let super::Change::Within(parts) = change else {
+            panic!("{what}: {change:?}");
+        };
+        parts
+            .iter()
+            .copied()
+            .reduce(|all, part| all.union(&part))
+            .expect("a change within nothing")
     }
 
     fn centre(r: Rect) -> Point {
@@ -1385,17 +1483,13 @@ mod tests {
         let (_, undo) = play.layout().buttons[1];
         play.pointer(Some(Point::new(new.x + 5, new.y + 5)));
         let (lit, change) = play.since(Some(&before));
-        let super::Change::Within(area) = change else {
-            panic!("lighting a button changed {change:?}");
-        };
+        let area = within(&change, "lighting a button changed {change:?}");
         assert!(area.contains(Point::new(new.x + 5, new.y + 5)));
         assert!(area.width < new.width + 10 && area.height < new.height + 10);
         // From one button to the next: both, and nothing of the cards.
         play.pointer(Some(Point::new(undo.x + 5, undo.y + 5)));
         let (_, change) = play.since(Some(&lit));
-        let super::Change::Within(area) = change else {
-            panic!("moving to the next button changed {change:?}");
-        };
+        let area = within(&change, "moving to the next button changed {change:?}");
         assert!(area.x <= new.x && area.right() >= undo.right());
         assert!(area.bottom() < play.layout().top);
         assert_eq!(play.since(None).1, super::Change::Everything);
@@ -1407,9 +1501,7 @@ mod tests {
         let asked = won.look();
         won.text('a');
         let (_, change) = won.since(Some(&asked));
-        let super::Change::Within(area) = change else {
-            panic!("a letter typed changed {change:?}");
-        };
+        let area = within(&change, "a letter typed changed {change:?}");
         let frame = won.layout().panel(&won.said().unwrap()).frame;
         assert!(area.x <= frame.x && area.right() >= frame.right());
         assert!(area.width < frame.width + 20);
@@ -1432,5 +1524,105 @@ mod tests {
         let before = fresh.look();
         fresh.text('n');
         assert_ne!(fresh.look(), before);
+    }
+
+    #[test]
+    fn a_move_is_the_piles_it_touched_and_no_others() {
+        let mut play = play(Kept::default(), None, false);
+        let reach = |play: &Play, place: Place| play.layout().reach(place);
+        let holds = |parts: &[Rect], r: Rect| parts.contains(&r);
+
+        // Turning the stock: the stock and the waste, and Undo coming alive.
+        let dealt = play.look();
+        play.key(Key::Space);
+        let (turned, change) = play.since(Some(&dealt));
+        let super::Change::Within(parts) = change else {
+            panic!("turning the stock changed {change:?}");
+        };
+        assert!(holds(&parts, reach(&play, Place::Stock)));
+        assert!(holds(&parts, reach(&play, Place::Waste)));
+        for pile in 0..7 {
+            assert!(
+                !holds(&parts, reach(&play, Place::Tableau(pile))),
+                "pile {pile}"
+            );
+        }
+        let (_, undo) = play.layout().buttons[1];
+        assert!(
+            parts
+                .iter()
+                .any(|p| p.contains(Point::new(undo.x + 3, undo.y + 3)))
+        );
+        // Turned again: the same two, and no button this time.
+        play.key(Key::Space);
+        let (_, change) = play.since(Some(&turned));
+        let super::Change::Within(parts) = change else {
+            panic!("turning the stock again changed {change:?}");
+        };
+        assert_eq!(parts.len(), 2);
+
+        // A card dragged from one pile to another: those two.
+        let mut found = None;
+        'deals: for _ in 0..50 {
+            for from in 0..7 {
+                for to in 0..7 {
+                    if play
+                        .game()
+                        .landing(Place::Tableau(from), 1, Place::Tableau(to))
+                        .is_some()
+                    {
+                        found = Some((from, to));
+                        break 'deals;
+                    }
+                }
+            }
+            play.key(Key::New);
+            play.key(Key::Enter);
+        }
+        let (from, to) = found.expect("no deal of fifty has a move between piles");
+        let before = play.look();
+        let card = play.layout().top(play.game(), Place::Tableau(from), 1);
+        play.press(Point::new(card.x + 10, card.y + 10));
+        // Picked up: the pile it left, and nothing else.
+        let (held, change) = play.since(Some(&before));
+        assert_eq!(
+            change,
+            super::Change::Within(vec![reach(&play, Place::Tableau(from))])
+        );
+        let target = play.layout().top(play.game(), Place::Tableau(to), 1);
+        play.release(Point::new(target.x + 12, target.y + 40));
+        let (_, change) = play.since(Some(&held));
+        let super::Change::Within(parts) = change else {
+            panic!("a card put down changed {change:?}");
+        };
+        assert!(
+            holds(&parts, reach(&play, Place::Tableau(from))),
+            "its card came back up"
+        );
+        assert!(holds(&parts, reach(&play, Place::Tableau(to))));
+        assert!(parts.len() <= 3, "{parts:?}");
+
+        // The keyboard's ring going from one pile to the next: both.
+        let rested = play.look();
+        play.key(Key::Down);
+        let (first, change) = play.since(Some(&rested));
+        assert_eq!(
+            change,
+            super::Change::Within(vec![reach(&play, Place::Tableau(0))])
+        );
+        play.key(Key::Right);
+        let (_, change) = play.since(Some(&first));
+        assert_eq!(
+            change,
+            super::Change::Within(vec![
+                reach(&play, Place::Tableau(0)),
+                reach(&play, Place::Tableau(1))
+            ])
+        );
+
+        // Another back is every card that shows one: all of it.
+        let before = play.look();
+        play.text('b');
+        assert_eq!(play.since(Some(&before)).1, super::Change::Everything);
     }
 }

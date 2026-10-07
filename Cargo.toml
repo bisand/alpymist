@@ -127,6 +127,21 @@ opt-level = 3
 # The store searches some thirty thousand entries at every keystroke.
 [profile.release.package.alpymist-store]
 opt-level = 3
+# Solitaire scales a card's picture the first time the card is turned up,
+# and on a Raspberry Pi that was a pause at every card.
+[profile.release.package.alpymist-solitaire]
+opt-level = 3
+# Decoding it is the other half of that pause.
+[profile.release.package.png]
+opt-level = 3
+[profile.release.package.fdeflate]
+opt-level = 3
+[profile.release.package.crc32fast]
+opt-level = 3
+[profile.release.package.simd-adler32]
+opt-level = 3
+[profile.release.package.adler2]
+opt-level = 3
 [profile.release.package.quick-xml]
 opt-level = 3
 [profile.release.package.miniz_oxide]
