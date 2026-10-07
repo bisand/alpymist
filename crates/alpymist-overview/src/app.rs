@@ -8,6 +8,7 @@ use alpymist_widget::host::{self, Placement};
 use alpymist_widget::{Appearance, Key, Outcome, Widget, instance};
 use denise::Frame;
 use denise::geom::{Point, Rect, Size};
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::time::{Duration, Instant};
 
 /// How long the mark takes from one workspace to the next.
@@ -64,8 +65,16 @@ impl App {
     }
 }
 
+/// Super+Tab was pressed again.
+struct Forward;
+
 impl Widget for App {
-    type Event = ();
+    type Event = Forward;
+
+    fn event(&mut self, _: Forward) -> Outcome {
+        let step = self.overview.forward();
+        self.act(step, true)
+    }
 
     fn layout(&mut self, scale: u32) -> Size {
         self.scale = scale;
@@ -135,33 +144,63 @@ impl Widget for App {
 /// what a second run finds the first by.
 pub const NAME: &str = "alpymist-overview";
 
-/// Open the overview of the screen with the focus, or close the one open.
+/// Open the overview of the screen with the focus; or, with one open, move
+/// its mark on to the next workspace. Super+Tab runs this each time it is
+/// pressed, and Hyprland takes that key before the overview sees it, so
+/// holding Super and pressing Tab again goes through the workspaces as Tab
+/// alone does.
 ///
 /// # Errors
 /// Hyprland could not be asked, or there is no Wayland session.
 pub fn run() -> Result<(), String> {
-    instance::toggle(NAME, |listener| {
-        let monitors = screen::parse(&hypr::request("j/monitors all")?)?;
-        let layouts = layout::Layouts::load(&layout::path());
-        let first = alpymist_displays::focused_id(1, &monitors, &layouts);
-        let overview = Overview::new(&monitors, first, &hypr::request("j/clients")?)?;
-        let appearance = alpymist_widget::appearance();
-        let fonts = Fonts::load(&appearance);
-        let options = host::Options {
-            placement: Placement::FullScreen,
-            output: Some(overview.screen.clone()),
-            ..host::Options::new(NAME)
-        };
-        let app = App {
-            overview,
-            appearance,
-            fonts,
-            scale: 1,
-            layout: None,
-            mark: None,
-            moving: None,
-        };
-        let (_sender, events) = host::events();
-        host::run(app, &options, events, listener)
-    })
+    let socket = instance::socket_path(NAME);
+    if let Some(path) = &socket
+        && UnixStream::connect(path).is_ok()
+    {
+        // The one that is open heard that, and has moved on.
+        return Ok(());
+    }
+    let listener = socket.as_ref().and_then(|path| {
+        // Left by one that did not end well: nothing answered above.
+        let _ = std::fs::remove_file(path);
+        UnixListener::bind(path).ok()
+    });
+
+    let monitors = screen::parse(&hypr::request("j/monitors all")?)?;
+    let layouts = layout::Layouts::load(&layout::path());
+    let first = alpymist_displays::focused_id(1, &monitors, &layouts);
+    let overview = Overview::new(&monitors, first, &hypr::request("j/clients")?)?;
+    let appearance = alpymist_widget::appearance();
+    let fonts = Fonts::load(&appearance);
+    let options = host::Options {
+        placement: Placement::FullScreen,
+        output: Some(overview.screen.clone()),
+        ..host::Options::new(NAME)
+    };
+    let app = App {
+        overview,
+        appearance,
+        fonts,
+        scale: 1,
+        layout: None,
+        mark: None,
+        moving: None,
+    };
+    let (sender, events) = host::events();
+    if let Some(listener) = listener {
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                if stream.is_err() || sender.send(Forward).is_err() {
+                    break;
+                }
+            }
+        });
+    }
+    // No listener of the host's: another run moves the mark, and does not
+    // close what is open.
+    let shown = host::run(app, &options, events, None);
+    if let Some(path) = &socket {
+        let _ = std::fs::remove_file(path);
+    }
+    shown.map(drop)
 }

@@ -61,8 +61,11 @@ windows themselves. Everywhere else, an ARM machine or a virtual one on a
 Mac among them, it is Alpymist's: each window is an outline with its
 program's name, where it is on the screen. There
 <kbd>Tab</kbd>, <kbd>Shift</kbd>+<kbd>Tab</kbd> and the arrows move between
-the workspaces, <kbd>Enter</kbd> goes to the one marked, <kbd>1</kbd> to
-<kbd>9</kbd> go straight to one, and <kbd>Esc</kbd> closes it.
+the workspaces, and so does <kbd>Tab</kbd> with <kbd>Super</kbd> still held;
+<kbd>Enter</kbd> or a click goes to the one marked, <kbd>1</kbd> to
+<kbd>9</kbd> go straight to one, and <kbd>Esc</kbd> closes it. Nothing else
+takes it away: not a second <kbd>Super</kbd>+<kbd>Tab</kbd>, and not a click
+that missed.
 
 When a screen goes away its workspaces move to the screens that are left, and
 when it comes back they go home.

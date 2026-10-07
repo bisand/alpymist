@@ -251,10 +251,17 @@ impl Overview {
         Step::Redraw
     }
 
-    /// A press on the workspace at `index`, or beside them all, which closes.
+    /// A press on the workspace at `index`, which goes there, or beside
+    /// them all, which does nothing: a click that missed should not take
+    /// the overview away.
     #[must_use]
     pub fn press(&self, index: Option<usize>) -> Step {
-        index.map_or(Step::Close, |i| self.go(i))
+        index.map_or(Step::Nothing, |i| self.go(i))
+    }
+
+    /// Super+Tab again while it is open: on to the next, and round.
+    pub fn forward(&mut self) -> Step {
+        self.key(Key::Tab)
     }
 
     /// A screen with windows on it, to draw without a desktop.
@@ -406,17 +413,21 @@ mod tests {
         assert_eq!(o.chosen, 0);
         assert_eq!(o.key(Key::BackTab), Step::Redraw);
         assert_eq!(o.chosen, 8);
+        // Super+Tab while it is open is Tab: 9 to 1, 1 to 2.
+        assert_eq!(o.forward(), Step::Redraw);
+        assert_eq!(o.forward(), Step::Redraw);
+        assert_eq!(o.chosen, 1);
     }
 
     #[test]
-    fn enter_a_number_and_a_click_go_and_escape_and_a_click_beside_close() {
+    fn enter_a_number_and_a_click_go_and_only_escape_closes() {
         let mut o = Overview::new(&screens(), 11, CLIENTS).unwrap();
         assert_eq!(o.key(Key::Enter), Step::Go(12));
         assert_eq!(o.typed('7'), Step::Go(17));
         assert_eq!(o.typed('0'), Step::Nothing);
         assert_eq!(o.typed('x'), Step::Nothing);
         assert_eq!(o.press(Some(4)), Step::Go(15));
-        assert_eq!(o.press(None), Step::Close);
+        assert_eq!(o.press(None), Step::Nothing, "a miss is not a dismissal");
         assert_eq!(o.key(Key::Escape), Step::Close);
         assert_eq!(o.hover(Some(2)), Step::Redraw);
         assert_eq!(o.hover(Some(2)), Step::Nothing);

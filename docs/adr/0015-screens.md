@@ -255,8 +255,10 @@ is on the screen with its program's name and title. It takes no picture of
 a window: places and names are what `hyprctl clients` tells any program of
 the account, so it needs no permission and nothing from the compositor that
 depends on the processor. Tab, Shift+Tab and the arrows move a mark between
-the workspaces, Enter or a click goes to one, 1 to 9 go straight there, Esc
-or a click beside them closes it, and so does running it again.
+the workspaces, Enter or a click goes to one, 1 to 9 go straight there, and
+Esc closes it; nothing else does. Run again while it is open, it moves the
+mark on: Hyprland takes Super+Tab before the overview sees it, so that is
+what makes Tab with Super held go through the workspaces as Tab alone does.
 
 `alpymist displays overview` asks hyprexpo first, on x86_64, and starts
 `alpymist-overview` wherever hyprexpo did not answer: aarch64, and an
@@ -270,7 +272,7 @@ Tried on the aarch64 machine: Hyprland reads the new file with the variable
 and without, and an `if` on a variable of the environment skips what is
 under it; `alpymist-overview`, built for it by hand, opens over the screen
 from `alpymist displays overview`, uses no processor while it waits, and
-closes when run again. Not tried: its keys and its looks on a real screen,
+stays open when run again. Not tried: its keys and its looks on a real screen,
 which a person has to press and see; a login with the new packages on
 either processor; and x86_64 without binutils, where the first cause is
 read from the source and not seen.

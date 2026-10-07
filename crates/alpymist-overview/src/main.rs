@@ -2,7 +2,7 @@
 //! side, to pick one from.
 //!
 //! ```text
-//! alpymist-overview    open the overview, or close the one that is open
+//! alpymist-overview    open the overview, or move the open one's mark on
 //! ```
 //!
 //! `alpymist displays overview`, which Super+Tab runs, starts this wherever
@@ -19,11 +19,12 @@ const USAGE: &str = "\
 usage: alpymist-overview
 
 Shows the nine workspaces of the screen with the focus, each window an
-outline with its program's name. Run again, it closes.
+outline with its program's name. Run again while it is open, it moves on to
+the next workspace, which is what holding Super and pressing Tab does.
   Tab, Shift+Tab, arrows    move between workspaces
   Enter, or a click         go to the chosen one
   1 to 9                    go to that one
-  Esc, or a click beside    close";
+  Esc                       close, and stay where you were";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

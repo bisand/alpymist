@@ -300,7 +300,8 @@ fn loads(hooks: bool, path: Option<&std::ffi::OsStr>) -> bool {
 }
 
 /// Super+Tab: every workspace of the screen with the focus, side by side on
-/// it, to pick one from; again, and it goes.
+/// it, to pick one from. Again while it is open, hyprexpo's goes, and ours
+/// moves on to the next workspace.
 ///
 /// Where hyprexpo is loaded it draws it, the windows themselves, and is told
 /// first which workspace its grid starts at: the screen's own first, since
