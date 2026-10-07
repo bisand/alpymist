@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Alpymist: folders open as a list, with sizes and dates, until you choose
+  otherwise in Thunar's own Edit › Preferences, which writes
+  ~/.config/xfce4/xfconf/xfce-perchannel-xml/thunar.xml; that file overrides
+  this one, setting by setting.
+-->
+<channel name="thunar" version="1.0">
+  <property name="default-view" type="string" value="ThunarDetailsView"/>
+</channel>

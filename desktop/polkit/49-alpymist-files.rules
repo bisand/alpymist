@@ -1,0 +1,39 @@
+// Alpymist files: anyone at the machine may open a stick or a card they
+// have plugged in, and take it out again, without a password; and nobody
+// starts gvfs's root helper without one. See ADR 0028.
+//
+// Without elogind polkit knows no sessions, so "at the machine" is the seat
+// group, as in 50-alpymist-power.rules. udisks2 asks about these four only
+// for a drive that is not the system's: mounting, unlocking or ejecting one
+// of the machine's own disks is another action, and still asks for an
+// administrator's password, as do formatting, partitioning and setting up a
+// loop device. Unlocking still wants the disk's own passphrase. Nothing
+// here mounts anything by itself: the file manager asks when a drive is
+// opened in it.
+polkit.addRule(function(action, subject) {
+    var free = [
+        "org.freedesktop.udisks2.filesystem-mount",
+        "org.freedesktop.udisks2.encrypted-unlock",
+        "org.freedesktop.udisks2.eject-media",
+        "org.freedesktop.udisks2.power-off-drive"
+    ];
+    if (free.indexOf(action.id) >= 0 && subject.isInGroup("seat")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});
+
+// gvfs's own org.gtk.vfs.file-operations.rules lets an administrator at the
+// machine start gvfsd-admin, which is root, with no password. polkit reads
+// the rules in the order of their names and takes the first answer, which
+// is why this file's begins with 49: where that rule would say yes, this
+// one has said to ask. Today polkit calls no session here active and so
+// refuses the helper outright, which this leaves as it is; the day a
+// session is active, it asks.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.gtk.vfs.file-operations-helper" &&
+        subject.local && subject.active && subject.isInGroup("wheel")) {
+        return polkit.Result.AUTH_ADMIN;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

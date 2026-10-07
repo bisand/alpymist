@@ -10,7 +10,7 @@ Each list offers the installed applications that can open that kind.
 |---|---|---|
 | Web browser | Links and web pages | LibreWolf |
 | Mail | Email addresses and messages | Nothing installed |
-| File manager | Folders | Nothing installed |
+| File manager | Folders | Thunar |
 | Text editor | Text files, configuration and code | squint |
 | Terminal | Commands, and programs that run in one | foot |
 | Images | Pictures and photos | Nothing installed |
@@ -19,6 +19,11 @@ Each list offers the installed applications that can open that kind.
 | Music | Songs and sound files | Nothing installed |
 | Archives | Zip files, tarballs | Nothing installed |
 | Calendar | Calendar files and subscriptions | Nothing installed |
+
+The file manager is Thunar: it is among the menu's applications, and a
+keyboard's Files key opens it. It shows folders as a list; Edit › Preferences
+in it changes that. Windows shares and phones need `gvfs-smb` and `gvfs-mtp`,
+which the menu's Install › Alpine package adds.
 
 The right-hand column is a system with nothing added, and yours shows what
 you have installed. Where nothing installed opens a kind, the page says so; the Store has
