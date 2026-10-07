@@ -488,12 +488,7 @@ impl Brush<'_> {
 }
 
 /// Paint the table into `frame`.
-// One table, top to bottom, and what it is painted from.
-#[allow(
-    clippy::too_many_lines,
-    clippy::many_single_char_names,
-    clippy::too_many_arguments
-)]
+#[allow(clippy::too_many_arguments)] // what a table is painted from
 pub fn paint(
     frame: &mut Frame<'_>,
     layout: &Layout,
@@ -505,7 +500,36 @@ pub fn paint(
     panel: Option<&Panel>,
 ) {
     let mut canvas = Canvas::new(frame);
-    let mut pen = Pen::new(&mut canvas);
+    paint_on(
+        &mut canvas,
+        layout,
+        appearance,
+        fonts,
+        faces,
+        game,
+        scene,
+        panel,
+    );
+}
+
+/// Paint the table onto a canvas somebody else made: a screen's own.
+// One table, top to bottom, and what it is painted from.
+#[allow(
+    clippy::too_many_lines,
+    clippy::many_single_char_names,
+    clippy::too_many_arguments
+)]
+pub fn paint_on(
+    canvas: &mut Canvas<'_>,
+    layout: &Layout,
+    appearance: &Appearance,
+    fonts: &mut Fonts,
+    faces: &mut Faces,
+    game: &Game,
+    scene: &Scene,
+    panel: Option<&Panel>,
+) {
+    let mut pen = Pen::new(canvas);
     let m = &layout.metrics;
     let ink = Ink::new(appearance);
     let st = fonts.styles(m);

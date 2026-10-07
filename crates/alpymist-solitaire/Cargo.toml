@@ -10,10 +10,19 @@ repository.workspace = true
 [[bin]]
 name = "alpymist-solitaire"
 path = "src/main.rs"
+required-features = ["window"]
+
+[features]
+default = ["window"]
+# The desktop's window. Without it this is the game alone, for
+# alpymist-solitaire-console to show on a screen with no desktop.
+window = ["alpymist-widget/wayland"]
 
 [dependencies]
-# The window, the fonts and the menu's appearance.
-alpymist-widget = { workspace = true }
+# The fonts, the controls and the menu's appearance; with `window`, the
+# window too. By its path and not from the workspace, to leave its Wayland
+# host out when this is built without one.
+alpymist-widget = { path = "../alpymist-widget", default-features = false }
 denise = { workspace = true }
 denise-render = { workspace = true }
 denise-text = { workspace = true }

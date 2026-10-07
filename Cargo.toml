@@ -17,6 +17,7 @@ members = [
     "crates/alpymist-menu",
     "crates/alpymist-overview",
     "crates/alpymist-solitaire",
+    "crates/alpymist-solitaire-console",
     "crates/alpymist-pam",
     "crates/alpymist-power",
     "crates/alpymist-saver-mountains",

@@ -19,7 +19,14 @@ serde_json = { workspace = true }
 # The host: a wlr layer surface over wl_shm, as the menu's. Linux only, so a
 # widget's logic, its drawing and its offscreen snapshots build anywhere.
 [target.'cfg(target_os = "linux")'.dependencies]
-alpymist-wayland = { workspace = true }
+alpymist-wayland = { workspace = true, optional = true }
+
+[features]
+default = ["wayland"]
+# The hosts: a popup under the bar and a window. Without it, what is left is
+# what a widget is drawn with, for a program that shows one on a screen with
+# no compositor and must not link a Wayland client to do it.
+wayland = ["dep:alpymist-wayland"]
 
 [lints]
 workspace = true

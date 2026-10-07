@@ -52,13 +52,13 @@
 
 pub mod draw;
 pub mod focus;
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "wayland"))]
 pub mod host;
 pub mod instance;
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "wayland"))]
 pub mod outputs;
 pub mod waybar;
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "wayland"))]
 pub mod window;
 
 pub use alpymist_menu::config::{Appearance, Colour};
