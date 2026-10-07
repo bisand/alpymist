@@ -72,7 +72,10 @@ with that.
 gh release view v<next> --json assets --jq '.assets[].name'
 ```
 
-Expect four: an `.iso` and an `.iso.sha256` for x86_64 and aarch64. Then confirm
+Expect ten: an `.iso` and an `.iso.sha256` for x86_64 and aarch64, and
+`alpymist-solitaire-console-ARCH` with its `.sha256` for x86_64, aarch64 and
+armv7. The last six are from a job that may fail without failing the run
+(ADR 0030): fewer than ten means look at Standalone Solitaire. Then confirm
 the packages carry the release version with the run number, and that `squint`
 and `alpymist-keys` kept their own — `alpymist-0.0.6-r10.apk` alongside
 `squint-0.1.8-r0.apk` is what correct looks like.

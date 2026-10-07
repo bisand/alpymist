@@ -44,3 +44,18 @@ jobs:
       # on would build there and here fails (ADR 0006, addendum of
       # 2026-10-04).
       - run: sh ci/build-programs.sh alone
+
+  # Solitaire's console program as releases attach it: one static file, run
+  # here on a system with no musl and no screen (ADR 0030). Its own job, and
+  # not one a merge waits for: it is a game.
+  standalone:
+    name: Standalone Solitaire
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.96
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target/standalone"
+      - run: sh ci/build-standalone.sh out/standalone x86_64-unknown-linux-musl
+      - run: out/standalone/alpymist-solitaire-console-x86_64 --bench
